@@ -556,11 +556,16 @@ func (p *PendingTeamDispatch) Drain() map[uuid.UUID][]uuid.UUID {
 	return out
 }
 
-// MarkListed records that list was called in this turn.
-func (p *PendingTeamDispatch) MarkListed() {
+// TryMarkListed records that list was called in this turn, returning true
+// if this was the first time it was called.
+func (p *PendingTeamDispatch) TryMarkListed() bool {
 	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.listed {
+		return false
+	}
 	p.listed = true
-	p.mu.Unlock()
+	return true
 }
 
 // HasListed reports whether list was called in this turn.
