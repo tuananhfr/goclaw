@@ -59,11 +59,24 @@ func (ch *Channel) handleCommentEvent(entry WebhookEntry, change ChangeValue) {
 	// Collect media URLs from the comment webhook payload.
 	// URLs are passed directly — persistMedia/copyMediaFile handles HTTP downloads.
 	var media []string
+	var mediaTags string
 	if change.Photo != "" {
 		media = append(media, change.Photo)
+		mediaTags += fmt.Sprintf("<media:image url=%q>", change.Photo)
 	}
 	if change.Video != "" {
 		media = append(media, change.Video)
+		if mediaTags != "" {
+			mediaTags += "\n"
+		}
+		mediaTags += "<media:video>"
+	}
+
+	if mediaTags != "" {
+		if content != "" {
+			content += "\n"
+		}
+		content += mediaTags
 	}
 
 	ch.HandleMessage(senderID, chatID, content, media, metadata, "direct")

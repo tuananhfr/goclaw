@@ -106,7 +106,21 @@ func buildMessageContent(data MessagingData) string {
 
 	for _, att := range data.Message.Attachments {
 		if att.URL != "" {
-			parts = append(parts, att.URL)
+			tag := ""
+			switch att.Type {
+			case "image", "photo":
+				tag = fmt.Sprintf("<media:image url=%q>", att.URL)
+			case "video":
+				tag = "<media:video>"
+			case "audio", "voice":
+				tag = "<media:audio>"
+			case "file", "document":
+				tag = "<media:document>"
+			default:
+				// Fallback to <media:image> if type is unknown but URL is present
+				tag = fmt.Sprintf("<media:image url=%q>", att.URL)
+			}
+			parts = append(parts, tag)
 		}
 	}
 

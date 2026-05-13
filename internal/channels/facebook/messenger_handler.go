@@ -63,6 +63,7 @@ func (ch *Channel) handleMessagingEvent(entry WebhookEntry, event MessagingEvent
 	var content string
 	var media []string
 
+	var mediaTags string
 	if event.Message != nil {
 		if event.Message.Text != "" {
 			content = event.Message.Text
@@ -70,6 +71,23 @@ func (ch *Channel) handleMessagingEvent(entry WebhookEntry, event MessagingEvent
 		for _, att := range event.Message.Attachments {
 			if (att.Type == "image" || att.Type == "video" || att.Type == "audio" || att.Type == "file") && att.Payload.URL != "" {
 				media = append(media, att.Payload.URL)
+				tag := ""
+				switch att.Type {
+				case "image":
+					tag = fmt.Sprintf("<media:image url=%q>", att.Payload.URL)
+				case "video":
+					tag = "<media:video>"
+				case "audio":
+					tag = "<media:audio>"
+				case "file":
+					tag = "<media:document>"
+				}
+				if tag != "" {
+					if mediaTags != "" {
+						mediaTags += "\n"
+					}
+					mediaTags += tag
+				}
 			}
 		}
 	} else if event.Postback != nil {
@@ -80,10 +98,13 @@ func (ch *Channel) handleMessagingEvent(entry WebhookEntry, event MessagingEvent
 		return // Ignore empty messages with no supported media
 	}
 
-	// For attachment-only messages (no text), provide a placeholder so the agent
-	// knows media was received. Without this, the LLM sees an empty user turn.
-	if content == "" && len(media) > 0 {
-		content = "[User sent media attachment(s)]"
+	// Append media tags so the agent has inline placeholders for the files.
+	// This matches Discord's behavior and prevents empty user turns.
+	if mediaTags != "" {
+		if content != "" {
+			content += "\n"
+		}
+		content += mediaTags
 	}
 
 	// Messenger sessions are 1:1: chatID = senderID (channel name scopes the session).
