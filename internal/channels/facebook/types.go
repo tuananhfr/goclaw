@@ -61,6 +61,9 @@ type ChangeValue struct {
 	PostID      string `json:"post_id"`
 	ParentID    string `json:"parent_id"` // parent comment ID for nested replies
 	Message     string `json:"message"`
+	Photo       string `json:"photo"`
+	Video       string `json:"video"`
+	Link        string `json:"link"`
 	Verb        string `json:"verb"` // "add", "edit", "remove"
 	CreatedTime int64  `json:"created_time"`
 }

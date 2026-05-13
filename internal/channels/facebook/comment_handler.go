@@ -55,7 +55,17 @@ func (ch *Channel) handleCommentEvent(entry WebhookEntry, change ChangeValue) {
 		"reply_to_comment_id": change.CommentID,
 	}
 
-	ch.HandleMessage(senderID, chatID, content, nil, metadata, "direct")
+	var media []string
+	if change.Photo != "" {
+		media = append(media, change.Photo)
+	}
+	if change.Video != "" {
+		media = append(media, change.Video)
+	}
+	// Fallback to Link if it points to media, but typically photo/video are what we want.
+	// If the user posted a link to an image, the agent can use tools to fetch it.
+
+	ch.HandleMessage(senderID, chatID, content, media, metadata, "direct")
 }
 
 // buildEnrichedContent fetches post content and comment thread, assembles a rich

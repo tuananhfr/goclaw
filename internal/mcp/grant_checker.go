@@ -69,6 +69,12 @@ func (gc *storeGrantChecker) IsAllowed(ctx context.Context, agentID uuid.UUID, u
 		return true
 	}
 
+	// Config-path servers (loaded from yaml) have a nil serverID.
+	// They are globally accessible, so skip the grant check.
+	if serverID == uuid.Nil {
+		return true
+	}
+
 	key := cacheKey{agentID: agentID, userID: userID}
 
 	// Try cache first

@@ -59,16 +59,25 @@ func (ch *Channel) handleMessagingEvent(entry WebhookEntry, event MessagingEvent
 		return
 	}
 
-	// Extract text content.
+	// Extract text content and media attachments.
 	var content string
-	switch {
-	case event.Message != nil && event.Message.Text != "":
-		content = event.Message.Text
-	case event.Postback != nil:
+	var media []string
+
+	if event.Message != nil {
+		if event.Message.Text != "" {
+			content = event.Message.Text
+		}
+		for _, att := range event.Message.Attachments {
+			if (att.Type == "image" || att.Type == "video" || att.Type == "audio" || att.Type == "file") && att.Payload.URL != "" {
+				media = append(media, att.Payload.URL)
+			}
+		}
+	} else if event.Postback != nil {
 		content = event.Postback.Title
-	default:
-		// Attachment-only message — skip for now.
-		return
+	}
+
+	if content == "" && len(media) == 0 {
+		return // Ignore empty messages with no supported media
 	}
 
 	// Messenger sessions are 1:1: chatID = senderID (channel name scopes the session).
@@ -84,7 +93,7 @@ func (ch *Channel) handleMessagingEvent(entry WebhookEntry, event MessagingEvent
 		metadata["session_timeout"] = ch.config.MessengerOptions.SessionTimeout
 	}
 
-	ch.HandleMessage(senderID, chatID, content, nil, metadata, "direct")
+	ch.HandleMessage(senderID, chatID, content, media, metadata, "direct")
 }
 
 func messagingEventTime(ts int64) time.Time {

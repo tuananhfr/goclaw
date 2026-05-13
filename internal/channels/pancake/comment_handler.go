@@ -99,7 +99,7 @@ func (ch *Channel) handleCommentEvent(data MessagingData) {
 	}
 
 	// Build content — optionally enriched with post context.
-	content := ch.buildCommentContent(data)
+	content, media := ch.buildCommentContent(data)
 
 	metadata := map[string]string{
 		"pancake_mode":        "comment",
@@ -121,7 +121,7 @@ func (ch *Channel) handleCommentEvent(data MessagingData) {
 		data.Message.SenderID,
 		data.ConversationID,
 		content,
-		nil,
+		media,
 		metadata,
 		"direct",
 	)
@@ -136,16 +136,23 @@ func (ch *Channel) handleCommentEvent(data MessagingData) {
 
 // buildCommentContent assembles the comment content, optionally enriched with post context.
 // Uses display name only (no senderID in content — senderID stays in metadata).
-func (ch *Channel) buildCommentContent(data MessagingData) string {
+func (ch *Channel) buildCommentContent(data MessagingData) (string, []string) {
 	commentText := stripHTML(data.Message.Content)
 	senderName := channels.SanitizeDisplayName(data.Message.SenderName)
 	senderPrefix := fmt.Sprintf("[From: %s]", senderName)
 
+	var media []string
+	for _, att := range data.Message.Attachments {
+		if att.URL != "" {
+			media = append(media, att.URL)
+		}
+	}
+
 	if !ch.config.CommentReplyOptions.IncludePostContext || ch.postFetcher == nil {
 		if commentText != "" {
-			return senderPrefix + " " + commentText
+			return senderPrefix + " " + commentText, media
 		}
-		return senderPrefix
+		return senderPrefix, media
 	}
 
 	var sb strings.Builder
@@ -171,7 +178,7 @@ func (ch *Channel) buildCommentContent(data MessagingData) string {
 		sb.WriteString(commentText)
 	}
 
-	return sb.String()
+	return sb.String(), media
 }
 
 // reactCommentAsync likes the comment on Facebook asynchronously.

@@ -942,7 +942,7 @@ CREATE TABLE IF NOT EXISTS team_task_attachments (
     base_name            TEXT NOT NULL DEFAULT '',  -- app-populated lowercased basename; PG equivalent is GENERATED
     file_size            BIGINT NOT NULL DEFAULT 0,
     mime_type            VARCHAR(100) DEFAULT '',
-    created_by_agent_id  TEXT REFERENCES agents(id),
+    created_by_agent_id  TEXT REFERENCES agents(id) ON DELETE SET NULL,
     created_by_sender_id VARCHAR(255) DEFAULT '',
     metadata             TEXT NOT NULL DEFAULT '{}',
     custom_scope         TEXT,

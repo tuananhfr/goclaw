@@ -44,8 +44,7 @@ func (l *Loop) makeExecuteToolCall(req *RunRequest, bridgeRS *runState) func(ctx
 			})
 		}
 
-		result := l.tools.ExecuteWithContext(ctx, registryName, tc.Arguments,
-			req.Channel, req.ChatID, req.PeerKind, req.SessionKey, nil)
+		result := l.executeToolWithUserOverride(ctx, registryName, tc.Arguments, req)
 		toolDuration := time.Since(toolStart)
 
 		l.emitToolSpanEnd(ctx, toolSpanID, toolStart, result)
@@ -101,8 +100,7 @@ func (l *Loop) makeExecuteToolRaw(req *RunRequest) func(ctx context.Context, tc 
 			})
 		}
 
-		result := l.tools.ExecuteWithContext(ctx, registryName, tc.Arguments,
-			req.Channel, req.ChatID, req.PeerKind, req.SessionKey, nil)
+		result := l.executeToolWithUserOverride(ctx, registryName, tc.Arguments, req)
 		dur := time.Since(start)
 
 		// Emit tool span end inside goroutine to prevent orphaned spans on ctx cancellation.
@@ -228,4 +226,33 @@ func makeToolEmitRun(l *Loop, req *RunRequest) func(AgentEvent) {
 		event.Channel = req.Channel
 		l.emit(event)
 	}
+}
+
+// executeToolWithUserOverride executes a tool, giving precedence to user-specific
+// tool instances (e.g. per-user MCP connections) over the shared agent registry.
+// This prevents cross-user data leaks where User B might execute a tool using User A's connection.
+func (l *Loop) executeToolWithUserOverride(ctx context.Context, registryName string, args map[string]any, req *RunRequest) *tools.Result {
+	// 1. Check if the current user has a user-specific version of this tool
+	var userTool tools.Tool
+	if cached, ok := l.mcpUserTools.Load(req.UserID); ok {
+		for _, t := range cached.([]tools.Tool) {
+			if t.Name() == registryName {
+				userTool = t
+				break
+			}
+		}
+	}
+
+	// 2. If a user-specific tool exists, clone the registry, override the tool, and execute.
+	// This ensures interceptors (rate limiting, scrubbing, panics) are still applied.
+	if userTool != nil {
+		if reg, ok := l.tools.(*tools.Registry); ok {
+			clone := reg.Clone()
+			clone.Register(userTool)
+			return clone.ExecuteWithContext(ctx, registryName, args, req.Channel, req.ChatID, req.PeerKind, req.SessionKey, nil)
+		}
+	}
+
+	// 3. Fallback to shared registry
+	return l.tools.ExecuteWithContext(ctx, registryName, args, req.Channel, req.ChatID, req.PeerKind, req.SessionKey, nil)
 }

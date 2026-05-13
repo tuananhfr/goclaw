@@ -127,7 +127,7 @@ func (h *MCPUserCredentialsHandler) handleGet(w http.ResponseWriter, r *http.Req
 	}
 
 	creds, err := h.store.GetUserCredentials(r.Context(), serverID, userID)
-	if err != nil {
+	if err != nil || creds == nil {
 		writeJSON(w, http.StatusOK, map[string]any{"has_credentials": false})
 		return
 	}

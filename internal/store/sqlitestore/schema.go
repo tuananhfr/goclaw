@@ -16,7 +16,7 @@ var schemaSQL string
 
 // SchemaVersion is the current SQLite schema version.
 // Bump this when adding new migration steps below.
-const SchemaVersion = 26
+const SchemaVersion = 27
 
 // migrations maps version → SQL to apply when upgrading FROM that version.
 // schema.sql always represents the LATEST full schema (for fresh DBs).
@@ -561,6 +561,50 @@ ALTER TABLE agent_heartbeats_new RENAME TO agent_heartbeats;
 CREATE INDEX IF NOT EXISTS idx_heartbeats_due
   ON agent_heartbeats(next_run_at)
   WHERE enabled = 1 AND next_run_at IS NOT NULL;`,
+
+	// Version 26 → 27: change team_task_attachments.created_by_agent_id FK to ON DELETE SET NULL
+	// (mirrors PG migration 000058). SQLite cannot ALTER FK clauses, so the table
+	// must be rebuilt.
+	26: `-- Defensive: clear orphan created_by_agent_id refs before rebuild (idempotent).
+UPDATE team_task_attachments
+   SET created_by_agent_id = NULL
+ WHERE created_by_agent_id IS NOT NULL
+   AND created_by_agent_id NOT IN (SELECT id FROM agents);
+
+-- Rebuild table with ON DELETE SET NULL on created_by_agent_id FK.
+CREATE TABLE team_task_attachments_new (
+    id                   TEXT NOT NULL PRIMARY KEY,
+    task_id              TEXT NOT NULL REFERENCES team_tasks(id) ON DELETE CASCADE,
+    team_id              TEXT NOT NULL REFERENCES agent_teams(id) ON DELETE CASCADE,
+    chat_id              VARCHAR(255) NOT NULL DEFAULT '',
+    path                 TEXT NOT NULL,
+    base_name            TEXT NOT NULL DEFAULT '',
+    file_size            BIGINT NOT NULL DEFAULT 0,
+    mime_type            VARCHAR(100) DEFAULT '',
+    created_by_agent_id  TEXT REFERENCES agents(id) ON DELETE SET NULL,
+    created_by_sender_id VARCHAR(255) DEFAULT '',
+    metadata             TEXT NOT NULL DEFAULT '{}',
+    custom_scope         TEXT,
+    tenant_id            TEXT NOT NULL REFERENCES tenants(id),
+    created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE(task_id, path)
+);
+
+INSERT INTO team_task_attachments_new (
+    id, task_id, team_id, chat_id, path, base_name, file_size, mime_type,
+    created_by_agent_id, created_by_sender_id, metadata, custom_scope, tenant_id, created_at
+) SELECT
+    id, task_id, team_id, chat_id, path, base_name, file_size, mime_type,
+    created_by_agent_id, created_by_sender_id, metadata, custom_scope, tenant_id, created_at
+  FROM team_task_attachments;
+
+DROP TABLE team_task_attachments;
+ALTER TABLE team_task_attachments_new RENAME TO team_task_attachments;
+
+CREATE INDEX IF NOT EXISTS idx_tta_task ON team_task_attachments(task_id);
+CREATE INDEX IF NOT EXISTS idx_tta_team ON team_task_attachments(team_id);
+CREATE INDEX IF NOT EXISTS idx_team_task_attachments_tenant ON team_task_attachments(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_tta_tenant_basename ON team_task_attachments(tenant_id, base_name);`,
 }
 
 // addHooksTables is the SQLite incremental migration for schema v19 → v20.
@@ -756,7 +800,9 @@ func EnsureSchema(db *sql.DB) error {
 			// require foreign_keys=OFF per SQLite altertable §7. The pragma is
 			// a no-op inside a transaction, so toggle it around BEGIN/COMMIT.
 			// v25 → v26: rebuilds agent_heartbeats; heartbeat_run_logs.heartbeat_id FKs into it.
-			needsFKOff := v == 25
+			// v26 → v27: rebuilds team_task_attachments. No tables reference it via FKs right now,
+			// but we turn it off just to be safe.
+			needsFKOff := v == 25 || v == 26
 			if needsFKOff {
 				if _, err := db.Exec("PRAGMA foreign_keys=OFF"); err != nil {
 					return fmt.Errorf("disable FK before v%d: %w", v, err)
