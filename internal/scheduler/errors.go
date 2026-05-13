@@ -20,4 +20,8 @@ var (
 	// ErrLaneCleared is returned when a session queue is reset (e.g. during restart)
 	// and all pending requests are drained.
 	ErrLaneCleared = errors.New("session queue cleared during reset")
+
+	// ErrMessageCoalesced is returned to extra queued messages that were merged
+	// into a single run request. Not a real error — just signals dedup.
+	ErrMessageCoalesced = errors.New("message coalesced into another run")
 )

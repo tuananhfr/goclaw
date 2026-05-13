@@ -8,6 +8,7 @@ package bus
 
 import (
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -38,7 +39,7 @@ func NewInboundDebouncer(debounceMs time.Duration, flushFn func(InboundMessage))
 }
 
 // Push adds a message to the debounce buffer.
-// If debouncing is disabled or the message should bypass (media), it is flushed immediately.
+// If debouncing is disabled, it is flushed immediately.
 func (d *InboundDebouncer) Push(msg InboundMessage) {
 	// Disabled: pass through immediately.
 	if d.debounceMs <= 0 {
@@ -48,17 +49,19 @@ func (d *InboundDebouncer) Push(msg InboundMessage) {
 
 	key := debounceKey(msg)
 
-	// Media messages bypass debounce — flush any buffered text first, then process media.
-	if len(msg.Media) > 0 {
-		d.flushKey(key)
-		d.flushFn(msg)
-		return
-	}
-
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	buf, exists := d.buffers[key]
+
+	// Media message with NO pending buffer: flush immediately (nothing to merge with).
+	if len(msg.Media) > 0 && !exists {
+		d.mu.Unlock()
+		d.flushFn(msg)
+		d.mu.Lock()
+		return
+	}
+
 	if !exists {
 		buf = &debounceBuffer{}
 		d.buffers[key] = buf
@@ -66,17 +69,28 @@ func (d *InboundDebouncer) Push(msg InboundMessage) {
 
 	buf.messages = append(buf.messages, msg)
 
-	// Reset debounce timer — fires after debounceMs of silence.
+	// Remove the immediate media flush block. Media should be debounced just like text
+	// so that a text + multiple images sent together will all be merged into one run.
+
+	// Determine effective debounce window: use per-message override if provided.
+	effective := d.debounceMs
+	if ms, ok := msg.Metadata["debounce_ms"]; ok {
+		if v, err := strconv.Atoi(ms); err == nil && time.Duration(v)*time.Millisecond > effective {
+			effective = time.Duration(v) * time.Millisecond
+		}
+	}
+
+	// Reset debounce timer — fires after effective debounce window of silence.
 	if buf.timer != nil {
 		buf.timer.Stop()
 	}
-	buf.timer = time.AfterFunc(d.debounceMs, func() {
+	buf.timer = time.AfterFunc(effective, func() {
 		d.flushKey(key)
 	})
 
 	if len(buf.messages) == 1 {
 		slog.Debug("inbound debounce: buffering",
-			"key", key, "debounce_ms", d.debounceMs.Milliseconds())
+			"key", key, "debounce_ms", effective.Milliseconds())
 	} else {
 		slog.Debug("inbound debounce: message appended",
 			"key", key, "buffered", len(buf.messages))

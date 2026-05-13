@@ -263,6 +263,50 @@ func (sq *SessionQueue) startOne(ctx context.Context) {
 	pending := sq.queue[0]
 	sq.queue = sq.queue[1:]
 
+	// Coalesce: if more messages are queued for the same session,
+	// merge them into a single run to avoid redundant agent runs.
+	// This handles the common pattern where a user sends multiple
+	// rapid messages while the agent is processing a previous one.
+	if len(sq.queue) > 0 {
+		coalesced := 0
+		for len(sq.queue) > 0 {
+			extra := sq.queue[0]
+
+			// Skip stale messages.
+			if !sq.abortCutoffTime.IsZero() && extra.EnqueuedAt.Before(sq.abortCutoffTime) {
+				sq.queue = sq.queue[1:]
+				extra.ResultCh <- RunOutcome{Err: ErrMessageStale}
+				close(extra.ResultCh)
+				continue
+			}
+
+			sq.queue = sq.queue[1:]
+			coalesced++
+
+			// Merge content: join with newlines.
+			if extra.Req.Message != "" {
+				if pending.Req.Message != "" {
+					pending.Req.Message += "\n" + extra.Req.Message
+				} else {
+					pending.Req.Message = extra.Req.Message
+				}
+			}
+
+			// Merge media files.
+			pending.Req.Media = append(pending.Req.Media, extra.Req.Media...)
+
+			// Signal merged requests as completed (with the primary result).
+			// They share the same outcome — close their channels with a sentinel.
+			extra.ResultCh <- RunOutcome{Err: ErrMessageCoalesced}
+			close(extra.ResultCh)
+		}
+		if coalesced > 0 {
+			slog.Info("scheduler: coalesced queued messages",
+				"session", sq.key, "coalesced", coalesced,
+				"content_preview", truncateForLog(pending.Req.Message, 80))
+		}
+	}
+
 	runID := pending.Req.RunID
 	runCtx, cancel := context.WithCancel(ctx)
 	sq.activeRuns[runID] = activeRunEntry{cancel: cancel, generation: sq.generation}
@@ -468,4 +512,12 @@ func (sq *SessionQueue) Reset() {
 	sq.activeRuns = make(map[string]activeRunEntry)
 	sq.activeOrder = nil
 	sq.drainQueue(RunOutcome{Err: ErrLaneCleared})
+}
+
+// truncateForLog truncates a string for log output.
+func truncateForLog(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }

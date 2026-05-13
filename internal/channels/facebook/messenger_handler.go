@@ -59,7 +59,7 @@ func (ch *Channel) handleMessagingEvent(entry WebhookEntry, event MessagingEvent
 		return
 	}
 
-	// Extract text content and media attachments.
+	// Extract text content and media attachment URLs.
 	var content string
 	var media []string
 
@@ -80,19 +80,29 @@ func (ch *Channel) handleMessagingEvent(entry WebhookEntry, event MessagingEvent
 		return // Ignore empty messages with no supported media
 	}
 
+	// For attachment-only messages (no text), provide a placeholder so the agent
+	// knows media was received. Without this, the LLM sees an empty user turn.
+	if content == "" && len(media) > 0 {
+		content = "[User sent media attachment(s)]"
+	}
+
 	// Messenger sessions are 1:1: chatID = senderID (channel name scopes the session).
 	chatID := senderID
 
 	metadata := map[string]string{
-		"fb_mode":    "messenger",
-		"message_id": eventKey,
-		"page_id":    ch.pageID,
-		"sender_id":  senderID,
+		"fb_mode":     "messenger",
+		"message_id":  eventKey,
+		"page_id":     ch.pageID,
+		"sender_id":   senderID,
+		"debounce_ms": "3000", // Facebook splits text+media into separate webhooks; 3s window to merge them
 	}
 	if ch.config.MessengerOptions.SessionTimeout != "" {
 		metadata["session_timeout"] = ch.config.MessengerOptions.SessionTimeout
 	}
 
+	// Pass media URLs directly — persistMedia/copyMediaFile handles HTTP downloads.
+	// This avoids blocking the webhook handler and allows the debouncer to merge
+	// text + media messages from the same sender.
 	ch.HandleMessage(senderID, chatID, content, media, metadata, "direct")
 }
 

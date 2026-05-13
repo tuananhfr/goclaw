@@ -53,8 +53,11 @@ func (ch *Channel) handleCommentEvent(entry WebhookEntry, change ChangeValue) {
 		"sender_id":           senderID,
 		"fb_mode":             "comment",
 		"reply_to_comment_id": change.CommentID,
+		"debounce_ms":         "3000", // Facebook may split text+media into separate webhooks
 	}
 
+	// Collect media URLs from the comment webhook payload.
+	// URLs are passed directly — persistMedia/copyMediaFile handles HTTP downloads.
 	var media []string
 	if change.Photo != "" {
 		media = append(media, change.Photo)
@@ -62,8 +65,6 @@ func (ch *Channel) handleCommentEvent(entry WebhookEntry, change ChangeValue) {
 	if change.Video != "" {
 		media = append(media, change.Video)
 	}
-	// Fallback to Link if it points to media, but typically photo/video are what we want.
-	// If the user posted a link to an image, the agent can use tools to fetch it.
 
 	ch.HandleMessage(senderID, chatID, content, media, metadata, "direct")
 }

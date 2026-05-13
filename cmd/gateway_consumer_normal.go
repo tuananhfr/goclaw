@@ -428,6 +428,12 @@ func processNormalMessage(
 		}
 
 		if outcome.Err != nil {
+			// Coalesced messages were merged into another run — silently skip.
+			if errors.Is(outcome.Err, scheduler.ErrMessageCoalesced) || errors.Is(outcome.Err, scheduler.ErrQueueDropped) {
+				slog.Debug("inbound: message coalesced/dropped, skipping reply",
+					"channel", channel, "session", session, "err", outcome.Err)
+				return
+			}
 			// Don't send error for cancelled runs (/stop command) —
 			// publish empty outbound to clean up thinking/typing indicators.
 			if errors.Is(outcome.Err, context.Canceled) {

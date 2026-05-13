@@ -64,7 +64,7 @@ func (ch *Channel) handleMessagingEvent(data MessagingData) {
 		return
 	}
 
-	content, media := buildMessageContent(data)
+	content := buildMessageContent(data)
 
 	metadata := map[string]string{
 		"pancake_mode":      strings.ToLower(data.Type), // "inbox" or "comment"
@@ -80,7 +80,7 @@ func (ch *Channel) handleMessagingEvent(data MessagingData) {
 		data.Message.SenderID,
 		data.ConversationID, // ChatID = conversation_id for reply routing
 		content,
-		media,
+		nil, // media handled inline via content URLs
 		metadata,
 		"direct", // Pancake inbox conversations are always treated as direct messages
 	)
@@ -95,9 +95,10 @@ func (ch *Channel) handleMessagingEvent(data MessagingData) {
 	)
 }
 
-func buildMessageContent(data MessagingData) (string, []string) {
+// buildMessageContent combines text content and attachment URLs into a single string.
+// Format: [From: {SenderID} ({SenderName})] {content}
+func buildMessageContent(data MessagingData) string {
 	parts := []string{}
-	var media []string
 
 	if data.Message.Content != "" {
 		parts = append(parts, stripHTML(data.Message.Content))
@@ -106,9 +107,6 @@ func buildMessageContent(data MessagingData) (string, []string) {
 	for _, att := range data.Message.Attachments {
 		if att.URL != "" {
 			parts = append(parts, att.URL)
-			// Assuming all attachments with URLs are media for now
-			// If Pancake differentiates types, we should check it, but passing URL as media is safer.
-			media = append(media, att.URL)
 		}
 	}
 
@@ -117,11 +115,11 @@ func buildMessageContent(data MessagingData) (string, []string) {
 	if data.Message.SenderID != "" {
 		prefix := fmt.Sprintf("[From: %s (%s)]", data.Message.SenderID, data.Message.SenderName)
 		if body != "" {
-			return prefix + " " + body, media
+			return prefix + " " + body
 		}
-		return prefix, media
+		return prefix
 	}
-	return body, media
+	return body
 }
 
 // stripHTML removes HTML tags and unescapes HTML entities from s.

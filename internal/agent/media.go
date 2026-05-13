@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -206,19 +208,80 @@ func (l *Loop) persistMedia(sessionKey string, files []bus.MediaFile, workspace 
 
 	var refs []providers.MediaRef
 	for _, f := range files {
+		srcPath := f.Path
+		var downloadedTemp string // track downloaded URL temp file for cleanup
+
+		// If the path is a URL, download to a local temp file first.
+		// SanitizeImage and copyMediaFile both need local file access.
+		if strings.HasPrefix(f.Path, "http://") || strings.HasPrefix(f.Path, "https://") {
+			client := &http.Client{Timeout: 30 * time.Second}
+			resp, err := client.Get(f.Path)
+			if err != nil {
+				slog.Warn("media: URL download failed", "url", f.Path, "error", err)
+				continue
+			}
+			if resp.StatusCode != http.StatusOK {
+				resp.Body.Close()
+				slog.Warn("media: URL download non-200", "url", f.Path, "status", resp.StatusCode)
+				continue
+			}
+			// Detect extension from Content-Type or URL.
+			ct := resp.Header.Get("Content-Type")
+			ext := ".jpg"
+			switch {
+			case strings.Contains(ct, "png"):
+				ext = ".png"
+			case strings.Contains(ct, "gif"):
+				ext = ".gif"
+			case strings.Contains(ct, "webp"):
+				ext = ".webp"
+			case strings.Contains(ct, "mp4"), strings.Contains(ct, "video"):
+				ext = ".mp4"
+			case strings.Contains(ct, "audio"), strings.Contains(ct, "mpeg"):
+				ext = ".mp3"
+			case strings.Contains(ct, "pdf"):
+				ext = ".pdf"
+			}
+
+			tmp, err := os.CreateTemp("", "goclaw_dl_*"+ext)
+			if err != nil {
+				resp.Body.Close()
+				slog.Warn("media: create temp for URL failed", "error", err)
+				continue
+			}
+			n, err := io.Copy(tmp, io.LimitReader(resp.Body, 10*1024*1024))
+			resp.Body.Close()
+			tmp.Close()
+			if err != nil || n == 0 {
+				os.Remove(tmp.Name())
+				slog.Warn("media: URL download write failed", "url", f.Path, "error", err)
+				continue
+			}
+			srcPath = tmp.Name()
+			downloadedTemp = srcPath
+			// Update MIME from Content-Type header if not already set.
+			if f.MimeType == "" && ct != "" {
+				// Extract base MIME (e.g. "image/jpeg" from "image/jpeg; charset=utf-8")
+				if semi := strings.IndexByte(ct, ';'); semi > 0 {
+					ct = strings.TrimSpace(ct[:semi])
+				}
+				f.MimeType = ct
+			}
+			slog.Debug("media: downloaded URL to temp", "url", f.Path, "tmp", srcPath, "size", n)
+		}
+
 		mime := f.MimeType
 		if mime == "" {
-			mime = mimeFromExt(filepath.Ext(f.Path))
+			mime = mimeFromExt(filepath.Ext(srcPath))
 		}
 		kind := mediaKindFromMime(mime)
 
 		// Sanitize images before persistent storage.
-		srcPath := f.Path
 		var sanitizedTemp string // track temp file for cleanup
 		if kind == "image" {
-			sanitized, err := SanitizeImage(f.Path)
+			sanitized, err := SanitizeImage(srcPath)
 			if err != nil {
-				slog.Warn("media: sanitize image failed, using original", "path", f.Path, "error", err)
+				slog.Warn("media: sanitize image failed, using original", "path", srcPath, "error", err)
 			} else {
 				srcPath = sanitized
 				sanitizedTemp = sanitized
@@ -252,6 +315,9 @@ func (l *Loop) persistMedia(sessionKey string, files []bus.MediaFile, workspace 
 			if sanitizedTemp != "" {
 				os.Remove(sanitizedTemp)
 			}
+			if downloadedTemp != "" {
+				os.Remove(downloadedTemp)
+			}
 			continue
 		}
 
@@ -260,10 +326,16 @@ func (l *Loop) persistMedia(sessionKey string, files []bus.MediaFile, workspace 
 			if sanitizedTemp != "" {
 				os.Remove(sanitizedTemp)
 			}
+			if downloadedTemp != "" {
+				os.Remove(downloadedTemp)
+			}
 			continue
 		}
 		if sanitizedTemp != "" {
 			os.Remove(sanitizedTemp) // cleanup sanitized temp file
+		}
+		if downloadedTemp != "" {
+			os.Remove(downloadedTemp) // cleanup downloaded URL temp file
 		}
 
 		refs = append(refs, providers.MediaRef{
