@@ -85,5 +85,6 @@ export function isValidIanaTimezone(tz: string): boolean {
   if (!_cachedTzSet) {
     _cachedTzSet = new Set(getAllIanaTimezones().map((t) => t.value));
   }
-  return _cachedTzSet.has(tz);
+  const c = canonicalizeTimezone(tz);
+  return c ? _cachedTzSet.has(c) : false;
 }
