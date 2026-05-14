@@ -12,8 +12,8 @@ const (
 	DefaultHTTPTimeout = 300 * time.Second
 
 	// SSE stream scanner buffer sizes (OpenAI-compat, Anthropic, Codex).
-	SSEScanBufInit = 64 * 1024   // 64KB initial buffer
-	SSEScanBufMax  = 1024 * 1024 // 1MB max line for large tool call / thinking chunks
+	SSEScanBufInit = 64 * 1024        // 64KB initial buffer
+	SSEScanBufMax  = 16 * 1024 * 1024 // 16MB max line for large tool call / thinking chunks
 
 	// Stdio/JSONRPC scanner buffer sizes (Claude CLI, ACP).
 	StdioScanBufInit = 256 * 1024       // 256KB initial buffer
