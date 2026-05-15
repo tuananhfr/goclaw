@@ -544,7 +544,7 @@ flowchart TD
 | `traces` | LLM call traces | `agent_id`, `user_id`, `status`, `parent_trace_id`, aggregated token counts |
 | `spans` | Individual operations | `span_type` (llm_call, tool_call, agent, embedding), `parent_span_id` |
 | `skills` | Skill definitions | Content, metadata, grants |
-| `cron_jobs` | Scheduled tasks | `schedule_kind` (at/every/cron), `payload` (JSONB) |
+| `cron_jobs` | Scheduled tasks | `schedule_kind` (at/every/cron/random_window), `schedule_expr`, `schedule_tz`, `window_ms`, `next_run_at`, `payload` (JSONB) |
 | `mcp_servers` | MCP server configs | `transport`, `api_key` (encrypted), `tool_prefix` |
 | `custom_tools` | Dynamic tool definitions | `command` (template), `agent_id` (NULL = global), `env` (encrypted) |
 

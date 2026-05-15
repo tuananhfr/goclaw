@@ -7,7 +7,7 @@ Concurrency control and periodic task execution. The scheduler provides lane-bas
 ### Responsibilities
 
 - Scheduler: lane-based concurrency control, per-session message queue serialization
-- Cron: three schedule kinds (at/every/cron), run logging, retry with exponential backoff
+- Cron: four schedule kinds (at/every/cron/random_window), run logging, retry with exponential backoff
 
 ---
 
@@ -168,6 +168,56 @@ stateDiagram-v2
 | `at` | `atMs` (epoch ms) | Reminder at 3PM tomorrow, auto-deleted after execution |
 | `every` | `everyMs` | Every 30 minutes (1,800,000 ms) |
 | `cron` | `expr` (5-field) | `"0 9 * * 1-5"` (9AM on weekdays) |
+| `random_window` | `expr` (5-field), `windowMs` | `"0 9 * * 1,3,5"` + `7200000` (one random run between 9AM and 11AM on Mon/Wed/Fri) |
+
+### Random Window Schedules
+
+`random_window` is for human-like or non-fixed execution inside a bounded time range. The cron expression defines the start of the window, and `windowMs` defines the window length. The scheduler computes one random `nextRunAtMS` inside that range and persists it.
+
+Example payload:
+
+```json
+{
+  "kind": "random_window",
+  "expr": "0 9 * * 1,3,5",
+  "tz": "Asia/Ho_Chi_Minh",
+  "windowMs": 7200000
+}
+```
+
+This opens a window at 09:00 on Monday, Wednesday, and Friday, then runs once at a random time where `09:00 <= run < 11:00`.
+
+Important behavior:
+
+- Random selection happens only when `nextRunAtMS` is recomputed: create, update, enable, stale/null recovery, and after a successful or exhausted job run.
+- The main scheduler loop does not randomize every tick. It only checks the persisted `nextRunAtMS`.
+- If the server restarts and the persisted `nextRunAtMS` is still in the future, that selected time is preserved.
+- If `nextRunAtMS` is missing or stale, the store recomputes a new random time from the next matching window.
+- `windowMs` must be positive. Exact-time cron execution should use `kind: "cron"` instead.
+
+Common examples:
+
+```json
+{
+  "kind": "random_window",
+  "expr": "0 9 * * 1,3,5",
+  "tz": "Asia/Ho_Chi_Minh",
+  "windowMs": 7200000
+}
+```
+
+Runs once between 09:00 and 11:00 on Monday, Wednesday, and Friday.
+
+```json
+{
+  "kind": "random_window",
+  "expr": "0 15 * * 2,4,6",
+  "tz": "Asia/Ho_Chi_Minh",
+  "windowMs": 7200000
+}
+```
+
+Runs once between 15:00 and 17:00 on Tuesday, Thursday, and Saturday.
 
 ### Job States
 
@@ -208,7 +258,7 @@ Both jobs run with 5-minute timeout and tenant-scoped context. Failed analyses l
 |---|---|---|
 | Scheduler | `internal/scheduler/` | Lane-based concurrency (lanes, queue, drop policies, debounce, cancel, draining) |
 | Cron service | `internal/cron/` | In-memory run loop (1s tick), job CRUD, retry with backoff, schedule parsing, types |
-| Cron store | `internal/store/pg/cron*.go`, `internal/store/cron_store.go` | CronStore interface + PostgreSQL persistence (create, list, update, delete, execution, scanning) |
+| Cron store | `internal/store/pg/cron*.go`, `internal/store/sqlitestore/cron*.go`, `internal/store/cron_store.go` | CronStore interface + PostgreSQL/SQLite persistence (create, list, update, delete, execution, scanning, random-window recompute) |
 | Gateway wiring | `cmd/gateway_cron.go`, `internal/gateway/methods/cron.go` | Scheduler lane routing, RPC handlers (list, create, update, delete, toggle, run, runs) |
 
 Use `grep` or your editor's symbol search for specific files.

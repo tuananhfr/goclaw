@@ -34,6 +34,36 @@ For system design see `docs/00-architecture-overview.md`; for API contract see `
 
 ---
 
+## Cron Scheduling
+
+Cron jobs live in the store layer (`internal/store/cron_store.go`, `internal/store/pg/cron*.go`, and `internal/store/sqlitestore/cron*.go`) and are exposed through the cron tool, WebSocket cron RPCs, and the web UI.
+
+Supported schedule kinds:
+
+| Kind | Purpose |
+|------|---------|
+| `at` | Run once at an absolute epoch-millisecond timestamp |
+| `every` | Run repeatedly at a fixed millisecond interval |
+| `cron` | Run at exact times from a 5-field cron expression |
+| `random_window` | Use a 5-field cron expression as the window start, then run once at a random offset inside `windowMs` |
+
+`random_window` persists the selected random time in `next_run_at`. Randomness happens only when the next run is recomputed: create, update, enable, stale/null recovery, and after a job finishes. The scheduler loop itself only checks due jobs by `next_run_at`.
+
+Example:
+
+```json
+{
+  "kind": "random_window",
+  "expr": "0 9 * * 1,3,5",
+  "tz": "Asia/Ho_Chi_Minh",
+  "windowMs": 7200000
+}
+```
+
+This runs once between 09:00 and 11:00 on Monday, Wednesday, and Friday. See `docs/08-scheduling-cron.md` for details.
+
+---
+
 ## TTS Subsystem
 
 ### Overview

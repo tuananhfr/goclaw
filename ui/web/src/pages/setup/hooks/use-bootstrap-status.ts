@@ -9,18 +9,21 @@ export type SetupStep = 1 | 2 | 3 | 4 | "complete";
 
 export function useBootstrapStatus() {
   const connected = useAuthStore((s) => s.connected);
+  const role = useAuthStore((s) => s.role);
   const userId = useAuthStore((s) => s.userId);
   const tenantId = useAuthStore((s) => s.tenantId);
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
-  const { providers, loading: providersLoading } = useProviders();
+  const canManageSetup = role === "owner" || role === "admin";
+  const { providers, loading: providersLoading } = useProviders(connected && canManageSetup);
   const { statuses: oauthStatuses, isLoading: oauthStatusesLoading } = useChatGPTOAuthProviderStatuses(providers);
-  const { agents, loading: agentsLoading } = useAgents();
+  const { agents, loading: agentsLoading } = useAgents(canManageSetup);
 
   // Wait for WS to connect before considering agents loaded
-  const loading = providersLoading || agentsLoading || oauthStatusesLoading || !connected;
+  const loading = !connected || (canManageSetup && (providersLoading || agentsLoading || oauthStatusesLoading));
 
   const { needsSetup, currentStep } = useMemo(() => {
     if (loading) return { needsSetup: false, currentStep: "complete" as SetupStep };
+    if (!canManageSetup) return { needsSetup: false, currentStep: "complete" as SetupStep };
 
     const readyOAuthProviders = new Set(
       oauthStatuses
@@ -42,7 +45,7 @@ export function useBootstrapStatus() {
     if (!hasProvider) return { needsSetup: true, currentStep: 1 as SetupStep };
     if (!hasAgent) return { needsSetup: true, currentStep: 2 as SetupStep };
     return { needsSetup: false, currentStep: "complete" as SetupStep };
-  }, [agents, loading, oauthStatuses, providers, tenantId, tenantSlug, userId]);
+  }, [agents, canManageSetup, loading, oauthStatuses, providers, tenantId, tenantSlug, userId]);
 
   return { needsSetup, currentStep, loading, providers, agents };
 }

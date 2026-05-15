@@ -15,7 +15,7 @@ interface AgentInfoWs {
   isRunning: boolean;
 }
 
-export function useAgents() {
+export function useAgents(enabled = true) {
   const ws = useWs();
   const http = useHttp();
   const connected = useAuthStore((s) => s.connected);
@@ -53,7 +53,7 @@ export function useAgents() {
       }));
     },
     staleTime: 60_000,
-    enabled: connected,
+    enabled: connected && enabled,
   });
 
   const error = queryError instanceof Error ? queryError.message : queryError ? "Failed to load agents" : null;
