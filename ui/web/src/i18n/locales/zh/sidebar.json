@@ -21,7 +21,7 @@
     "cron": "定时任务",
     "hooks": "Hooks",
     "customTools": "自定义工具",
-    "logs": "日志",
+    "logs": "系统日志",
     "mcpServers": "MCP 服务器",
     "memory": "记忆",
     "knowledgeGraph": "Knowledge Graph",

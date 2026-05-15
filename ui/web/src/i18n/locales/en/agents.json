@@ -651,8 +651,12 @@
     "revokeDesc": "Revoke access for user \"{{userId}}\"? They will no longer be able to use this agent.",
     "revoke": "Revoke",
     "role.user": "User",
+    "role.operator": "Operator",
+    "role.admin": "Admin",
     "role.viewer": "Viewer",
     "roleDesc.user": "Can use the agent and chat",
+    "roleDesc.operator": "Can operate shared workflows",
+    "roleDesc.admin": "Can administer this agent",
     "roleDesc.viewer": "Read-only access"
   },
   "links": {

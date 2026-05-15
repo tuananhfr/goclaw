@@ -10,6 +10,7 @@ import { AgentOverviewTab } from "./agent-overview-tab";
 import { AgentFilesTab } from "./agent-files-tab";
 import { AgentInstancesTab } from "./agent-instances-tab";
 import { AgentPermissionsTab } from "./agent-permissions-tab";
+import { AgentSharesSection } from "./agent-shares-section";
 import { AgentEvolutionTab } from "./evolution-tab/agent-evolution-tab";
 import { AgentHooksTab } from "./agent-hooks-tab";
 import { SummoningModal } from "../summoning-modal";
@@ -115,7 +116,10 @@ export function AgentDetailPage({ agentId, onBack }: AgentDetailPageProps) {
             </TabsContent>
 
             <TabsContent value="permissions" className="mt-4">
-              <AgentPermissionsTab agentId={agentId} />
+              <div className="space-y-4">
+                <AgentSharesSection agentId={agentId} />
+                <AgentPermissionsTab agentId={agentId} />
+              </div>
             </TabsContent>
 
             <TabsContent value="evolution" className="mt-4">

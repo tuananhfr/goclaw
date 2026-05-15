@@ -636,8 +636,12 @@
     "revokeDesc": "Thu hồi quyền truy cập của người dùng \"{{userId}}\"? Họ sẽ không thể sử dụng agent này nữa.",
     "revoke": "Thu hồi",
     "role.user": "Người dùng",
+    "role.operator": "Vận hành",
+    "role.admin": "Quản trị",
     "role.viewer": "Người xem",
     "roleDesc.user": "Có thể sử dụng agent và trò chuyện",
+    "roleDesc.operator": "Có thể vận hành workflow được chia sẻ",
+    "roleDesc.admin": "Có thể quản trị agent này",
     "roleDesc.viewer": "Chỉ đọc"
   },
   "links": {
