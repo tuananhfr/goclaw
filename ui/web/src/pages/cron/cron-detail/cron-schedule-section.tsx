@@ -6,7 +6,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { getAllIanaTimezones } from "@/lib/constants";
 import type { CronJob } from "../hooks/use-cron";
 
-type ScheduleKind = "every" | "cron" | "at";
+type ScheduleKind = "every" | "cron" | "random_window" | "at";
 
 interface CronScheduleSectionProps {
   job: CronJob;
@@ -16,6 +16,8 @@ interface CronScheduleSectionProps {
   setEverySeconds: (v: string) => void;
   cronExpr: string;
   setCronExpr: (v: string) => void;
+  windowMinutes: string;
+  setWindowMinutes: (v: string) => void;
   timezone: string;
   setTimezone: (v: string) => void;
   readonly: boolean;
@@ -29,6 +31,8 @@ export function CronScheduleSection({
   setEverySeconds,
   cronExpr,
   setCronExpr,
+  windowMinutes,
+  setWindowMinutes,
   timezone,
   setTimezone,
   readonly,
@@ -47,7 +51,7 @@ export function CronScheduleSection({
       <div className="space-y-2">
         <Label>{t("create.scheduleType")}</Label>
         <div className="flex gap-2">
-          {(["every", "cron", "at"] as const).map((kind) => (
+          {(["every", "cron", "random_window", "at"] as const).map((kind) => (
             <Button
               key={kind}
               variant={scheduleKind === kind ? "default" : "outline"}
@@ -56,7 +60,13 @@ export function CronScheduleSection({
               disabled={readonly}
               type="button"
             >
-              {kind === "every" ? t("create.every") : kind === "cron" ? t("create.cron") : t("create.once")}
+              {kind === "every"
+                ? t("create.every")
+                : kind === "cron"
+                  ? t("create.cron")
+                  : kind === "random_window"
+                    ? t("create.randomWindow", "Random window")
+                    : t("create.once")}
             </Button>
           ))}
         </div>
@@ -73,7 +83,7 @@ export function CronScheduleSection({
         </div>
       )}
 
-      {scheduleKind === "cron" && (
+      {(scheduleKind === "cron" || scheduleKind === "random_window") && (
         <div className="space-y-2">
           <Label>{t("create.cronExpression")}</Label>
           <Input
@@ -81,6 +91,18 @@ export function CronScheduleSection({
             disabled={readonly} placeholder="0 * * * *" className="text-base md:text-sm"
           />
           <p className="text-xs text-muted-foreground">{t("create.cronHint")}</p>
+        </div>
+      )}
+
+      {scheduleKind === "random_window" && (
+        <div className="space-y-2">
+          <Label>{t("create.windowMinutes", "Window duration (minutes)")}</Label>
+          <Input
+            type="number" min={1} value={windowMinutes}
+            onChange={(e) => setWindowMinutes(e.target.value)}
+            disabled={readonly} className="text-base md:text-sm"
+          />
+          <p className="text-xs text-muted-foreground">{t("create.randomWindowHint", "Runs once at a random time after the cron start.")}</p>
         </div>
       )}
 

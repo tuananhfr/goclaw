@@ -140,7 +140,10 @@ func printCronJobs(jobs []store.CronJob, jsonOutput bool) {
 	fmt.Fprintf(tw, "ID\tNAME\tENABLED\tSCHEDULE\tLAST RUN\n")
 	for _, j := range jobs {
 		schedule := j.Schedule.Kind
-		if j.Schedule.Expr != "" {
+		if j.Schedule.Kind == "random_window" && j.Schedule.Expr != "" && j.Schedule.WindowMS != nil {
+			d := time.Duration(*j.Schedule.WindowMS) * time.Millisecond
+			schedule = "random " + j.Schedule.Expr + " + " + d.String()
+		} else if j.Schedule.Expr != "" {
 			schedule = j.Schedule.Expr
 		} else if j.Schedule.EveryMS != nil {
 			d := time.Duration(*j.Schedule.EveryMS) * time.Millisecond

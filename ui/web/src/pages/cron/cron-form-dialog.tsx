@@ -13,10 +13,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import type { CronSchedule } from "./hooks/use-cron";
 import { slugify } from "@/lib/slug";
+import { getAllIanaTimezones, isValidIanaTimezone } from "@/lib/constants";
 import { useAgents } from "@/pages/agents/hooks/use-agents";
 import { cronCreateSchema, type CronCreateFormData } from "@/schemas/cron.schema";
+import { toast } from "@/stores/use-toast-store";
 
 interface CronFormDialogProps {
   open: boolean;
@@ -43,17 +46,26 @@ export function CronFormDialog({ open, onOpenChange, onSubmit }: CronFormDialogP
       scheduleKind: "every",
       everyValue: "60",
       cronExpr: "0 * * * *",
+      timezone: "UTC",
+      windowMinutes: "120",
     },
   });
 
   const scheduleKind = watch("scheduleKind");
 
   const onFormSubmit = async (data: CronCreateFormData) => {
+    const tz = data.timezone && data.timezone !== "UTC" ? data.timezone : "";
+    if (tz && !isValidIanaTimezone(tz)) {
+      toast.error(t("detail.invalidTimezone", "Invalid timezone"));
+      return;
+    }
     let schedule: CronSchedule;
     if (data.scheduleKind === "every") {
       schedule = { kind: "every", everyMs: Number(data.everyValue) * 1000 };
     } else if (data.scheduleKind === "cron") {
-      schedule = { kind: "cron", expr: data.cronExpr };
+      schedule = { kind: "cron", expr: data.cronExpr, tz };
+    } else if (data.scheduleKind === "random_window") {
+      schedule = { kind: "random_window", expr: data.cronExpr, tz, windowMs: Number(data.windowMinutes) * 60_000 };
     } else {
       schedule = { kind: "at", atMs: Date.now() + 60000 };
     }
@@ -118,14 +130,20 @@ export function CronFormDialog({ open, onOpenChange, onSubmit }: CronFormDialogP
           <div className="space-y-2">
             <Label>{t("create.scheduleType")}</Label>
             <div className="flex gap-2">
-              {(["every", "cron", "at"] as const).map((kind) => (
+              {(["every", "cron", "random_window", "at"] as const).map((kind) => (
                 <Button
                   key={kind}
                   variant={scheduleKind === kind ? "default" : "outline"}
                   size="sm"
                   onClick={() => setValue("scheduleKind", kind)}
                 >
-                  {kind === "every" ? t("create.every") : kind === "cron" ? t("create.cron") : t("create.once")}
+                  {kind === "every"
+                    ? t("create.every")
+                    : kind === "cron"
+                      ? t("create.cron")
+                      : kind === "random_window"
+                        ? t("create.randomWindow", "Random window")
+                        : t("create.once")}
                 </Button>
               ))}
             </div>
@@ -143,7 +161,7 @@ export function CronFormDialog({ open, onOpenChange, onSubmit }: CronFormDialogP
             </div>
           )}
 
-          {scheduleKind === "cron" && (
+          {(scheduleKind === "cron" || scheduleKind === "random_window") && (
             <div className="space-y-2">
               <Label>{t("create.cronExpression")}</Label>
               <Input
@@ -151,6 +169,39 @@ export function CronFormDialog({ open, onOpenChange, onSubmit }: CronFormDialogP
                 placeholder="0 * * * *"
               />
               <p className="text-xs text-muted-foreground">{t("create.cronHint")}</p>
+            </div>
+          )}
+
+          {scheduleKind === "random_window" && (
+            <div className="space-y-2">
+              <Label>{t("create.windowMinutes", "Window duration (minutes)")}</Label>
+              <Input
+                type="number"
+                min={1}
+                {...register("windowMinutes")}
+                placeholder="120"
+              />
+              <p className="text-xs text-muted-foreground">{t("create.randomWindowHint", "Runs once at a random time after the cron start.")}</p>
+            </div>
+          )}
+
+          {(scheduleKind === "cron" || scheduleKind === "random_window") && (
+            <div className="space-y-2">
+              <Label>{t("detail.timezone")}</Label>
+              <Controller
+                control={control}
+                name="timezone"
+                render={({ field }) => (
+                  <Combobox
+                    value={field.value || "UTC"}
+                    onChange={field.onChange}
+                    options={getAllIanaTimezones()}
+                    placeholder={t("detail.timezone")}
+                    className="text-base md:text-sm"
+                  />
+                )}
+              />
+              <p className="text-xs text-muted-foreground">{t("detail.timezoneDesc")}</p>
             </div>
           )}
 

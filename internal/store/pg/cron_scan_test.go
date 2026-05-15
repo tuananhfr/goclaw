@@ -89,6 +89,7 @@ func validCronRow(payloadJSON []byte) []any {
 		(*time.Time)(nil),   // run_at
 		&tz,                 // timezone
 		(*int64)(nil),       // interval_ms
+		(*int64)(nil),       // window_ms
 		payloadJSON,         // payload
 		false,               // delete_after_run
 		false,               // stateless
@@ -130,10 +131,10 @@ func TestScanCronRow_ValidPayload(t *testing.T) {
 
 	// Build row with deliver/deliver_channel/deliver_to set as dedicated columns.
 	rowVals := validCronRow(payloadJSON)
-	// Indices: stateless=13, deliver=14, deliver_channel=15, deliver_to=16, wake_heartbeat=17
-	rowVals[14] = true      // deliver
-	rowVals[15] = "telegram" // deliver_channel
-	rowVals[16] = "user123" // deliver_to
+	// Indices: stateless=14, deliver=15, deliver_channel=16, deliver_to=17, wake_heartbeat=18
+	rowVals[15] = true       // deliver
+	rowVals[16] = "telegram" // deliver_channel
+	rowVals[17] = "user123"  // deliver_to
 	row := &mockRowScanner{values: rowVals}
 
 	job, err := scanCronRow(row)

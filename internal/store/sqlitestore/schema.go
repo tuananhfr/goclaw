@@ -16,7 +16,7 @@ var schemaSQL string
 
 // SchemaVersion is the current SQLite schema version.
 // Bump this when adding new migration steps below.
-const SchemaVersion = 27
+const SchemaVersion = 28
 
 // migrations maps version → SQL to apply when upgrading FROM that version.
 // schema.sql always represents the LATEST full schema (for fresh DBs).
@@ -605,6 +605,9 @@ CREATE INDEX IF NOT EXISTS idx_tta_task ON team_task_attachments(task_id);
 CREATE INDEX IF NOT EXISTS idx_tta_team ON team_task_attachments(team_id);
 CREATE INDEX IF NOT EXISTS idx_team_task_attachments_tenant ON team_task_attachments(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_tta_tenant_basename ON team_task_attachments(tenant_id, base_name);`,
+
+	// Version 27 → 28: random-window cron schedules.
+	27: `ALTER TABLE cron_jobs ADD COLUMN window_ms BIGINT;`,
 }
 
 // addHooksTables is the SQLite incremental migration for schema v19 → v20.

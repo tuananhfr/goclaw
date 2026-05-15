@@ -8,9 +8,11 @@ export const cronCreateSchema = z.object({
     .refine(isValidSlug, "Only lowercase letters, numbers, and hyphens"),
   message: z.string().min(1, "Required"),
   agentId: z.string().optional(),
-  scheduleKind: z.enum(["every", "cron", "at"]),
+  scheduleKind: z.enum(["every", "cron", "random_window", "at"]),
   everyValue: z.string().min(1, "Required"),
   cronExpr: z.string().min(1, "Required"),
+  timezone: z.string().optional(),
+  windowMinutes: z.string().min(1, "Required"),
 });
 
 export type CronCreateFormData = z.infer<typeof cronCreateSchema>;

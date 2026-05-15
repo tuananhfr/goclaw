@@ -52,6 +52,7 @@ type CronJobExport struct {
 	ScheduleKind   string          `json:"schedule_kind" db:"schedule_kind"`
 	CronExpression *string         `json:"cron_expression,omitempty" db:"cron_expression"`
 	IntervalMS     *int64          `json:"interval_ms,omitempty" db:"interval_ms"`
+	WindowMS       *int64          `json:"window_ms,omitempty" db:"window_ms"`
 	RunAt          *string         `json:"run_at,omitempty" db:"run_at"`
 	Timezone       *string         `json:"timezone,omitempty" db:"timezone"`
 	Payload        json.RawMessage `json:"payload" db:"payload"`
@@ -445,7 +446,7 @@ func ExportCronJobs(ctx context.Context, db *sql.DB, agentID uuid.UUID) ([]CronJ
 		return nil, err
 	}
 	rows, err := db.QueryContext(ctx,
-		"SELECT name, schedule_kind, cron_expression, interval_ms,"+
+		"SELECT name, schedule_kind, cron_expression, interval_ms, window_ms,"+
 			" to_char(run_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'), timezone, payload, delete_after_run"+
 			" FROM cron_jobs WHERE agent_id = $1"+tc,
 		append([]any{agentID}, tcArgs...)...,
@@ -459,7 +460,7 @@ func ExportCronJobs(ctx context.Context, db *sql.DB, agentID uuid.UUID) ([]CronJ
 	for rows.Next() {
 		var j CronJobExport
 		if err := rows.Scan(&j.Name, &j.ScheduleKind, &j.CronExpression, &j.IntervalMS,
-			&j.RunAt, &j.Timezone, &j.Payload, &j.DeleteAfterRun); err != nil {
+			&j.WindowMS, &j.RunAt, &j.Timezone, &j.Payload, &j.DeleteAfterRun); err != nil {
 			slog.Warn("export.scan", "error", err)
 			continue
 		}

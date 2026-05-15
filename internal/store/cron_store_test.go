@@ -64,6 +64,74 @@ func TestNextRunForToggle_EnableUsesDefaultTimezoneForCronSchedule(t *testing.T)
 	}
 }
 
+func TestValidateCronSchedule_RandomWindow(t *testing.T) {
+	window := int64(2 * time.Hour / time.Millisecond)
+	valid := &CronSchedule{
+		Kind:     "random_window",
+		Expr:     "0 9 * * 1,3,5",
+		TZ:       "Asia/Ho_Chi_Minh",
+		WindowMS: &window,
+	}
+	if err := ValidateCronSchedule(valid); err != nil {
+		t.Fatalf("valid random_window rejected: %v", err)
+	}
+
+	for name, schedule := range map[string]*CronSchedule{
+		"missing_window": {Kind: "random_window", Expr: "0 9 * * *"},
+		"zero_window":    {Kind: "random_window", Expr: "0 9 * * *", WindowMS: int64Ptr(0)},
+		"bad_cron":       {Kind: "random_window", Expr: "bad cron", WindowMS: &window},
+		"bad_timezone":   {Kind: "random_window", Expr: "0 9 * * *", TZ: "Invalid/Zone", WindowMS: &window},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := ValidateCronSchedule(schedule); err == nil {
+				t.Fatal("expected validation error")
+			}
+		})
+	}
+}
+
+func TestComputeNextRun_RandomWindowRangeAndTimezone(t *testing.T) {
+	window := int64(2 * time.Hour / time.Millisecond)
+	now := time.Date(2026, time.May, 15, 1, 0, 0, 0, time.UTC) // Friday 08:00 in Vietnam.
+	schedule := &CronSchedule{
+		Kind:     "random_window",
+		Expr:     "0 9 * * 1,3,5",
+		TZ:       "Asia/Ho_Chi_Minh",
+		WindowMS: &window,
+	}
+
+	next := ComputeNextRun(schedule, now, "")
+	if next == nil {
+		t.Fatal("expected next random_window run")
+	}
+	windowStart := time.Date(2026, time.May, 15, 2, 0, 0, 0, time.UTC) // 09:00 +07.
+	windowEnd := windowStart.Add(2 * time.Hour)
+	if next.Before(windowStart) || !next.Before(windowEnd) {
+		t.Fatalf("next run %v outside [%v, %v)", next, windowStart, windowEnd)
+	}
+}
+
+func TestComputeNextRun_RandomWindowNextMatchingDay(t *testing.T) {
+	window := int64(time.Hour / time.Millisecond)
+	now := time.Date(2026, time.May, 15, 12, 0, 0, 0, time.UTC) // after Friday window.
+	schedule := &CronSchedule{
+		Kind:     "random_window",
+		Expr:     "0 9 * * 1,3,5",
+		TZ:       "Asia/Ho_Chi_Minh",
+		WindowMS: &window,
+	}
+
+	next := ComputeNextRun(schedule, now, "")
+	if next == nil {
+		t.Fatal("expected next random_window run")
+	}
+	windowStart := time.Date(2026, time.May, 18, 2, 0, 0, 0, time.UTC) // next Monday 09:00 +07.
+	windowEnd := windowStart.Add(time.Hour)
+	if next.Before(windowStart) || !next.Before(windowEnd) {
+		t.Fatalf("next run %v outside [%v, %v)", next, windowStart, windowEnd)
+	}
+}
+
 func TestNextRunForToggle_AlreadyEnabledPreservesCurrentNextRun(t *testing.T) {
 	now := time.Date(2026, time.March, 28, 12, 0, 0, 0, time.UTC)
 	currentNextRun := now.Add(5 * time.Minute)
@@ -106,10 +174,10 @@ func TestNextRunForToggle_ExpiredAtReturnsError(t *testing.T) {
 
 //go:fix inline
 func int64Ptr(v int64) *int64 {
-	return new(v)
+	return &v
 }
 
 //go:fix inline
 func timePtr(v time.Time) *time.Time {
-	return new(v)
+	return &v
 }

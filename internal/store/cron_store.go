@@ -2,8 +2,10 @@ package store
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"math/big"
 	"sort"
 	"time"
 
@@ -39,11 +41,12 @@ type CronJob struct {
 
 // CronSchedule defines when a job should run.
 type CronSchedule struct {
-	Kind    string `json:"kind" db:"-"` // "at", "every", "cron"
-	AtMS    *int64 `json:"atMs,omitempty" db:"-"`
-	EveryMS *int64 `json:"everyMs,omitempty" db:"-"`
-	Expr    string `json:"expr,omitempty" db:"-"`
-	TZ      string `json:"tz,omitempty" db:"-"`
+	Kind     string `json:"kind" db:"-"` // "at", "every", "cron", "random_window"
+	AtMS     *int64 `json:"atMs,omitempty" db:"-"`
+	EveryMS  *int64 `json:"everyMs,omitempty" db:"-"`
+	Expr     string `json:"expr,omitempty" db:"-"`
+	TZ       string `json:"tz,omitempty" db:"-"`
+	WindowMS *int64 `json:"windowMs,omitempty" db:"-"`
 }
 
 // CronPayload describes what a job does when triggered.
@@ -167,25 +170,54 @@ func ComputeNextRun(schedule *CronSchedule, now time.Time, defaultTZ string) *ti
 		if schedule.Expr == "" {
 			return nil
 		}
-		tz := schedule.TZ
-		if tz == "" {
-			tz = defaultTZ
-		}
-		evalTime := now
-		if tz != "" {
-			if loc, err := time.LoadLocation(tz); err == nil {
-				evalTime = now.In(loc)
-			}
-		}
-		nextTime, err := gronx.NextTickAfter(schedule.Expr, evalTime, false)
+		nextTime, err := nextCronTick(schedule.Expr, schedule.TZ, now, defaultTZ)
 		if err != nil {
 			return nil
 		}
-		utcNext := nextTime.UTC()
-		return &utcNext
+		return nextTime
+	case "random_window":
+		if schedule.Expr == "" || schedule.WindowMS == nil || *schedule.WindowMS <= 0 {
+			return nil
+		}
+		windowStart, err := nextCronTick(schedule.Expr, schedule.TZ, now, defaultTZ)
+		if err != nil || windowStart == nil {
+			return nil
+		}
+		offsetMS := randomInt63n(*schedule.WindowMS)
+		next := windowStart.Add(time.Duration(offsetMS) * time.Millisecond)
+		return &next
 	default:
 		return nil
 	}
+}
+
+func nextCronTick(expr, tz string, now time.Time, defaultTZ string) (*time.Time, error) {
+	if tz == "" {
+		tz = defaultTZ
+	}
+	evalTime := now
+	if tz != "" {
+		if loc, err := time.LoadLocation(tz); err == nil {
+			evalTime = now.In(loc)
+		}
+	}
+	nextTime, err := gronx.NextTickAfter(expr, evalTime, false)
+	if err != nil {
+		return nil, err
+	}
+	utcNext := nextTime.UTC()
+	return &utcNext, nil
+}
+
+func randomInt63n(max int64) int64 {
+	if max <= 1 {
+		return 0
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(max))
+	if err != nil {
+		return time.Now().UnixNano() % max
+	}
+	return n.Int64()
 }
 
 // NextRunForSchedule resolves the persisted next_run_at for a given schedule state.
@@ -202,7 +234,7 @@ func NextRunForSchedule(schedule *CronSchedule, enabled bool, now time.Time, def
 	switch schedule.Kind {
 	case "at":
 		return nil, fmt.Errorf("%w: at schedule is already in the past", ErrCronJobNoFutureRun)
-	case "cron":
+	case "cron", "random_window":
 		return nil, fmt.Errorf("%w: cron schedule has no valid next execution", ErrCronJobNoFutureRun)
 	case "every":
 		return nil, fmt.Errorf("%w: every schedule has no valid interval", ErrCronJobNoFutureRun)
@@ -240,11 +272,16 @@ func MergeCronSchedule(current CronSchedule, patch *CronSchedule) CronSchedule {
 	// TZ: always use patch value for all schedule kinds. Empty = UTC (default).
 	merged.TZ = patch.TZ
 	switch newKind {
-	case "cron":
+	case "cron", "random_window":
 		if patch.Expr != "" {
 			merged.Expr = patch.Expr
 		} else if current.Kind == newKind {
 			merged.Expr = current.Expr
+		}
+		if patch.WindowMS != nil {
+			merged.WindowMS = patch.WindowMS
+		} else if current.Kind == newKind {
+			merged.WindowMS = current.WindowMS
 		}
 	case "every":
 		if patch.EveryMS != nil {
@@ -266,7 +303,7 @@ func MergeCronSchedule(current CronSchedule, patch *CronSchedule) CronSchedule {
 // ValidateCronSchedule checks structural schedule validity without evaluating future run existence.
 func ValidateCronSchedule(schedule *CronSchedule) error {
 	switch schedule.Kind {
-	case "cron":
+	case "cron", "random_window":
 		if schedule.Expr == "" {
 			return fmt.Errorf("cron schedule requires expr")
 		}
@@ -277,6 +314,9 @@ func ValidateCronSchedule(schedule *CronSchedule) error {
 			if _, err := time.LoadLocation(schedule.TZ); err != nil {
 				return fmt.Errorf("invalid timezone: %s", schedule.TZ)
 			}
+		}
+		if schedule.Kind == "random_window" && (schedule.WindowMS == nil || *schedule.WindowMS <= 0) {
+			return fmt.Errorf("random_window schedule requires positive windowMs")
 		}
 	case "every":
 		if schedule.EveryMS == nil || *schedule.EveryMS <= 0 {
@@ -309,15 +349,23 @@ func ApplyCronScheduleUpdates(updates map[string]any, schedule CronSchedule) {
 		updates["cron_expression"] = schedule.Expr
 		updates["interval_ms"] = nil
 		updates["run_at"] = nil
+		updates["window_ms"] = nil
+	case "random_window":
+		updates["cron_expression"] = schedule.Expr
+		updates["interval_ms"] = nil
+		updates["run_at"] = nil
+		updates["window_ms"] = *schedule.WindowMS
 	case "every":
 		updates["cron_expression"] = nil
 		updates["interval_ms"] = *schedule.EveryMS
 		updates["run_at"] = nil
+		updates["window_ms"] = nil
 	case "at":
 		runAt := time.UnixMilli(*schedule.AtMS)
 		updates["cron_expression"] = nil
 		updates["interval_ms"] = nil
 		updates["run_at"] = runAt
+		updates["window_ms"] = nil
 	}
 }
 

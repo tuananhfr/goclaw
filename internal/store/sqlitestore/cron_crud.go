@@ -18,8 +18,11 @@ import (
 )
 
 func (s *SQLiteCronStore) AddJob(ctx context.Context, name string, schedule store.CronSchedule, message string, deliver bool, channel, to, agentID, userID string) (*store.CronJob, error) {
-	if schedule.TZ == "" && schedule.Kind == "cron" && s.defaultTZ != "" {
+	if schedule.TZ == "" && (schedule.Kind == "cron" || schedule.Kind == "random_window") && s.defaultTZ != "" {
 		schedule.TZ = s.defaultTZ
+	}
+	if err := store.ValidateCronSchedule(&schedule); err != nil {
+		return nil, err
 	}
 	if schedule.TZ != "" {
 		if _, err := time.LoadLocation(schedule.TZ); err != nil {
@@ -66,15 +69,19 @@ func (s *SQLiteCronStore) AddJob(ctx context.Context, name string, schedule stor
 	if schedule.EveryMS != nil {
 		intervalMS = schedule.EveryMS
 	}
+	var windowMS *int64
+	if schedule.WindowMS != nil {
+		windowMS = schedule.WindowMS
+	}
 
 	nextRun := computeNextRun(&schedule, now, s.defaultTZ)
 
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO cron_jobs (id, tenant_id, agent_id, user_id, name, enabled, schedule_kind, cron_expression, run_at, timezone,
-		 interval_ms, payload, delete_after_run, deliver, deliver_channel, deliver_to, wake_heartbeat, next_run_at, created_at, updated_at)
-		 VALUES (?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 interval_ms, window_ms, payload, delete_after_run, deliver, deliver_channel, deliver_to, wake_heartbeat, next_run_at, created_at, updated_at)
+		 VALUES (?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		id, tenantIDForInsert(ctx), agentUUID, userIDPtr, name, scheduleKind, cronExpr, runAt, tz,
-		intervalMS, payloadJSON, deleteAfterRun, deliver, channel, to, false, nextRun, now, now,
+		intervalMS, windowMS, payloadJSON, deleteAfterRun, deliver, channel, to, false, nextRun, now, now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create cron job: %w", err)
@@ -99,7 +106,7 @@ func (s *SQLiteCronStore) GetJob(ctx context.Context, jobID string) (*store.Cron
 
 func (s *SQLiteCronStore) ListJobs(ctx context.Context, includeDisabled bool, agentID, userID string) []store.CronJob {
 	q := `SELECT id, tenant_id, agent_id, user_id, name, enabled, schedule_kind, cron_expression, run_at, timezone,
-		 interval_ms, payload, delete_after_run, stateless, deliver, deliver_channel, deliver_to, wake_heartbeat,
+		 interval_ms, window_ms, payload, delete_after_run, stateless, deliver, deliver_channel, deliver_to, wake_heartbeat,
 		 next_run_at, last_run_at, last_status, last_error,
 		 created_at, updated_at FROM cron_jobs WHERE 1=1`
 
@@ -327,7 +334,7 @@ func (s *SQLiteCronStore) UpdateJob(ctx context.Context, jobID string, patch sto
 }
 
 func (s *SQLiteCronStore) lockCronJobForMutation(ctx context.Context, tx *sql.Tx, id uuid.UUID, loadPayload bool) (*store.CronJobMutableState, error) {
-	q := `SELECT enabled, schedule_kind, cron_expression, run_at, timezone, interval_ms, next_run_at, payload
+	q := `SELECT enabled, schedule_kind, cron_expression, run_at, timezone, interval_ms, window_ms, next_run_at, payload
 		FROM cron_jobs WHERE id = ?`
 	args := []any{id}
 
@@ -347,6 +354,7 @@ func (s *SQLiteCronStore) lockCronJobForMutation(ctx context.Context, tx *sql.Tx
 		runAt        nullSqliteTime
 		tz           *string
 		intervalMS   *int64
+		windowMS     *int64
 		nextRunAt    nullSqliteTime
 		payloadJSON  []byte
 	)
@@ -358,6 +366,7 @@ func (s *SQLiteCronStore) lockCronJobForMutation(ctx context.Context, tx *sql.Tx
 		&runAt,
 		&tz,
 		&intervalMS,
+		&windowMS,
 		&nextRunAt,
 		&payloadJSON,
 	); err != nil {
@@ -380,6 +389,9 @@ func (s *SQLiteCronStore) lockCronJobForMutation(ctx context.Context, tx *sql.Tx
 	}
 	if intervalMS != nil {
 		state.Schedule.EveryMS = intervalMS
+	}
+	if windowMS != nil {
+		state.Schedule.WindowMS = windowMS
 	}
 	if nextRunAt.Valid {
 		next := nextRunAt.Time

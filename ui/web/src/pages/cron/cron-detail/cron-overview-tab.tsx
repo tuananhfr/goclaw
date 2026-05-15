@@ -27,13 +27,20 @@ interface CronOverviewTabProps {
   onUpdate?: (id: string, params: CronJobPatch) => Promise<void>;
 }
 
-type ScheduleKind = "every" | "cron" | "at";
+type ScheduleKind = "every" | "cron" | "random_window" | "at";
 
 function getEverySeconds(job: CronJob): string {
   if (job.schedule.kind === "every" && job.schedule.everyMs) {
     return String(job.schedule.everyMs / 1000);
   }
   return "60";
+}
+
+function getWindowMinutes(job: CronJob): string {
+  if (job.schedule.kind === "random_window" && job.schedule.windowMs) {
+    return String(Math.round(job.schedule.windowMs / 60_000));
+  }
+  return "120";
 }
 
 export function CronOverviewTab({ job, onUpdate }: CronOverviewTabProps) {
@@ -48,6 +55,7 @@ export function CronOverviewTab({ job, onUpdate }: CronOverviewTabProps) {
   const [scheduleKind, setScheduleKind] = useState<ScheduleKind>(job.schedule.kind as ScheduleKind);
   const [everySeconds, setEverySeconds] = useState(getEverySeconds(job));
   const [cronExpr, setCronExpr] = useState(job.schedule.expr ?? "0 * * * *");
+  const [windowMinutes, setWindowMinutes] = useState(getWindowMinutes(job));
   const [timezone, setTimezone] = useState(job.schedule.tz ?? "UTC");
   const [message, setMessage] = useState(job.payload?.message ?? "");
   const [agentId, setAgentId] = useState(job.agentId ?? "");
@@ -93,6 +101,8 @@ export function CronOverviewTab({ job, onUpdate }: CronOverviewTabProps) {
         schedule = { kind: "every" as const, everyMs: Number(everySeconds) * 1000, tz: timezone !== "UTC" ? timezone : "" };
       } else if (scheduleKind === "cron") {
         schedule = { kind: "cron" as const, expr: cronExpr, tz: timezone !== "UTC" ? timezone : "" };
+      } else if (scheduleKind === "random_window") {
+        schedule = { kind: "random_window" as const, expr: cronExpr, windowMs: Number(windowMinutes) * 60_000, tz: timezone !== "UTC" ? timezone : "" };
       } else {
         schedule = { kind: "at" as const, atMs: job.schedule.atMs ?? Date.now() + 60000, tz: timezone !== "UTC" ? timezone : "" };
       }
@@ -129,6 +139,8 @@ export function CronOverviewTab({ job, onUpdate }: CronOverviewTabProps) {
         setEverySeconds={setEverySeconds}
         cronExpr={cronExpr}
         setCronExpr={setCronExpr}
+        windowMinutes={windowMinutes}
+        setWindowMinutes={setWindowMinutes}
         timezone={timezone}
         setTimezone={setTimezone}
         readonly={readonly}

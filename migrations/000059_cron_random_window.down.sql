@@ -1,0 +1,2 @@
+ALTER TABLE cron_jobs DROP COLUMN IF EXISTS window_ms;
+ALTER TABLE cron_jobs ALTER COLUMN schedule_kind TYPE VARCHAR(10);

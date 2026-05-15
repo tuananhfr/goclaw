@@ -8,11 +8,12 @@ import { queryKeys } from "@/lib/query-keys";
 import { toast } from "@/stores/use-toast-store";
 
 export interface CronSchedule {
-  kind: "at" | "every" | "cron";
+  kind: "at" | "every" | "cron" | "random_window";
   atMs?: number;
   everyMs?: number;
   expr?: string;
   tz?: string;
+  windowMs?: number;
 }
 
 export interface CronPayload {

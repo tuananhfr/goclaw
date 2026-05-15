@@ -83,6 +83,7 @@ SCHEDULE SCHEMA:
 - at: { "kind": "at", "atMs": <unix-milliseconds> }
 - every: { "kind": "every", "everyMs": <interval-ms> }
 - cron: { "kind": "cron", "expr": "<5-field cron>", "tz": "<IANA timezone, e.g. Asia/Ho_Chi_Minh; omit for gateway default>" }
+- random_window: { "kind": "random_window", "expr": "<5-field cron window start>", "windowMs": <positive-ms>, "tz": "<IANA timezone>" }
 
 RULES:
 - For action="add", send the job inside "job". Do not place job fields at the root level.
@@ -241,10 +242,21 @@ func (t *CronTool) handleAdd(ctx context.Context, args map[string]any, agentID, 
 		} else {
 			return ErrorResult("job.schedule.everyMs is required for 'every' schedule")
 		}
-	case "cron":
+	case "cron", "random_window":
 		schedule.Expr = stringFromMap(scheduleObj, "expr")
 		if schedule.Expr == "" {
-			return ErrorResult("job.schedule.expr is required for 'cron' schedule")
+			return ErrorResult(fmt.Sprintf("job.schedule.expr is required for '%s' schedule", schedule.Kind))
+		}
+		if schedule.Kind == "random_window" {
+			if v, ok := numberFromMap(scheduleObj, "windowMs"); ok {
+				ms := int64(v)
+				if ms <= 0 {
+					return ErrorResult("job.schedule.windowMs must be positive for 'random_window' schedule")
+				}
+				schedule.WindowMS = &ms
+			} else {
+				return ErrorResult("job.schedule.windowMs is required for 'random_window' schedule")
+			}
 		}
 		schedule.TZ = stringFromMap(scheduleObj, "tz")
 		if schedule.TZ != "" {
@@ -253,7 +265,7 @@ func (t *CronTool) handleAdd(ctx context.Context, args map[string]any, agentID, 
 			}
 		}
 	default:
-		return ErrorResult(fmt.Sprintf("invalid schedule kind: %s (must be at, every, or cron)", schedule.Kind))
+		return ErrorResult(fmt.Sprintf("invalid schedule kind: %s (must be at, every, cron, or random_window)", schedule.Kind))
 	}
 
 	// Optional fields

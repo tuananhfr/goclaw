@@ -128,12 +128,12 @@ func scanCronRow(row cronRowScanner) (*store.CronJob, error) {
 	var deliverChannel, deliverTo string
 	var cronExpr, tz, lastStatus, lastError *string
 	var runAt, nextRunAt, lastRunAt nullSqliteTime
-	var intervalMS *int64
+	var intervalMS, windowMS *int64
 	var payloadJSON []byte
 	createdAt, updatedAt := scanTimePair()
 
 	err := row.Scan(&id, &tenantID, &agentID, &userID, &name, &enabled, &scheduleKind, &cronExpr, &runAt, &tz,
-		&intervalMS, &payloadJSON, &deleteAfterRun, &stateless, &deliver, &deliverChannel, &deliverTo, &wakeHeartbeat,
+		&intervalMS, &windowMS, &payloadJSON, &deleteAfterRun, &stateless, &deliver, &deliverChannel, &deliverTo, &wakeHeartbeat,
 		&nextRunAt, &lastRunAt, &lastStatus, &lastError,
 		createdAt, updatedAt)
 	if err != nil {
@@ -180,6 +180,9 @@ func scanCronRow(row cronRowScanner) (*store.CronJob, error) {
 	if intervalMS != nil {
 		job.Schedule.EveryMS = intervalMS
 	}
+	if windowMS != nil {
+		job.Schedule.WindowMS = windowMS
+	}
 	if tz != nil {
 		job.Schedule.TZ = *tz
 	}
@@ -208,7 +211,7 @@ func computeNextRun(schedule *store.CronSchedule, now time.Time, defaultTZ strin
 
 func (s *SQLiteCronStore) scanJob(ctx context.Context, id uuid.UUID) (*store.CronJob, error) {
 	q := `SELECT id, tenant_id, agent_id, user_id, name, enabled, schedule_kind, cron_expression, run_at, timezone,
-		 interval_ms, payload, delete_after_run, stateless, deliver, deliver_channel, deliver_to, wake_heartbeat,
+		 interval_ms, window_ms, payload, delete_after_run, stateless, deliver, deliver_channel, deliver_to, wake_heartbeat,
 		 next_run_at, last_run_at, last_status, last_error,
 		 created_at, updated_at FROM cron_jobs WHERE id = ?`
 	args := []any{id}

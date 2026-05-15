@@ -10,6 +10,11 @@ export function formatSchedule(job: CronJob): string {
     return `every ${Math.round(sec / 3600)}h`;
   }
   if (s.kind === "cron" && s.expr) return s.expr;
+  if (s.kind === "random_window" && s.expr && s.windowMs) {
+    const min = Math.round(s.windowMs / 60_000);
+    const windowText = min < 60 ? `${min}m` : `${Math.round(min / 60)}h`;
+    return `random ${s.expr} + ${windowText}`;
+  }
   if (s.kind === "at" && s.atMs) return `once at ${new Date(s.atMs).toLocaleString()}`;
   return s.kind;
 }

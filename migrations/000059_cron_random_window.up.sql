@@ -1,0 +1,2 @@
+ALTER TABLE cron_jobs ALTER COLUMN schedule_kind TYPE VARCHAR(20);
+ALTER TABLE cron_jobs ADD COLUMN IF NOT EXISTS window_ms BIGINT;

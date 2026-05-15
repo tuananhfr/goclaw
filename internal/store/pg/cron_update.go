@@ -115,7 +115,7 @@ func (s *PGCronStore) UpdateJob(ctx context.Context, jobID string, patch store.C
 }
 
 func (s *PGCronStore) lockCronJobForMutation(ctx context.Context, tx *sql.Tx, id uuid.UUID, loadPayload bool) (*store.CronJobMutableState, error) {
-	q := `SELECT enabled, schedule_kind, cron_expression, run_at, timezone, interval_ms, next_run_at, payload
+	q := `SELECT enabled, schedule_kind, cron_expression, run_at, timezone, interval_ms, window_ms, next_run_at, payload
 		FROM cron_jobs WHERE id = $1`
 	args := []any{id}
 
@@ -136,6 +136,7 @@ func (s *PGCronStore) lockCronJobForMutation(ctx context.Context, tx *sql.Tx, id
 		runAt        *time.Time
 		tz           *string
 		intervalMS   *int64
+		windowMS     *int64
 		nextRunAt    *time.Time
 		payloadJSON  []byte
 	)
@@ -147,6 +148,7 @@ func (s *PGCronStore) lockCronJobForMutation(ctx context.Context, tx *sql.Tx, id
 		&runAt,
 		&tz,
 		&intervalMS,
+		&windowMS,
 		&nextRunAt,
 		&payloadJSON,
 	); err != nil {
@@ -169,6 +171,9 @@ func (s *PGCronStore) lockCronJobForMutation(ctx context.Context, tx *sql.Tx, id
 	}
 	if intervalMS != nil {
 		state.Schedule.EveryMS = intervalMS
+	}
+	if windowMS != nil {
+		state.Schedule.WindowMS = windowMS
 	}
 	state.NextRunAt = nextRunAt
 
