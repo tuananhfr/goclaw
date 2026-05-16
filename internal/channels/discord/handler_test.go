@@ -61,12 +61,14 @@ func TestIsChannelAllowed(t *testing.T) {
 		{"listed channel allowed", []string{"chan-1", "chan-2"}, "chan-2", true},
 		{"unlisted channel denied", []string{"chan-1"}, "chan-2", false},
 		{"trim spaces", []string{" chan-1 "}, "chan-1", true},
+		{"guild slash channel allowed", []string{"guild-1/chan-2"}, "chan-2", true},
+		{"discord URL allowed", []string{"https://discord.com/channels/guild-1/chan-2"}, "chan-2", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ch := &Channel{config: config.DiscordConfig{AllowedChannels: tt.allowed}}
-			if got := ch.isChannelAllowed(tt.channel); got != tt.expected {
+			if got := ch.isChannelAllowed("guild-1", tt.channel); got != tt.expected {
 				t.Fatalf("isChannelAllowed() = %v, want %v", got, tt.expected)
 			}
 		})

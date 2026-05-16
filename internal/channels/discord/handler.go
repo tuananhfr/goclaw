@@ -66,7 +66,7 @@ func (c *Channel) handleMessage(_ *discordgo.Session, m *discordgo.MessageCreate
 			return
 		}
 	} else {
-		if !c.isChannelAllowed(channelID) {
+		if !c.isChannelAllowed(m.GuildID, channelID) {
 			slog.Debug("discord group message rejected by channel allowlist",
 				"channel_id", channelID,
 				"guild_id", m.GuildID,
@@ -329,15 +329,38 @@ func (c *Channel) handleMessage(_ *discordgo.Session, m *discordgo.MessageCreate
 	}
 }
 
-func (c *Channel) isChannelAllowed(channelID string) bool {
+func (c *Channel) isChannelAllowed(guildID, channelID string) bool {
 	if len(c.config.AllowedChannels) == 0 {
 		return true
 	}
 	for _, allowed := range c.config.AllowedChannels {
-		if strings.TrimSpace(allowed) == channelID {
+		if discordChannelAllowlistMatch(strings.TrimSpace(allowed), guildID, channelID) {
 			return true
 		}
 	}
+	return false
+}
+
+func discordChannelAllowlistMatch(allowed, guildID, channelID string) bool {
+	if allowed == "" {
+		return false
+	}
+	if allowed == channelID {
+		return true
+	}
+
+	// Accept common Discord copy formats:
+	// - guildID/channelID
+	// - https://discord.com/channels/guildID/channelID
+	parts := strings.Split(strings.TrimRight(allowed, "/"), "/")
+	if len(parts) >= 2 {
+		last := parts[len(parts)-1]
+		prev := parts[len(parts)-2]
+		if last == channelID && (guildID == "" || prev == guildID || strings.EqualFold(prev, "channels")) {
+			return true
+		}
+	}
+
 	return false
 }
 
