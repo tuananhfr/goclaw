@@ -229,6 +229,16 @@
     "link_preview": { "label": "Xem trước liên kết" },
     "allow_from": { "label": "Người dùng được phép" },
     "allowed_channels": { "label": "Salon/Channel được phép", "help": "Discord channel IDs mà bot được phép phản hồi. Để trống = tất cả channel." },
+    "channel_agent_routes": {
+      "label": "Định tuyến Salon -> Agent",
+      "help": "Mỗi Discord salon/channel sẽ được gắn với một agent riêng. Channel không có route sẽ bị bỏ qua.",
+      "empty": "Chưa có route nào.",
+      "channelPlaceholder": "Discord channel ID",
+      "agentPlaceholder": "Chọn agent",
+      "duplicate": "Channel ID này bị trùng.",
+      "add": "Thêm route",
+      "remove": "Xóa route"
+    },
     "block_reply": { "label": "Phản hồi khối", "help": "Gửi văn bản trung gian trong quá trình lặp công cụ" },
     "domain": { "label": "Tên miền" },
     "connection_mode": { "label": "Chế độ kết nối", "help": "WebSocket không cần IP công khai — chỉ kết nối ra ngoài" },

@@ -75,6 +75,44 @@ func TestIsChannelAllowed(t *testing.T) {
 	}
 }
 
+func TestIsChannelAllowedWithChannelAgentRoutes(t *testing.T) {
+	ch := &Channel{config: config.DiscordConfig{
+		AllowedChannels: []string{"chan-allowed-legacy"},
+		ChannelAgentRoutes: map[string]string{
+			"chan-1": "agent-a",
+			"https://discord.com/channels/guild-1/chan-2": "agent-b",
+		},
+	}}
+
+	if !ch.isChannelAllowed("guild-1", "chan-1") {
+		t.Fatal("routed channel should be allowed")
+	}
+	if !ch.isChannelAllowed("guild-1", "chan-2") {
+		t.Fatal("routed Discord URL channel should be allowed")
+	}
+	if ch.isChannelAllowed("guild-1", "chan-allowed-legacy") {
+		t.Fatal("legacy allowed_channels should not allow channels when router is configured")
+	}
+}
+
+func TestChannelAgentRoute(t *testing.T) {
+	ch := &Channel{config: config.DiscordConfig{ChannelAgentRoutes: map[string]string{
+		" chan-1 ":      " agent-a ",
+		"guild-1/chan-2": "agent-b",
+		"chan-3":        "",
+	}}}
+
+	if got, ok := ch.channelAgentRoute("guild-1", "chan-1"); !ok || got != "agent-a" {
+		t.Fatalf("channelAgentRoute(chan-1) = %q, %v; want agent-a, true", got, ok)
+	}
+	if got, ok := ch.channelAgentRoute("guild-1", "chan-2"); !ok || got != "agent-b" {
+		t.Fatalf("channelAgentRoute(chan-2) = %q, %v; want agent-b, true", got, ok)
+	}
+	if _, ok := ch.channelAgentRoute("guild-1", "chan-3"); ok {
+		t.Fatal("empty agent route should be ignored")
+	}
+}
+
 func TestDiscordMessageMentionsBot(t *testing.T) {
 	tests := []struct {
 		name string

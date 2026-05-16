@@ -281,8 +281,15 @@ func (c *Channel) handleMessage(_ *discordgo.Session, m *discordgo.MessageCreate
 		"placeholder_key": m.ID, // keyed by inbound message ID for placeholder lookup
 	}
 
-	// Voice agent routing
+	// Channel router picks the target agent for routed Discord salons.
 	targetAgentID := c.AgentID()
+	if !isDM {
+		if routedAgentID, ok := c.channelAgentRoute(m.GuildID, channelID); ok {
+			targetAgentID = routedAgentID
+		}
+	}
+
+	// Voice agent routing overrides the channel route for audio/voice inbound.
 	if c.config.VoiceAgentID != "" {
 		for _, mi := range mediaList {
 			if mi.Type == media.TypeAudio || mi.Type == media.TypeVoice {
@@ -321,6 +328,10 @@ func (c *Channel) handleMessage(_ *discordgo.Session, m *discordgo.MessageCreate
 }
 
 func (c *Channel) isChannelAllowed(guildID, channelID string) bool {
+	if len(c.config.ChannelAgentRoutes) > 0 {
+		_, ok := c.channelAgentRoute(guildID, channelID)
+		return ok
+	}
 	if len(c.config.AllowedChannels) == 0 {
 		return true
 	}
@@ -330,6 +341,19 @@ func (c *Channel) isChannelAllowed(guildID, channelID string) bool {
 		}
 	}
 	return false
+}
+
+func (c *Channel) channelAgentRoute(guildID, channelID string) (string, bool) {
+	for allowed, agentID := range c.config.ChannelAgentRoutes {
+		agentID = strings.TrimSpace(agentID)
+		if agentID == "" {
+			continue
+		}
+		if discordChannelAllowlistMatch(strings.TrimSpace(allowed), guildID, channelID) {
+			return agentID, true
+		}
+	}
+	return "", false
 }
 
 func discordMessageMentionsBot(m *discordgo.MessageCreate, botUserID string) bool {

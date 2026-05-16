@@ -135,7 +135,7 @@ export function ChannelInstanceFormStep({
               {t("form.credentials")}
               {instance && <span className="text-xs font-normal text-muted-foreground ml-1">{t("form.credentialsHint")}</span>}
             </legend>
-            <ChannelFields fields={credsFields} values={credsValues} onChange={onCredsChange} idPrefix="ci-cred" isEdit={!!instance} contextValues={configValues} />
+            <ChannelFields fields={credsFields} values={credsValues} onChange={onCredsChange} idPrefix="ci-cred" isEdit={!!instance} contextValues={configValues} agents={agents} />
             <p className="text-xs text-muted-foreground">{t("form.credentialsEncrypted")}</p>
           </fieldset>
         )}
@@ -165,7 +165,7 @@ export function ChannelInstanceFormStep({
         {formCfgFields.length > 0 && (
           <fieldset className="rounded-md border p-3 space-y-3">
             <legend className="px-1 text-sm font-medium">{t("form.configuration")}</legend>
-            <ChannelFields fields={normalCfgFields} values={configValues} onChange={onConfigChange} idPrefix="ci-cfg" />
+            <ChannelFields fields={normalCfgFields} values={configValues} onChange={onConfigChange} idPrefix="ci-cfg" agents={agents} />
             {instance && EditConfig && <EditConfig instance={instance} configValues={configValues} onConfigChange={onConfigChange} />}
             {advancedCfgFields.length > 0 && (
               <div className="pt-1">
@@ -179,7 +179,7 @@ export function ChannelInstanceFormStep({
                 </button>
                 {showAdvanced && (
                   <div className="mt-3">
-                    <ChannelFields fields={advancedCfgFields} values={configValues} onChange={onConfigChange} idPrefix="ci-cfg-adv" />
+                    <ChannelFields fields={advancedCfgFields} values={configValues} onChange={onConfigChange} idPrefix="ci-cfg-adv" agents={agents} />
                   </div>
                 )}
               </div>

@@ -242,6 +242,7 @@ export function ChannelDetailPage({
 
       <ChannelDetailDialogs
         instance={instance}
+        agents={agents}
         advancedOpen={advancedOpen}
         setAdvancedOpen={setAdvancedOpen}
         reauthOpen={reauthOpen}

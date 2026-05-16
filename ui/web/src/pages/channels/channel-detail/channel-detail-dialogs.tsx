@@ -3,11 +3,13 @@ import { ChannelAdvancedDialog } from "./channel-advanced-dialog";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { reauthDialogs } from "../channel-wizard-registry";
 import type { ChannelInstanceData } from "@/types/channel";
+import type { AgentData } from "@/types/agent";
 import type { ComponentType } from "react";
 import type { ReauthDialogProps } from "../channel-wizard-registry";
 
 interface ChannelDetailDialogsProps {
   instance: ChannelInstanceData;
+  agents?: AgentData[];
   advancedOpen: boolean;
   setAdvancedOpen: (v: boolean) => void;
   reauthOpen: boolean;
@@ -21,6 +23,7 @@ interface ChannelDetailDialogsProps {
 
 export function ChannelDetailDialogs({
   instance,
+  agents = [],
   advancedOpen,
   setAdvancedOpen,
   reauthOpen,
@@ -43,6 +46,7 @@ export function ChannelDetailDialogs({
         open={advancedOpen}
         onOpenChange={setAdvancedOpen}
         instance={instance}
+        agents={agents}
         onUpdate={onUpdate}
       />
 

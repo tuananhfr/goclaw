@@ -4,7 +4,7 @@
 export interface FieldDef {
   key: string;
   label: string;
-  type: "text" | "password" | "number" | "boolean" | "select" | "tags" | "tristate" | "textarea" | "tool-select" | "skill-select";
+  type: "text" | "password" | "number" | "boolean" | "select" | "tags" | "tristate" | "textarea" | "tool-select" | "skill-select" | "agent-route-map";
   placeholder?: string;
   required?: boolean;
   defaultValue?: string | number | boolean | string[];
@@ -132,6 +132,7 @@ export const configSchema: Record<string, FieldDef[]> = {
     { key: "require_mention", label: "Require @mention in groups", type: "boolean", defaultValue: true },
     { key: "history_limit", label: "Group History Limit", type: "number", defaultValue: 50, help: "Max pending group messages for context (0 = disabled)" },
     { key: "allowed_channels", label: "Allowed Channels", type: "tags", placeholder: "One Discord channel ID per line", help: "Discord channel IDs where this bot may respond. Empty = all channels." },
+    { key: "channel_agent_routes", label: "Channel -> Agent Routes", type: "agent-route-map", advanced: true, help: "Map Discord channel IDs to agents. When set, unlisted channels are ignored." },
     { key: "allow_from", label: "Allowed Users", type: "tags", help: "Discord user IDs" },
     { key: "block_reply", label: "Block Reply", type: "select", options: blockReplyOptions, defaultValue: "inherit", help: "Deliver intermediate text during tool iterations" },
   ],

@@ -12,11 +12,13 @@ import { ConfigGroupHeader } from "@/components/shared/config-group-header";
 import { ChannelFields } from "../channel-fields";
 import { configSchema } from "../channel-schemas";
 import type { ChannelInstanceData } from "@/types/channel";
+import type { AgentData } from "@/types/agent";
 
 interface ChannelAdvancedDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   instance: ChannelInstanceData;
+  agents?: AgentData[];
   onUpdate: (updates: Record<string, unknown>) => Promise<void>;
 }
 
@@ -26,7 +28,7 @@ const NETWORK_KEYS = new Set(["api_server", "proxy", "domain", "connection_mode"
 const LIMITS_KEYS = new Set(["history_limit", "media_max_mb", "text_chunk_limit"]);
 const STREAMING_KEYS = new Set(["dm_stream", "group_stream", "draft_transport", "reasoning_stream", "native_stream", "debounce_delay", "thread_ttl"]);
 const BEHAVIOR_KEYS = new Set(["reaction_level", "link_preview", "block_reply", "render_mode", "topic_session_mode"]);
-const ACCESS_KEYS = new Set(["allow_from", "group_allow_from", "allowed_channels"]);
+const ACCESS_KEYS = new Set(["allow_from", "group_allow_from", "allowed_channels", "channel_agent_routes"]);
 
 function getAdvancedFields(channelType: string) {
   const allFields = configSchema[channelType] ?? [];
@@ -44,6 +46,13 @@ function flattenFields(groups: ReturnType<typeof getAdvancedFields>) {
   return Object.values(groups).flat();
 }
 
+function isEmptyAdvancedValue(value: unknown) {
+  if (value === undefined || value === "" || value === null) return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === "object") return Object.keys(value as Record<string, unknown>).length === 0;
+  return false;
+}
+
 function deriveInitialValues(instance: ChannelInstanceData): Record<string, unknown> {
   const config = (instance.config ?? {}) as Record<string, unknown>;
   // Only keep advanced keys (exclude essential + groups)
@@ -56,6 +65,7 @@ export function ChannelAdvancedDialog({
   open,
   onOpenChange,
   instance,
+  agents = [],
   onUpdate,
 }: ChannelAdvancedDialogProps) {
   const { t } = useTranslation("channels");
@@ -81,7 +91,7 @@ export function ChannelAdvancedDialog({
       const existingConfig = (instance.config ?? {}) as Record<string, unknown>;
       const advancedKeys = new Set(flattenFields(groups).map((f) => f.key));
       const cleanAdvanced = Object.fromEntries(
-        Object.entries(values).filter(([, v]) => v !== undefined && v !== "" && v !== null),
+        Object.entries(values).filter(([, v]) => !isEmptyAdvancedValue(v)),
       );
       const baseConfig = Object.fromEntries(
         Object.entries(existingConfig).filter(([key]) => !advancedKeys.has(key)),
@@ -127,6 +137,7 @@ export function ChannelAdvancedDialog({
                 onChange={handleChange}
                 idPrefix="adv-net"
                 contextValues={values}
+                agents={agents}
               />
             </>
           )}
@@ -142,6 +153,7 @@ export function ChannelAdvancedDialog({
                 values={values}
                 onChange={handleChange}
                 idPrefix="adv-lim"
+                agents={agents}
               />
             </>
           )}
@@ -157,6 +169,7 @@ export function ChannelAdvancedDialog({
                 values={values}
                 onChange={handleChange}
                 idPrefix="adv-str"
+                agents={agents}
               />
             </>
           )}
@@ -172,6 +185,7 @@ export function ChannelAdvancedDialog({
                 values={values}
                 onChange={handleChange}
                 idPrefix="adv-beh"
+                agents={agents}
               />
             </>
           )}
@@ -187,6 +201,7 @@ export function ChannelAdvancedDialog({
                 values={values}
                 onChange={handleChange}
                 idPrefix="adv-acc"
+                agents={agents}
               />
             </>
           )}

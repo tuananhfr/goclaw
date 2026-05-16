@@ -266,6 +266,16 @@
     "link_preview": { "label": "Link Preview" },
     "allow_from": { "label": "Allowed Users" },
     "allowed_channels": { "label": "Allowed Channels", "help": "Discord channel IDs where this bot may respond. Empty = all channels." },
+    "channel_agent_routes": {
+      "label": "Channel -> Agent Routes",
+      "help": "Map each Discord salon/channel to one agent. Channels without a route are ignored.",
+      "empty": "No routes configured.",
+      "channelPlaceholder": "Discord channel ID",
+      "agentPlaceholder": "Select agent",
+      "duplicate": "This channel ID is duplicated.",
+      "add": "Add route",
+      "remove": "Remove route"
+    },
     "block_reply": {
       "label": "Block Reply",
       "help": "Deliver intermediate text during tool iterations"

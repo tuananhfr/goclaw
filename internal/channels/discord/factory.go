@@ -1,9 +1,12 @@
 package discord
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
+	"github.com/google/uuid"
 	"github.com/nextlevelbuilder/goclaw/internal/audio"
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
 	"github.com/nextlevelbuilder/goclaw/internal/channels"
@@ -22,6 +25,7 @@ type discordInstanceConfig struct {
 	GroupPolicy       string   `json:"group_policy,omitempty"`
 	AllowFrom         []string `json:"allow_from,omitempty"`
 	AllowedChannels   []string `json:"allowed_channels,omitempty"`
+	ChannelAgentRoutes map[string]string `json:"channel_agent_routes,omitempty"`
 	RequireMention    *bool    `json:"require_mention,omitempty"`
 	HistoryLimit      int      `json:"history_limit,omitempty"`
 	BlockReply        *bool    `json:"block_reply,omitempty"`
@@ -79,6 +83,7 @@ func buildChannel(name string, creds json.RawMessage, cfg json.RawMessage,
 		Token:             c.Token,
 		AllowFrom:         ic.AllowFrom,
 		AllowedChannels:   ic.AllowedChannels,
+		ChannelAgentRoutes: resolveDiscordChannelAgentRoutes(context.Background(), agentStore, ic.ChannelAgentRoutes),
 		DMPolicy:          ic.DMPolicy,
 		GroupPolicy:       ic.GroupPolicy,
 		RequireMention:    ic.RequireMention,
@@ -104,4 +109,31 @@ func buildChannel(name string, creds json.RawMessage, cfg json.RawMessage,
 
 	ch.SetName(name)
 	return ch, nil
+}
+
+func resolveDiscordChannelAgentRoutes(ctx context.Context, agentStore store.AgentStore, routes map[string]string) map[string]string {
+	if len(routes) == 0 {
+		return nil
+	}
+	resolved := make(map[string]string, len(routes))
+	for channelID, agentRef := range routes {
+		channelID = strings.TrimSpace(channelID)
+		agentRef = strings.TrimSpace(agentRef)
+		if channelID == "" || agentRef == "" {
+			continue
+		}
+		if agentStore != nil {
+			if id, err := uuid.Parse(agentRef); err == nil {
+				if ag, err := agentStore.GetByID(ctx, id); err == nil && ag != nil && ag.AgentKey != "" {
+					resolved[channelID] = ag.AgentKey
+					continue
+				}
+			}
+		}
+		resolved[channelID] = agentRef
+	}
+	if len(resolved) == 0 {
+		return nil
+	}
+	return resolved
 }
