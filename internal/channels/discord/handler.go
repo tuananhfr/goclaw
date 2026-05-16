@@ -48,17 +48,7 @@ func (c *Channel) handleMessage(_ *discordgo.Session, m *discordgo.MessageCreate
 	// pairing replies when the bot was not addressed.
 	mentioned := false
 	if !isDM {
-		for _, u := range m.Mentions {
-			if u.ID == c.botUserID {
-				mentioned = true
-				break
-			}
-		}
-		if !mentioned && m.ReferencedMessage != nil &&
-			m.ReferencedMessage.Author != nil &&
-			m.ReferencedMessage.Author.ID == c.botUserID {
-			mentioned = true
-		}
+		mentioned = discordMessageMentionsBot(m, c.botUserID)
 	}
 
 	if isDM {
@@ -258,6 +248,7 @@ func (c *Channel) handleMessage(_ *discordgo.Session, m *discordgo.MessageCreate
 
 	// Strip bot @mention from content — it's just the trigger, not meaningful.
 	content = strings.ReplaceAll(content, "<@"+c.botUserID+">", "")
+	content = strings.ReplaceAll(content, "<@!"+c.botUserID+">", "")
 	content = strings.TrimSpace(content)
 
 	// Build final content with group context.
@@ -339,6 +330,24 @@ func (c *Channel) isChannelAllowed(guildID, channelID string) bool {
 		}
 	}
 	return false
+}
+
+func discordMessageMentionsBot(m *discordgo.MessageCreate, botUserID string) bool {
+	if m == nil || botUserID == "" {
+		return false
+	}
+	for _, u := range m.Mentions {
+		if u != nil && u.ID == botUserID {
+			return true
+		}
+	}
+	if strings.Contains(m.Content, "<@"+botUserID+">") ||
+		strings.Contains(m.Content, "<@!"+botUserID+">") {
+		return true
+	}
+	return m.ReferencedMessage != nil &&
+		m.ReferencedMessage.Author != nil &&
+		m.ReferencedMessage.Author.ID == botUserID
 }
 
 func discordChannelAllowlistMatch(allowed, guildID, channelID string) bool {

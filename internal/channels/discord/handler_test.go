@@ -75,6 +75,56 @@ func TestIsChannelAllowed(t *testing.T) {
 	}
 }
 
+func TestDiscordMessageMentionsBot(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  *discordgo.MessageCreate
+		want bool
+	}{
+		{
+			name: "mentions array",
+			msg: &discordgo.MessageCreate{Message: &discordgo.Message{
+				Mentions: []*discordgo.User{{ID: "bot-1"}},
+			}},
+			want: true,
+		},
+		{
+			name: "content mention",
+			msg: &discordgo.MessageCreate{Message: &discordgo.Message{
+				Content: "<@bot-1> hi",
+			}},
+			want: true,
+		},
+		{
+			name: "nickname content mention",
+			msg: &discordgo.MessageCreate{Message: &discordgo.Message{
+				Content: "<@!bot-1> hi",
+			}},
+			want: true,
+		},
+		{
+			name: "reply to bot",
+			msg: &discordgo.MessageCreate{Message: &discordgo.Message{
+				ReferencedMessage: &discordgo.Message{Author: &discordgo.User{ID: "bot-1"}},
+			}},
+			want: true,
+		},
+		{
+			name: "no mention",
+			msg:  &discordgo.MessageCreate{Message: &discordgo.Message{Content: "hi"}},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := discordMessageMentionsBot(tt.msg, "bot-1"); got != tt.want {
+				t.Fatalf("discordMessageMentionsBot() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // --- tryHandleCommand: routing only (no session calls) ---
 
 func TestTryHandleCommandRoutingNonCommand(t *testing.T) {
