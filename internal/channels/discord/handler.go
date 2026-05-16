@@ -66,6 +66,13 @@ func (c *Channel) handleMessage(_ *discordgo.Session, m *discordgo.MessageCreate
 			return
 		}
 	} else {
+		if !c.isChannelAllowed(channelID) {
+			slog.Debug("discord group message rejected by channel allowlist",
+				"channel_id", channelID,
+				"guild_id", m.GuildID,
+			)
+			return
+		}
 		if !c.checkGroupPolicy(ctx, senderID, channelID, mentioned) {
 			slog.Debug("discord group message rejected by policy",
 				"user_id", senderID,
@@ -320,6 +327,18 @@ func (c *Channel) handleMessage(_ *discordgo.Session, m *discordgo.MessageCreate
 	if peerKind == "group" {
 		c.GroupHistory().Clear(channelID)
 	}
+}
+
+func (c *Channel) isChannelAllowed(channelID string) bool {
+	if len(c.config.AllowedChannels) == 0 {
+		return true
+	}
+	for _, allowed := range c.config.AllowedChannels {
+		if strings.TrimSpace(allowed) == channelID {
+			return true
+		}
+	}
+	return false
 }
 
 // checkGroupPolicy evaluates the group policy for a sender, with pairing support.

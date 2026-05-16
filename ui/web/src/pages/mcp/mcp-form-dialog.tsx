@@ -35,6 +35,7 @@ function restoreFacebookPages(
 ): MCPFormData["facebookPages"] {
   const restored = (pages ?? []).map((page, idx) => ({
     ...page,
+    watermarks: page.watermarks ?? (page.watermark ? [page.watermark] : undefined),
     access_token: headers[`x-fb-page-${idx + 1}-token`] ?? "",
   }));
   if (restored.length > 0) return restored;
@@ -46,7 +47,30 @@ function restoreFacebookPages(
     name: headers["x-facebook-page-name"] ?? "",
     access_token: headers.Authorization?.replace(/^Bearer\s+/i, "") ?? "",
     watermark: undefined,
+    watermarks: undefined,
   }];
+}
+
+function sanitizeWatermark(watermark: NonNullable<MCPFormData["facebookPages"][number]["watermark"]>) {
+  const cleaned = { ...watermark };
+  delete cleaned.logo_preview_url;
+  if (cleaned.logo_url) delete cleaned.logo_path;
+  return cleaned;
+}
+
+function stripWatermarkPreview(watermark: NonNullable<MCPFormData["facebookPages"][number]["watermark"]>) {
+  const cleaned = { ...watermark };
+  delete cleaned.logo_preview_url;
+  return cleaned;
+}
+
+function stripFacebookPageForSettings(page: MCPFormData["facebookPages"][number]) {
+  const { access_token: _token, watermark, watermarks, ...rest } = page;
+  return {
+    ...rest,
+    watermark: watermark ? stripWatermarkPreview(watermark) : undefined,
+    watermarks: watermarks?.map(stripWatermarkPreview),
+  };
 }
 
 function buildFacebookHeaders(
@@ -61,11 +85,13 @@ function buildFacebookHeaders(
     if (page.page_id) headers[`x-fb-page-${n}-id`] = page.page_id;
     if (page.access_token) headers[`x-fb-page-${n}-token`] = page.access_token;
     if (page.name) headers[`x-fb-page-${n}-name`] = page.name;
-    if (page.watermark?.enabled) {
-      const watermark = { ...page.watermark };
-      delete watermark.logo_preview_url;
-      if (watermark.logo_url) delete watermark.logo_path;
-      headers[`x-fb-page-${n}-watermark`] = JSON.stringify(watermark);
+    const watermarks = (page.watermarks?.length ? page.watermarks : page.watermark ? [page.watermark] : [])
+      .filter((wm) => wm.enabled)
+      .map(sanitizeWatermark);
+    if (watermarks.length === 1) {
+      headers[`x-fb-page-${n}-watermark`] = JSON.stringify(watermarks[0]);
+    } else if (watermarks.length > 1) {
+      headers[`x-fb-page-${n}-watermark`] = JSON.stringify({ enabled: true, items: watermarks });
     }
   });
   return headers;
@@ -211,7 +237,7 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
           require_user_credentials: data.requireUserCreds,
           preset: data.preset,
           facebook: data.preset === "facebook" ? {
-            pages: data.facebookPages.map(({ access_token: _token, ...page }) => page),
+            pages: data.facebookPages.map(stripFacebookPageForSettings),
           } : undefined,
         },
         enabled: data.enabled,

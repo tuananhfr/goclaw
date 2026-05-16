@@ -11,6 +11,7 @@ import (
 
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
 	"github.com/nextlevelbuilder/goclaw/internal/channels"
+	"github.com/nextlevelbuilder/goclaw/internal/config"
 )
 
 // --- resolveDisplayName ---
@@ -44,6 +45,29 @@ func TestResolveDisplayName(t *testing.T) {
 			got := resolveDisplayName(m)
 			if got != tt.want {
 				t.Errorf("resolveDisplayName() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsChannelAllowed(t *testing.T) {
+	tests := []struct {
+		name     string
+		allowed  []string
+		channel  string
+		expected bool
+	}{
+		{"empty allows all", nil, "chan-1", true},
+		{"listed channel allowed", []string{"chan-1", "chan-2"}, "chan-2", true},
+		{"unlisted channel denied", []string{"chan-1"}, "chan-2", false},
+		{"trim spaces", []string{" chan-1 "}, "chan-1", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ch := &Channel{config: config.DiscordConfig{AllowedChannels: tt.allowed}}
+			if got := ch.isChannelAllowed(tt.channel); got != tt.expected {
+				t.Fatalf("isChannelAllowed() = %v, want %v", got, tt.expected)
 			}
 		})
 	}

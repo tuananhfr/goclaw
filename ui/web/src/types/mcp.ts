@@ -15,6 +15,7 @@ export interface MCPFacebookPageConfig {
   page_id: string;
   name?: string;
   watermark?: MCPWatermarkConfig;
+  watermarks?: MCPWatermarkConfig[];
 }
 
 export interface MCPSettings {

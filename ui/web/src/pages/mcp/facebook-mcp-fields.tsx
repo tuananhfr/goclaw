@@ -10,7 +10,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useHttp } from "@/hooks/use-ws";
 import type { MCPFormData } from "@/schemas/mcp.schema";
 
-type WatermarkFormValue = NonNullable<MCPFormData["facebookPages"][number]["watermark"]>;
+type FacebookPageFormValue = MCPFormData["facebookPages"][number];
+type WatermarkFormValue = NonNullable<FacebookPageFormValue["watermark"]>;
 
 const defaultWatermark: WatermarkFormValue = {
   enabled: true,
@@ -33,38 +34,53 @@ interface FacebookMcpFieldsProps {
 export function FacebookMcpFields({ form, serverId }: FacebookMcpFieldsProps) {
   const http = useHttp();
   const { watch, setValue, getValues } = form;
+  const signedPreviewPaths = useRef(new Set<string>());
   const pages = watch("facebookPages") ?? [];
 
   useEffect(() => {
-    pages.forEach((page, idx) => {
-      const wm = page.watermark;
-      if (!wm?.logo_path || wm.logo_preview_url) return;
-      void http.post<{ url: string }>("/v1/files/sign", { path: wm.logo_path })
-        .then((res) => {
-          const latest = getValues("facebookPages") ?? [];
-          const next = latest.map((p, i) => i === idx
-            ? { ...p, watermark: { ...defaultWatermark, ...(p.watermark ?? {}), logo_preview_url: res.url } }
-            : p);
-          setValue("facebookPages", next, { shouldDirty: false });
-        })
-        .catch(() => undefined);
+    pages.forEach((page, pageIdx) => {
+      getWatermarks(page).forEach((wm, wmIdx) => {
+        if (!wm.logo_path || signedPreviewPaths.current.has(wm.logo_path)) return;
+        signedPreviewPaths.current.add(wm.logo_path);
+        void http.post<{ url: string }>("/v1/files/sign", { path: wm.logo_path })
+          .then((res) => {
+            const latest = getValues("facebookPages") ?? [];
+            const next = latest.map((p, i) => i === pageIdx
+              ? { ...p, watermarks: updateWatermarkList(getWatermarks(p), wmIdx, { logo_preview_url: res.url }) }
+              : p);
+            setValue("facebookPages", next, { shouldDirty: false });
+          })
+          .catch(() => undefined);
+      });
     });
   }, [pages, http, getValues, setValue]);
 
-  const updatePage = (idx: number, patch: Partial<(typeof pages)[number]>) => {
+  const updatePage = (idx: number, patch: Partial<FacebookPageFormValue>) => {
     setValue("facebookPages", pages.map((p, i) => (i === idx ? { ...p, ...patch } : p)), { shouldDirty: true });
   };
 
-  const updateWatermark = (idx: number, patch: Partial<WatermarkFormValue>) => {
-    const page = pages[idx];
+  const updateWatermark = (pageIdx: number, wmIdx: number, patch: Partial<WatermarkFormValue>) => {
+    const page = pages[pageIdx];
     if (!page) return;
-    updatePage(idx, { watermark: { ...defaultWatermark, ...(page.watermark ?? {}), ...patch } });
+    updatePage(pageIdx, { watermarks: updateWatermarkList(getWatermarks(page), wmIdx, patch), watermark: undefined });
+  };
+
+  const addWatermark = (pageIdx: number) => {
+    const page = pages[pageIdx];
+    if (!page) return;
+    updatePage(pageIdx, { watermarks: [...getWatermarks(page), { ...defaultWatermark }], watermark: undefined });
+  };
+
+  const removeWatermark = (pageIdx: number, wmIdx: number) => {
+    const page = pages[pageIdx];
+    if (!page) return;
+    updatePage(pageIdx, { watermarks: getWatermarks(page).filter((_, i) => i !== wmIdx), watermark: undefined });
   };
 
   const addPage = () => {
     setValue("facebookPages", [
       ...pages,
-      { page_id: "", name: "", access_token: "", watermark: { ...defaultWatermark } },
+      { page_id: "", name: "", access_token: "", watermarks: [{ ...defaultWatermark }] },
     ], { shouldDirty: true });
   };
 
@@ -72,12 +88,16 @@ export function FacebookMcpFields({ form, serverId }: FacebookMcpFieldsProps) {
     setValue("facebookPages", pages.filter((_, i) => i !== idx), { shouldDirty: true });
   };
 
-  const uploadLogo = async (idx: number, file: File) => {
+  const uploadLogo = async (pageIdx: number, wmIdx: number, file: File) => {
     const formData = new FormData();
     formData.set("file", file);
     const path = serverId ? `/v1/mcp/servers/${serverId}/assets/watermark` : "/v1/mcp/assets/watermark";
     const res = await http.upload<{ path: string; url_path?: string; url: string }>(path, formData);
-    updateWatermark(idx, { logo_path: res.path, logo_url: res.url_path ?? res.path, logo_preview_url: res.url });
+    updateWatermark(pageIdx, wmIdx, {
+      logo_path: res.path,
+      logo_url: res.url_path ?? res.path,
+      logo_preview_url: res.url,
+    });
   };
 
   return (
@@ -96,83 +116,110 @@ export function FacebookMcpFields({ form, serverId }: FacebookMcpFieldsProps) {
         <Button type="button" variant="secondary" onClick={addPage}>Add first Facebook page</Button>
       )}
 
-      {pages.map((page, idx) => {
-        const wm = { ...defaultWatermark, ...(page.watermark ?? {}) };
+      {pages.map((page, pageIdx) => {
+        const watermarks = getWatermarks(page);
         return (
-          <div key={idx} className="grid gap-3 border-t border-border pt-3">
+          <div key={pageIdx} className="grid gap-3 border-t border-border pt-3">
             <div className="flex items-center justify-between">
-              <Label>Page {idx + 1}</Label>
-              <Button type="button" variant="ghost" size="icon" onClick={() => removePage(idx)}>
+              <Label>Page {pageIdx + 1}</Label>
+              <Button type="button" variant="ghost" size="icon" onClick={() => removePage(pageIdx)}>
                 <Trash2 className="h-4 w-4 text-muted-foreground" />
               </Button>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <Input
                 value={page.page_id}
-                onChange={(e) => updatePage(idx, { page_id: e.target.value })}
+                onChange={(e) => updatePage(pageIdx, { page_id: e.target.value })}
                 placeholder="Page ID"
                 className="font-mono"
               />
               <Input
                 value={page.name ?? ""}
-                onChange={(e) => updatePage(idx, { name: e.target.value })}
+                onChange={(e) => updatePage(pageIdx, { name: e.target.value })}
                 placeholder="Page name"
               />
             </div>
             <Input
               type="password"
               value={page.access_token ?? ""}
-              onChange={(e) => updatePage(idx, { access_token: e.target.value })}
+              onChange={(e) => updatePage(pageIdx, { access_token: e.target.value })}
               placeholder="Page access token"
               className="font-mono"
             />
 
-            <div className="flex items-center gap-2">
-              <Switch checked={wm.enabled} onCheckedChange={(v) => updateWatermark(idx, { enabled: v })} />
-              <Label>Watermark</Label>
+            <div className="flex items-center justify-between gap-3">
+              <Label>Watermarks</Label>
+              <Button type="button" variant="outline" size="sm" onClick={() => addWatermark(pageIdx)} className="gap-1.5">
+                <Plus className="h-3.5 w-3.5" /> Add watermark
+              </Button>
             </div>
 
-            {wm.enabled && (
-              <div className="grid gap-3">
-                <Tabs value={wm.mode} onValueChange={(v) => updateWatermark(idx, { mode: v as "logo" | "text" })}>
-                  <TabsList>
-                    <TabsTrigger value="logo">Logo</TabsTrigger>
-                    <TabsTrigger value="text">Text</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-
-                {wm.mode === "logo" ? (
-                  <LogoUpload onUpload={(file) => uploadLogo(idx, file)} />
-                ) : (
-                  <Input
-                    value={wm.text ?? ""}
-                    onChange={(e) => updateWatermark(idx, { text: e.target.value })}
-                    placeholder="Watermark text"
-                  />
-                )}
-
-                <WatermarkPreview
-                  watermark={wm}
-                  onChange={(patch) => updateWatermark(idx, patch)}
-                />
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="grid gap-1.5">
-                    <Label>Size</Label>
-                    <Slider value={[wm.scale_pct]} min={0.06} max={0.5} step={0.01} onValueChange={([v]) => updateWatermark(idx, { scale_pct: v ?? wm.scale_pct })} />
+            {watermarks.map((wm, wmIdx) => (
+              <div key={wmIdx} className="grid gap-3 rounded-md border border-border p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Switch checked={wm.enabled} onCheckedChange={(v) => updateWatermark(pageIdx, wmIdx, { enabled: v })} />
+                    <Label>Watermark {wmIdx + 1}</Label>
                   </div>
-                  <div className="grid gap-1.5">
-                    <Label>Opacity</Label>
-                    <Slider value={[wm.opacity]} min={0.1} max={1} step={0.05} onValueChange={([v]) => updateWatermark(idx, { opacity: v ?? wm.opacity })} />
-                  </div>
+                  <Button type="button" variant="ghost" size="icon" onClick={() => removeWatermark(pageIdx, wmIdx)}>
+                    <Trash2 className="h-4 w-4 text-muted-foreground" />
+                  </Button>
                 </div>
+
+                {wm.enabled && (
+                  <div className="grid gap-3">
+                    <Tabs value={wm.mode} onValueChange={(v) => updateWatermark(pageIdx, wmIdx, { mode: v as "logo" | "text" })}>
+                      <TabsList>
+                        <TabsTrigger value="logo">Logo</TabsTrigger>
+                        <TabsTrigger value="text">Text</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+
+                    {wm.mode === "logo" ? (
+                      <LogoUpload onUpload={(file) => uploadLogo(pageIdx, wmIdx, file)} />
+                    ) : (
+                      <Input
+                        value={wm.text ?? ""}
+                        onChange={(e) => updateWatermark(pageIdx, wmIdx, { text: e.target.value })}
+                        placeholder="Watermark text"
+                      />
+                    )}
+
+                    <WatermarkPreview watermark={wm} onChange={(patch) => updateWatermark(pageIdx, wmIdx, patch)} />
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid gap-1.5">
+                        <Label>Size</Label>
+                        <Slider value={[wm.scale_pct]} min={0.06} max={0.5} step={0.01} onValueChange={([v]) => updateWatermark(pageIdx, wmIdx, { scale_pct: v ?? wm.scale_pct })} />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label>Opacity</Label>
+                        <Slider value={[wm.opacity]} min={0.1} max={1} step={0.05} onValueChange={([v]) => updateWatermark(pageIdx, wmIdx, { opacity: v ?? wm.opacity })} />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+            ))}
           </div>
         );
       })}
     </div>
   );
+}
+
+function getWatermarks(page: FacebookPageFormValue): WatermarkFormValue[] {
+  if (page.watermarks?.length) return page.watermarks.map((wm) => ({ ...defaultWatermark, ...wm }));
+  if (page.watermark) return [{ ...defaultWatermark, ...page.watermark }];
+  return [{ ...defaultWatermark }];
+}
+
+function updateWatermarkList(
+  list: WatermarkFormValue[],
+  idx: number,
+  patch: Partial<WatermarkFormValue>,
+): WatermarkFormValue[] {
+  return list.map((wm, i) => i === idx ? { ...defaultWatermark, ...wm, ...patch } : wm);
 }
 
 function LogoUpload({ onUpload }: { onUpload: (file: File) => void }) {
@@ -205,10 +252,9 @@ function WatermarkPreview({
 }) {
   const [dragging, setDragging] = useState(false);
   const boxRef = useRef<HTMLDivElement | null>(null);
-  const sizePct = watermark.scale_pct;
   const left = `${watermark.x_pct * 100}%`;
   const top = `${watermark.y_pct * 100}%`;
-  const width = `${sizePct * 100}%`;
+  const width = `${watermark.scale_pct * 100}%`;
 
   const updateFromPointer = (clientX: number, clientY: number) => {
     const rect = boxRef.current?.getBoundingClientRect();

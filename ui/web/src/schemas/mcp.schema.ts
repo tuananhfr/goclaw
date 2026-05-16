@@ -30,6 +30,18 @@ export const mcpFormSchema = z.object({
       scale_pct: z.number(),
       opacity: z.number(),
     }).optional(),
+    watermarks: z.array(z.object({
+      enabled: z.boolean(),
+      mode: z.enum(["logo", "text"]),
+      text: z.string().optional(),
+      logo_path: z.string().optional(),
+      logo_url: z.string().optional(),
+      logo_preview_url: z.string().optional(),
+      x_pct: z.number(),
+      y_pct: z.number(),
+      scale_pct: z.number(),
+      opacity: z.number(),
+    })).optional(),
   })),
 });
 

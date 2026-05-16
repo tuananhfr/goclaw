@@ -102,6 +102,7 @@ type DiscordConfig struct {
 	GroupPolicy       string              `json:"group_policy,omitempty"`    // "open" (default), "allowlist", "disabled"
 	RequireMention    *bool               `json:"require_mention,omitempty"` // require @bot mention in groups (default true)
 	HistoryLimit      int                 `json:"history_limit,omitempty"`   // max pending group messages for context (default 50, 0=disabled)
+	AllowedChannels   FlexibleStringSlice `json:"allowed_channels,omitempty"` // Discord channel IDs where the bot may respond; empty = all
 	BlockReply        *bool               `json:"block_reply,omitempty"`     // override gateway block_reply (nil = inherit)
 	MediaMaxBytes     int64               `json:"media_max_bytes,omitempty"` // max media download size (default 25MB)
 	STTProxyURL       string              `json:"stt_proxy_url,omitempty"`
