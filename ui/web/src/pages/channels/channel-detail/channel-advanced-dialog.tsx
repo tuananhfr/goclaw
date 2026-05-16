@@ -40,6 +40,10 @@ function getAdvancedFields(channelType: string) {
   };
 }
 
+function flattenFields(groups: ReturnType<typeof getAdvancedFields>) {
+  return Object.values(groups).flat();
+}
+
 function deriveInitialValues(instance: ChannelInstanceData): Record<string, unknown> {
   const config = (instance.config ?? {}) as Record<string, unknown>;
   // Only keep advanced keys (exclude essential + groups)
@@ -75,11 +79,16 @@ export function ChannelAdvancedDialog({
     setSaving(true);
     try {
       const existingConfig = (instance.config ?? {}) as Record<string, unknown>;
+      const advancedKeys = new Set(flattenFields(groups).map((f) => f.key));
       const cleanAdvanced = Object.fromEntries(
         Object.entries(values).filter(([, v]) => v !== undefined && v !== "" && v !== null),
       );
-      // Merge: preserve essential keys and groups from existing, overwrite advanced keys
-      const merged = { ...existingConfig, ...cleanAdvanced };
+      const baseConfig = Object.fromEntries(
+        Object.entries(existingConfig).filter(([key]) => !advancedKeys.has(key)),
+      );
+      // Preserve essential keys and groups from existing, then replace the whole advanced slice.
+      // This lets users clear a tags field instead of keeping stale values from the old config.
+      const merged = { ...baseConfig, ...cleanAdvanced };
       await onUpdate({ config: merged });
       onOpenChange(false);
     } catch { // toast shown by hook
