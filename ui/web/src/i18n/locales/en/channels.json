@@ -265,6 +265,7 @@
     "media_max_mb": { "label": "Max Media Size (MB)" },
     "link_preview": { "label": "Link Preview" },
     "allow_from": { "label": "Allowed Users" },
+    "allowed_channels": { "label": "Allowed Channels", "help": "Discord channel IDs where this bot may respond. Empty = all channels." },
     "block_reply": {
       "label": "Block Reply",
       "help": "Deliver intermediate text during tool iterations"
