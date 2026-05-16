@@ -59,6 +59,7 @@ func (d *gatewayDeps) wireHTTPHandlersOnServer(
 		if mcpPool != nil {
 			h.mcp.SetPoolEvictor(mcpPool)
 		}
+		h.mcp.SetDataDir(d.dataDir)
 		d.server.SetMCPHandler(h.mcp)
 	}
 	if h.mcpUserCreds != nil {

@@ -33,6 +33,7 @@ type MCPHandler struct {
 	mgr         MCPToolLister  // optional, nil when Manager not available
 	poolEvictor MCPPoolEvictor // optional, nil when pool not available
 	db          *sql.DB        // for export/import direct queries
+	dataDir     string         // root for MCP-owned uploaded assets
 }
 
 // NewMCPHandler creates a handler for MCP server management endpoints.
@@ -42,6 +43,9 @@ func NewMCPHandler(s store.MCPServerStore, msgBus *bus.MessageBus, mgr MCPToolLi
 
 // SetPoolEvictor sets the pool evictor for credential rotation handling.
 func (h *MCPHandler) SetPoolEvictor(e MCPPoolEvictor) { h.poolEvictor = e }
+
+// SetDataDir sets the root data directory used for MCP-owned assets.
+func (h *MCPHandler) SetDataDir(dataDir string) { h.dataDir = dataDir }
 
 func (h *MCPHandler) emitCacheInvalidate() {
 	if h.msgBus == nil {
@@ -70,6 +74,8 @@ func (h *MCPHandler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Server tools (read-only: viewer+)
 	mux.HandleFunc("GET /v1/mcp/servers/{id}/tools", h.auth(h.handleListServerTools))
+	mux.HandleFunc("POST /v1/mcp/assets/watermark", h.adminAuth(h.handleUploadWatermarkAsset))
+	mux.HandleFunc("POST /v1/mcp/servers/{id}/assets/watermark", h.adminAuth(h.handleUploadWatermarkAsset))
 
 	// Agent grants (reads: viewer+, writes: admin+)
 	mux.HandleFunc("GET /v1/mcp/servers/{id}/grants", h.auth(h.handleListServerGrants))

@@ -13,6 +13,24 @@ export const mcpFormSchema = z.object({
   timeout: z.number().min(1),
   enabled: z.boolean(),
   requireUserCreds: z.boolean(),
+  preset: z.enum(["generic", "facebook"]),
+  facebookPages: z.array(z.object({
+    page_id: z.string(),
+    name: z.string().optional(),
+    access_token: z.string().optional(),
+    watermark: z.object({
+      enabled: z.boolean(),
+      mode: z.enum(["logo", "text"]),
+      text: z.string().optional(),
+      logo_path: z.string().optional(),
+      logo_url: z.string().optional(),
+      logo_preview_url: z.string().optional(),
+      x_pct: z.number(),
+      y_pct: z.number(),
+      scale_pct: z.number(),
+      opacity: z.number(),
+    }).optional(),
+  })),
 });
 
 export type MCPFormData = z.infer<typeof mcpFormSchema>;

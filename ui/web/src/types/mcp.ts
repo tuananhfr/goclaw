@@ -1,3 +1,30 @@
+export interface MCPWatermarkConfig {
+  enabled: boolean;
+  mode: "logo" | "text";
+  text?: string;
+  logo_path?: string;
+  logo_url?: string;
+  logo_preview_url?: string;
+  x_pct: number;
+  y_pct: number;
+  scale_pct: number;
+  opacity: number;
+}
+
+export interface MCPFacebookPageConfig {
+  page_id: string;
+  name?: string;
+  watermark?: MCPWatermarkConfig;
+}
+
+export interface MCPSettings {
+  require_user_credentials?: boolean;
+  preset?: "generic" | "facebook";
+  facebook?: {
+    pages?: MCPFacebookPageConfig[];
+  };
+}
+
 export interface MCPServerData {
   id: string;
   name: string;
@@ -10,7 +37,7 @@ export interface MCPServerData {
   env: Record<string, string> | null;
   tool_prefix: string;
   timeout_sec: number;
-  settings?: { require_user_credentials?: boolean };
+  settings?: MCPSettings;
   enabled: boolean;
   created_by: string;
   agent_count?: number;
@@ -29,7 +56,7 @@ export interface MCPServerInput {
   env?: Record<string, string>;
   tool_prefix?: string;
   timeout_sec?: number;
-  settings?: { require_user_credentials?: boolean };
+  settings?: MCPSettings;
   enabled?: boolean;
 }
 

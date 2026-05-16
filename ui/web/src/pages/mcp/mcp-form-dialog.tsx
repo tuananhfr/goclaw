@@ -16,6 +16,7 @@ import { isValidSlug } from "@/lib/slug";
 import { mcpFormSchema, type MCPFormData } from "@/schemas/mcp.schema";
 import { McpConnectionFields } from "./mcp-connection-fields";
 import { McpSettingsFields } from "./mcp-settings-fields";
+import { FacebookMcpFields } from "./facebook-mcp-fields";
 
 /** Split a string into shell-like tokens, treating commas and spaces outside quotes as delimiters. */
 function splitShellTokens(input: string): string[] {
@@ -26,6 +27,48 @@ function splitShellTokens(input: string): string[] {
     tokens.push(m[1] ?? m[2] ?? m[0]);
   }
   return tokens.filter(Boolean);
+}
+
+function restoreFacebookPages(
+  pages: NonNullable<NonNullable<MCPServerData["settings"]>["facebook"]>["pages"],
+  headers: Record<string, string>,
+): MCPFormData["facebookPages"] {
+  const restored = (pages ?? []).map((page, idx) => ({
+    ...page,
+    access_token: headers[`x-fb-page-${idx + 1}-token`] ?? "",
+  }));
+  if (restored.length > 0) return restored;
+
+  const legacyID = headers["x-facebook-page-id"];
+  if (!legacyID) return [];
+  return [{
+    page_id: legacyID,
+    name: headers["x-facebook-page-name"] ?? "",
+    access_token: headers.Authorization?.replace(/^Bearer\s+/i, "") ?? "",
+    watermark: undefined,
+  }];
+}
+
+function buildFacebookHeaders(
+  pages: MCPFormData["facebookPages"],
+  existing: Record<string, string>,
+): Record<string, string> {
+  const headers = Object.fromEntries(
+    Object.entries(existing).filter(([key]) => !/^x-fb-page-\d+-/i.test(key) && !/^x-facebook-/i.test(key)),
+  );
+  pages.forEach((page, idx) => {
+    const n = idx + 1;
+    if (page.page_id) headers[`x-fb-page-${n}-id`] = page.page_id;
+    if (page.access_token) headers[`x-fb-page-${n}-token`] = page.access_token;
+    if (page.name) headers[`x-fb-page-${n}-name`] = page.name;
+    if (page.watermark?.enabled) {
+      const watermark = { ...page.watermark };
+      delete watermark.logo_preview_url;
+      if (watermark.logo_url) delete watermark.logo_path;
+      headers[`x-fb-page-${n}-watermark`] = JSON.stringify(watermark);
+    }
+  });
+  return headers;
 }
 
 interface MCPFormDialogProps {
@@ -66,6 +109,8 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
       timeout: 60,
       enabled: true,
       requireUserCreds: false,
+      preset: "generic",
+      facebookPages: [],
     },
   });
 
@@ -93,6 +138,8 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
         timeout: server?.timeout_sec ?? 60,
         enabled: server?.enabled ?? true,
         requireUserCreds: server?.settings?.require_user_credentials ?? false,
+        preset: server?.settings?.preset ?? "generic",
+        facebookPages: restoreFacebookPages(server?.settings?.facebook?.pages ?? [], server?.headers ?? {}),
       });
       setError("");
       setTestResult(null);
@@ -115,12 +162,17 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
       }
     }
 
+    const data = form.getValues();
+    const nextHeaders = data.preset === "facebook"
+      ? buildFacebookHeaders(data.facebookPages, headers)
+      : headers;
+
     return {
       transport,
       command: isStdio ? resolvedCommand : undefined,
       args: parsedArgs,
       url: !isStdio ? url.trim() : undefined,
-      headers: !isStdio && Object.keys(headers).length > 0 ? headers : undefined,
+      headers: !isStdio && Object.keys(nextHeaders).length > 0 ? nextHeaders : undefined,
       env: Object.keys(env).length > 0 ? env : undefined,
     };
   };
@@ -155,7 +207,13 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
         ...buildConnectionData(),
         tool_prefix: data.toolPrefix.trim() || undefined,
         timeout_sec: data.timeout,
-        settings: { require_user_credentials: data.requireUserCreds },
+        settings: {
+          require_user_credentials: data.requireUserCreds,
+          preset: data.preset,
+          facebook: data.preset === "facebook" ? {
+            pages: data.facebookPages.map(({ access_token: _token, ...page }) => page),
+          } : undefined,
+        },
         enabled: data.enabled,
       });
       onOpenChange(false);
@@ -175,6 +233,7 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
 
         <div className="grid gap-4 py-2 -mx-4 px-4 sm:-mx-6 sm:px-6 overflow-y-auto min-h-0">
           <McpConnectionFields form={form} />
+          {watch("preset") === "facebook" && <FacebookMcpFields form={form} serverId={server?.id} />}
           <McpSettingsFields form={form} />
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>

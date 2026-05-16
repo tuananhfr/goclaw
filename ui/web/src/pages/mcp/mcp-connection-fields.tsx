@@ -28,6 +28,7 @@ export function McpConnectionFields({ form }: McpConnectionFieldsProps) {
   const transport = watch("transport");
   const name = watch("name");
   const headers = watch("headers") as Record<string, string>;
+  const preset = watch("preset");
   const isStdio = transport === "stdio";
 
   return (
@@ -69,6 +70,31 @@ export function McpConnectionFields({ form }: McpConnectionFieldsProps) {
         </div>
       </div>
 
+      <div className="grid gap-1.5">
+        <Label>MCP type</Label>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant={preset === "generic" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setValue("preset", "generic")}
+          >
+            Generic
+          </Button>
+          <Button
+            type="button"
+            variant={preset === "facebook" ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setValue("preset", "facebook");
+              if (transport === "stdio") setValue("transport", "sse");
+            }}
+          >
+            Facebook
+          </Button>
+        </div>
+      </div>
+
       {isStdio ? (
         <>
           <div className="grid gap-1.5">
@@ -86,8 +112,9 @@ export function McpConnectionFields({ form }: McpConnectionFieldsProps) {
             <Label htmlFor="mcp-url">{t("form.url")}</Label>
             <Input id="mcp-url" placeholder="http://localhost:3001/sse" className="font-mono" {...register("url")} />
           </div>
-          <div className="grid gap-1.5">
+          <div className={preset === "facebook" ? "grid gap-1.5 rounded-md border border-border p-3" : "grid gap-1.5"}>
             <Label>{t("form.headers")}</Label>
+            {preset === "facebook" && <p className="text-xs text-muted-foreground">Advanced headers are generated from the Facebook page form.</p>}
             <KeyValueEditor
               value={headers}
               onChange={(v) => setValue("headers", v)}
