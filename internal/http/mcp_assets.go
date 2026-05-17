@@ -1,7 +1,11 @@
 package http
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	"image/draw"
+	"image/png"
 	"io"
 	"net/http"
 	"os"
@@ -18,6 +22,62 @@ import (
 )
 
 const maxMCPWatermarkAssetSize int64 = 10 * 1024 * 1024
+
+func normalizeWatermarkAsset(r io.Reader, ext string) ([]byte, string, string, error) {
+	raw, err := io.ReadAll(r)
+	if err != nil {
+		return nil, ext, "", err
+	}
+	if strings.ToLower(ext) != ".png" {
+		return raw, ext, "", nil
+	}
+
+	img, err := png.Decode(bytes.NewReader(raw))
+	if err != nil {
+		return nil, ext, "", err
+	}
+	bounds := img.Bounds()
+	minX, minY := bounds.Max.X, bounds.Max.Y
+	maxX, maxY := bounds.Min.X-1, bounds.Min.Y-1
+	const alphaThreshold uint32 = 0x0800
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			_, _, _, a := img.At(x, y).RGBA()
+			if a <= alphaThreshold {
+				continue
+			}
+			if x < minX {
+				minX = x
+			}
+			if y < minY {
+				minY = y
+			}
+			if x > maxX {
+				maxX = x
+			}
+			if y > maxY {
+				maxY = y
+			}
+		}
+	}
+
+	if maxX < minX || maxY < minY {
+		return raw, ext, "image/png", nil
+	}
+	cropRect := image.Rect(0, 0, maxX-minX+1, maxY-minY+1)
+	if minX == bounds.Min.X && minY == bounds.Min.Y && cropRect.Dx() == bounds.Dx() && cropRect.Dy() == bounds.Dy() {
+		return raw, ext, "image/png", nil
+	}
+
+	cropped := image.NewNRGBA(cropRect)
+	draw.Draw(cropped, cropRect, img, image.Point{X: minX, Y: minY}, draw.Src)
+	var out bytes.Buffer
+	if err := png.Encode(&out, cropped); err != nil {
+		return nil, ext, "", err
+	}
+	return out.Bytes(), ".png", "image/png", nil
+}
 
 func (h *MCPHandler) handleUploadWatermarkAsset(w http.ResponseWriter, r *http.Request) {
 	locale := extractLocale(r)
@@ -66,6 +126,17 @@ func (h *MCPHandler) handleUploadWatermarkAsset(w http.ResponseWriter, r *http.R
 	if ext == "" {
 		ext = ".png"
 	}
+	assetBytes, normalizedExt, normalizedMime, err := normalizeWatermarkAsset(file, ext)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("failed to process watermark asset: %v", err)})
+		return
+	}
+	if normalizedExt != "" {
+		ext = normalizedExt
+	}
+	if normalizedMime != "" {
+		mimeType = normalizedMime
+	}
 
 	tenantDirName := store.TenantIDFromContext(r.Context()).String()
 	if slug := store.TenantSlugFromContext(r.Context()); slug != "" {
@@ -100,7 +171,7 @@ func (h *MCPHandler) handleUploadWatermarkAsset(w http.ResponseWriter, r *http.R
 		return
 	}
 	defer out.Close()
-	if _, err := io.Copy(out, file); err != nil {
+	if _, err := out.Write(assetBytes); err != nil {
 		_ = os.Remove(cleanDst)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("failed to save asset: %v", err)})
 		return
