@@ -32,7 +32,7 @@ export function SkillsPage() {
   const { t } = useTranslation("skills");
   const {
     skills, loading, refresh, getSkill, uploadSkill, updateSkill, deleteSkill,
-    getSkillVersions, getSkillFiles, getSkillFileContent, rescanDeps, installSingleDep, toggleSkill,
+    getSkillVersions, getSkillFiles, getSkillFileContent, updateSkillFileContent, rescanDeps, installSingleDep, toggleSkill,
     setTenantConfig, deleteTenantConfig,
   } = useSkills();
   const { runtimes } = useRuntimes();
@@ -43,6 +43,7 @@ export function SkillsPage() {
   const [tab, setTab] = useState<Tab>("core");
   const [search, setSearch] = useState("");
   const [selectedSkill, setSelectedSkill] = useState<(SkillInfo & { content: string }) | null>(null);
+  const [detailInitialTab, setDetailInitialTab] = useState<"content" | "files">("content");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<SkillInfo | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SkillInfo | null>(null);
@@ -63,7 +64,8 @@ export function SkillsPage() {
 
   useEffect(() => { resetPage(); }, [search, tab, resetPage]);
 
-  const handleViewSkill = async (name: string) => {
+  const handleViewSkill = async (name: string, initialTab: "content" | "files" = "content") => {
+    setDetailInitialTab(initialTab);
     const detail = await getSkill(name);
     if (detail) setSelectedSkill(detail);
   };
@@ -205,9 +207,12 @@ export function SkillsPage() {
         <SkillDetailDialog
           skill={selectedSkill}
           onClose={() => setSelectedSkill(null)}
+          initialTab={detailInitialTab}
           getSkillVersions={getSkillVersions}
           getSkillFiles={getSkillFiles}
           getSkillFileContent={getSkillFileContent}
+          updateSkillFileContent={updateSkillFileContent}
+          onSaved={refresh}
         />
       )}
 

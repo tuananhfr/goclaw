@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Dialog,
@@ -15,6 +15,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { FileContentPanel } from "@/components/shared/file-viewers";
 import { MarkdownRenderer } from "@/components/shared/markdown-renderer";
 import type { SkillInfo, SkillFile, SkillVersions } from "@/types/skill";
 import { buildTree } from "./skill-file-helpers";
@@ -23,17 +26,23 @@ import { FileBrowser } from "./skill-file-browser";
 interface SkillDetailDialogProps {
   skill: SkillInfo & { content: string };
   onClose: () => void;
+  initialTab?: "content" | "files";
   getSkillVersions: (id: string) => Promise<SkillVersions>;
   getSkillFiles: (id: string, version?: number) => Promise<SkillFile[]>;
   getSkillFileContent: (id: string, path: string, version?: number) => Promise<{ content: string; path: string; size: number }>;
+  updateSkillFileContent: (id: string, path: string, content: string) => Promise<{ version?: number }>;
+  onSaved?: () => void;
 }
 
 export function SkillDetailDialog({
   skill,
   onClose,
+  initialTab = "content",
   getSkillVersions,
   getSkillFiles,
   getSkillFileContent,
+  updateSkillFileContent,
+  onSaved,
 }: SkillDetailDialogProps) {
   const { t } = useTranslation("skills");
   const hasFiles = !!skill.id;
@@ -50,6 +59,9 @@ export function SkillDetailDialog({
   // File content state
   const [fileContent, setFileContent] = useState<{ content: string; path: string; size: number } | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
+  const [editedContent, setEditedContent] = useState("");
+  const [saving, setSaving] = useState(false);
+  const autoOpenedSkillMD = useRef(false);
 
   const tree = useMemo(() => buildTree(files), [files]);
 
@@ -80,16 +92,62 @@ export function SkillDetailDialog({
     try {
       const c = await getSkillFileContent(skill.id, path, selectedVersion ?? undefined);
       setFileContent(c);
+      setEditedContent(c.content);
     } finally {
       setContentLoading(false);
     }
   }, [skill.id, selectedVersion, getSkillFileContent]);
+
+  const isCurrentVersion = selectedVersion == null || selectedVersion === (versions?.current ?? skill.version);
+  const isActiveSkill = (skill.status ?? "active") === "active";
+  const canEditSkillMD = !!skill.id
+    && !skill.is_system
+    && isActiveSkill
+    && isCurrentVersion
+    && activePath === "SKILL.md"
+    && !!fileContent;
+  const hasChanges = fileContent ? editedContent !== fileContent.content : false;
+
+  const handleSaveSkillMD = async () => {
+    if (!skill.id || !fileContent || !canEditSkillMD) return;
+    setSaving(true);
+    try {
+      const res = await updateSkillFileContent(skill.id, "SKILL.md", editedContent);
+      onSaved?.();
+      const refreshed = await getSkillVersions(skill.id);
+      setVersions(refreshed);
+      setSelectedVersion(res.version ?? refreshed.current);
+      setFileContent(null);
+      setActivePath(null);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (selectedVersion != null) {
       loadFiles(selectedVersion);
     }
   }, [selectedVersion, loadFiles]);
+
+  useEffect(() => {
+    autoOpenedSkillMD.current = false;
+  }, [skill.id, selectedVersion]);
+
+  useEffect(() => {
+    if (initialTab !== "files" || autoOpenedSkillMD.current || activePath || contentLoading) return;
+    if (!files.some((f) => f.path === "SKILL.md")) return;
+    autoOpenedSkillMD.current = true;
+    loadFileContent("SKILL.md");
+  }, [initialTab, files, activePath, contentLoading, loadFileContent]);
+
+  useEffect(() => {
+    if (initialTab !== "files" || !hasFiles) return;
+    loadVersions();
+    if (files.length === 0 && !filesLoading) {
+      loadFiles(selectedVersion ?? undefined);
+    }
+  }, [initialTab, hasFiles, loadVersions, files.length, filesLoading, loadFiles, selectedVersion]);
 
   const handleTabChange = (tab: string) => {
     if (tab === "files" && hasFiles) {
@@ -126,7 +184,7 @@ export function SkillDetailDialog({
           )}
         </DialogHeader>
 
-        <Tabs defaultValue="content" className="flex-1 overflow-hidden flex flex-col" onValueChange={handleTabChange}>
+        <Tabs defaultValue={initialTab} className="flex-1 overflow-hidden flex flex-col" onValueChange={handleTabChange}>
           <TabsList>
             <TabsTrigger value="content">{t("detail.content")}</TabsTrigger>
             {hasFiles && <TabsTrigger value="files">{t("detail.files")}</TabsTrigger>}
@@ -172,6 +230,29 @@ export function SkillDetailDialog({
                 onSelect={loadFileContent}
                 contentLoading={contentLoading}
                 fileContent={fileContent}
+                renderContent={({ fileContent, contentLoading }) => {
+                  if (!canEditSkillMD || !fileContent) {
+                    return <FileContentPanel fileContent={fileContent} contentLoading={contentLoading} />;
+                  }
+                  return (
+                    <div className="flex h-full min-h-[360px] flex-col gap-2">
+                      <Textarea
+                        value={editedContent}
+                        onChange={(e) => setEditedContent(e.target.value)}
+                        className="min-h-[320px] flex-1 resize-none font-mono text-xs leading-relaxed"
+                        spellCheck={false}
+                      />
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          Saving creates a new skill version.
+                        </span>
+                        <Button size="sm" onClick={handleSaveSkillMD} disabled={saving || !hasChanges || !editedContent.trim()}>
+                          {saving ? "Saving..." : "Save new version"}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                }}
               />
             </TabsContent>
           )}

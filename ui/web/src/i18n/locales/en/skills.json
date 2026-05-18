@@ -19,6 +19,10 @@
   "visibility": {
     "clickToCycle": "Click to change visibility"
   },
+  "actions": {
+    "editContent": "Edit SKILL.md",
+    "editMetadata": "Edit metadata"
+  },
   "delete": {
     "title": "Delete Skill",
     "description": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Download } from "lucide-react";
 import { formatSize, sizeBadgeVariant, type TreeNode } from "@/lib/file-helpers";
@@ -53,6 +54,7 @@ export function FileBrowser({
   onDownload,
   fetchBlob,
   showSize,
+  renderContent,
 }: {
   tree: TreeNode[];
   filesLoading: boolean;
@@ -66,6 +68,10 @@ export function FileBrowser({
   onDownload?: (path: string) => void;
   fetchBlob?: (path: string) => Promise<Blob>;
   showSize?: boolean;
+  renderContent?: (args: {
+    fileContent: { content: string; path: string; size: number } | null;
+    contentLoading: boolean;
+  }) => ReactNode;
 }) {
   const isMobile = useIsMobile();
   const { t } = useTranslation("common");
@@ -128,7 +134,9 @@ export function FileBrowser({
               )}
             </div>
             <div className="flex-1 overflow-auto p-3 min-h-0">
-              <FileContentPanel fileContent={fileContent} contentLoading={contentLoading} fetchBlob={fetchBlob} onDownload={onDownload} />
+              {renderContent ? renderContent({ fileContent, contentLoading }) : (
+                <FileContentPanel fileContent={fileContent} contentLoading={contentLoading} fetchBlob={fetchBlob} onDownload={onDownload} />
+              )}
             </div>
           </div>
         )}
@@ -156,7 +164,9 @@ export function FileBrowser({
           </div>
         )}
         <div className="flex-1 overflow-auto p-3 min-h-0">
-          <FileContentPanel fileContent={fileContent} contentLoading={contentLoading} fetchBlob={fetchBlob} onDownload={onDownload} />
+          {renderContent ? renderContent({ fileContent, contentLoading }) : (
+            <FileContentPanel fileContent={fileContent} contentLoading={contentLoading} fetchBlob={fetchBlob} onDownload={onDownload} />
+          )}
         </div>
       </div>
     </div>

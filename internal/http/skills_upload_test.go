@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -365,6 +366,48 @@ func skillMarkdown(name, slug string) string {
 	return "---\nname: " + name + "\nslug: " + slug + "\n---\nSkill body\n"
 }
 
+func seedCustomSkill(t *testing.T, skillStore *skillManageStoreStub, slug, content string) uuid.UUID {
+	t.Helper()
+
+	dir := filepath.Join(skillStore.baseDir, slug, "1")
+	if err := os.MkdirAll(filepath.Join(dir, "references"), 0755); err != nil {
+		t.Fatalf("mkdir skill dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(content), 0644); err != nil {
+		t.Fatalf("write SKILL.md: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "references", "note.txt"), []byte("keep me"), 0644); err != nil {
+		t.Fatalf("write reference file: %v", err)
+	}
+
+	id := uuid.New()
+	skillStore.nextBySlug[slug] = 1
+	skillStore.skills[id] = store.SkillInfo{
+		ID:         id.String(),
+		Name:       "Editable Skill",
+		Slug:       slug,
+		Path:       filepath.Join(dir, "SKILL.md"),
+		BaseDir:    dir,
+		Version:    1,
+		Status:     "active",
+		Enabled:    true,
+		Visibility: "private",
+	}
+	return id
+}
+
+func newUpdateSkillMDRequest(t *testing.T, ctx context.Context, id uuid.UUID, content string) *http.Request {
+	t.Helper()
+
+	body, err := json.Marshal(updateSkillMDRequest{Content: content})
+	if err != nil {
+		t.Fatalf("marshal body: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPut, "/v1/skills/"+id.String()+"/files/SKILL.md", bytes.NewReader(body))
+	req.SetPathValue("id", id.String())
+	return req.WithContext(ctx)
+}
+
 type skillManageStoreStub struct {
 	baseDir    string
 	version    int64
@@ -543,6 +586,106 @@ func (s *skillManageStoreStub) ListWithGrantStatus(context.Context, uuid.UUID) (
 }
 func (s *skillManageStoreStub) GetSkillFilePath(context.Context, uuid.UUID) (string, string, int, bool, bool) {
 	return "", "", 0, false, false
+}
+
+func TestHandleUpdateSkillMD_CreatesNewVersion(t *testing.T) {
+	handler, skillStore, ctx, _ := newTestUploadHandler(t)
+	stubUploadDepFns(t,
+		func(context.Context, *skills.SkillManifest, []string) (*skills.InstallResult, error) {
+			return nil, nil
+		},
+		func(*skills.SkillManifest) (bool, []string) { return true, nil },
+	)
+
+	id := seedCustomSkill(t, skillStore, "editable-skill", skillMarkdown("Editable Skill", "editable-skill"))
+	updatedContent := "---\nname: Editable Skill\nslug: editable-skill\ndescription: Updated description\n---\nUpdated body\n"
+	req := newUpdateSkillMDRequest(t, ctx, id, updatedContent)
+	w := httptest.NewRecorder()
+
+	handler.handleUpdateSkillMD(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got := int(resp["version"].(float64)); got != 2 {
+		t.Fatalf("version = %d, want 2", got)
+	}
+	newID, err := uuid.Parse(resp["id"].(string))
+	if err != nil {
+		t.Fatalf("parse returned id: %v", err)
+	}
+	updated, ok := skillStore.GetSkillByID(ctx, newID)
+	if !ok {
+		t.Fatal("updated skill not stored")
+	}
+	if updated.Version != 2 {
+		t.Fatalf("stored version = %d, want 2", updated.Version)
+	}
+	if got := filepath.Clean(updated.BaseDir); got != filepath.Join(skillStore.baseDir, "editable-skill", "2") {
+		t.Fatalf("stored base dir = %s", got)
+	}
+	currentContent, err := os.ReadFile(filepath.Join(skillStore.baseDir, "editable-skill", "2", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("read new SKILL.md: %v", err)
+	}
+	if string(currentContent) != updatedContent {
+		t.Fatalf("new SKILL.md content = %q", string(currentContent))
+	}
+	oldContent, err := os.ReadFile(filepath.Join(skillStore.baseDir, "editable-skill", "1", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("read old SKILL.md: %v", err)
+	}
+	if string(oldContent) != skillMarkdown("Editable Skill", "editable-skill") {
+		t.Fatal("old version was modified")
+	}
+	if _, err := os.Stat(filepath.Join(skillStore.baseDir, "editable-skill", "2", "references", "note.txt")); err != nil {
+		t.Fatalf("copied reference file: %v", err)
+	}
+	if skillStore.version != 1 {
+		t.Fatalf("cache version bumps = %d, want 1", skillStore.version)
+	}
+}
+
+func TestHandleUpdateSkillMD_RejectsSystemSkill(t *testing.T) {
+	handler, skillStore, ctx, root := newTestUploadHandler(t)
+	systemDir := filepath.Join(root, "system-skill")
+	if err := os.MkdirAll(systemDir, 0755); err != nil {
+		t.Fatalf("mkdir system dir: %v", err)
+	}
+	skillStore.seedSystemSkill("system-skill", systemDir)
+
+	var id uuid.UUID
+	for skillID := range skillStore.skills {
+		id = skillID
+	}
+	req := newUpdateSkillMDRequest(t, ctx, id, skillMarkdown("System Skill", "system-skill"))
+	w := httptest.NewRecorder()
+
+	handler.handleUpdateSkillMD(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleUpdateSkillMD_RejectsMissingName(t *testing.T) {
+	handler, skillStore, ctx, _ := newTestUploadHandler(t)
+	id := seedCustomSkill(t, skillStore, "editable-skill", skillMarkdown("Editable Skill", "editable-skill"))
+	req := newUpdateSkillMDRequest(t, ctx, id, "---\nslug: editable-skill\n---\nBody\n")
+	w := httptest.NewRecorder()
+
+	handler.handleUpdateSkillMD(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(skillStore.baseDir, "editable-skill", "2")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected new version dir err = %v", err)
+	}
 }
 
 // ---------------------------------------------------------------------------

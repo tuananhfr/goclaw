@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Zap, Pencil, Trash2 } from "lucide-react";
+import { Zap, FilePenLine, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -18,7 +18,7 @@ interface SkillTableRowProps {
   tab: "core" | "custom";
   hasTenantScope: boolean;
   toggling: string | null;
-  onView: (name: string) => void;
+  onView: (name: string, initialTab?: "content" | "files") => void;
   onEdit: (skill: SkillInfo) => void;
   onDelete: (skill: SkillInfo) => void;
   onToggle: (skill: SkillInfo, enabled: boolean) => void;
@@ -37,6 +37,7 @@ export function SkillTableRow({
   const isArchived = skill.status === "archived";
   const isDisabled = skill.enabled === false;
   const hasMissing = (skill.missing_deps?.length ?? 0) > 0;
+  const skillKey = skill.slug || skill.name;
 
   return (
     <tr className={cn("border-b last:border-0 hover:bg-muted/30", (isArchived || isDisabled) && "opacity-60")}>
@@ -46,7 +47,7 @@ export function SkillTableRow({
           <button
             type="button"
             className="font-medium text-left hover:underline cursor-pointer"
-            onClick={() => onView(skill.name)}
+            onClick={() => onView(skillKey)}
           >
             {skill.name}
           </button>
@@ -129,7 +130,24 @@ export function SkillTableRow({
                   title={skill.enabled !== false ? t("toggle.disable") : t("toggle.enable")}
                 />
               )}
-              <Button variant="ghost" size="sm" onClick={() => onEdit(skill)} className="gap-1">
+              {!skill.is_system && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onView(skillKey, "files")}
+                  className="gap-1"
+                  title={t("actions.editContent", { defaultValue: "Sửa SKILL.md" })}
+                >
+                  <FilePenLine className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onEdit(skill)}
+                className="gap-1"
+                title={t("actions.editMetadata", { defaultValue: "Sửa thông tin" })}
+              >
                 <Pencil className="h-3.5 w-3.5" />
               </Button>
               {!skill.is_system && (
