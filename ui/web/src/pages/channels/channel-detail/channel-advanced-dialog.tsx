@@ -13,6 +13,7 @@ import { ChannelFields } from "../channel-fields";
 import { configSchema } from "../channel-schemas";
 import type { ChannelInstanceData } from "@/types/channel";
 import type { AgentData } from "@/types/agent";
+import { flattenConfig, unflattenConfig } from "@/lib/config-flatten";
 
 interface ChannelAdvancedDialogProps {
   open: boolean;
@@ -25,9 +26,22 @@ interface ChannelAdvancedDialogProps {
 const ESSENTIAL_CONFIG_KEYS = new Set(["dm_policy", "group_policy", "require_mention", "mention_mode"]);
 
 const NETWORK_KEYS = new Set(["api_server", "proxy", "domain", "connection_mode", "webhook_port", "webhook_path", "webhook_url"]);
-const LIMITS_KEYS = new Set(["history_limit", "media_max_mb", "text_chunk_limit"]);
+const LIMITS_KEYS = new Set(["history_limit", "media_max_mb", "text_chunk_limit", "comment_reply_options.max_thread_depth"]);
 const STREAMING_KEYS = new Set(["dm_stream", "group_stream", "draft_transport", "reasoning_stream", "native_stream", "debounce_delay", "thread_ttl"]);
-const BEHAVIOR_KEYS = new Set(["reaction_level", "link_preview", "block_reply", "render_mode", "topic_session_mode"]);
+const BEHAVIOR_KEYS = new Set([
+  "reaction_level",
+  "link_preview",
+  "block_reply",
+  "render_mode",
+  "topic_session_mode",
+  "features.comment_reply",
+  "features.messenger_auto_reply",
+  "features.first_inbox",
+  "comment_reply_options.include_post_context",
+  "messenger_options.session_timeout",
+  "post_context_cache_ttl",
+  "first_inbox_message",
+]);
 const ACCESS_KEYS = new Set(["allow_from", "group_allow_from", "allowed_channels", "channel_agent_routes"]);
 
 function getAdvancedFields(channelType: string) {
@@ -54,7 +68,7 @@ function isEmptyAdvancedValue(value: unknown) {
 }
 
 function deriveInitialValues(instance: ChannelInstanceData): Record<string, unknown> {
-  const config = (instance.config ?? {}) as Record<string, unknown>;
+  const config = flattenConfig((instance.config ?? {}) as Record<string, unknown>);
   // Only keep advanced keys (exclude essential + groups)
   return Object.fromEntries(
     Object.entries(config).filter(([k]) => !ESSENTIAL_CONFIG_KEYS.has(k) && k !== "groups"),
@@ -88,7 +102,7 @@ export function ChannelAdvancedDialog({
   const handleSave = async () => {
     setSaving(true);
     try {
-      const existingConfig = (instance.config ?? {}) as Record<string, unknown>;
+      const existingConfig = flattenConfig((instance.config ?? {}) as Record<string, unknown>);
       const advancedKeys = new Set(flattenFields(groups).map((f) => f.key));
       const cleanAdvanced = Object.fromEntries(
         Object.entries(values).filter(([, v]) => !isEmptyAdvancedValue(v)),
@@ -99,7 +113,7 @@ export function ChannelAdvancedDialog({
       // Preserve essential keys and groups from existing, then replace the whole advanced slice.
       // This lets users clear a tags field instead of keeping stale values from the old config.
       const merged = { ...baseConfig, ...cleanAdvanced };
-      await onUpdate({ config: merged });
+      await onUpdate({ config: unflattenConfig(merged) });
       onOpenChange(false);
     } catch { // toast shown by hook
     } finally {
