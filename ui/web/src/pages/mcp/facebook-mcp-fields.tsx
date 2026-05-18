@@ -188,14 +188,22 @@ export function FacebookMcpFields({ form, serverId }: FacebookMcpFieldsProps) {
                     <WatermarkPreview watermark={wm} onChange={(patch) => updateWatermark(pageIdx, wmIdx, patch)} />
 
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="grid gap-1.5">
-                        <Label>Size</Label>
-                        <Slider value={[wm.scale_pct]} min={0.06} max={0.5} step={0.01} onValueChange={([v]) => updateWatermark(pageIdx, wmIdx, { scale_pct: v ?? wm.scale_pct })} />
-                      </div>
-                      <div className="grid gap-1.5">
-                        <Label>Opacity</Label>
-                        <Slider value={[wm.opacity]} min={0.1} max={1} step={0.05} onValueChange={([v]) => updateWatermark(pageIdx, wmIdx, { opacity: v ?? wm.opacity })} />
-                      </div>
+                      <WatermarkPercentControl
+                        label="Size"
+                        value={wm.scale_pct}
+                        min={0.06}
+                        max={0.5}
+                        step={0.01}
+                        onChange={(scale_pct) => updateWatermark(pageIdx, wmIdx, { scale_pct })}
+                      />
+                      <WatermarkPercentControl
+                        label="Opacity"
+                        value={wm.opacity}
+                        min={0.1}
+                        max={1}
+                        step={0.05}
+                        onChange={(opacity) => updateWatermark(pageIdx, wmIdx, { opacity })}
+                      />
                     </div>
                   </div>
                 )}
@@ -239,6 +247,34 @@ function LogoUpload({ onUpload }: { onUpload: (file: File) => void }) {
       <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()} className="gap-1.5">
         <ImagePlus className="h-3.5 w-3.5" /> Upload logo
       </Button>
+    </div>
+  );
+}
+
+function WatermarkPercentControl({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (value: number) => void;
+}) {
+  const pct = Math.round(value * 100);
+
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex items-center justify-between">
+        <Label>{label}</Label>
+        <span className="text-sm font-medium text-muted-foreground">{pct}%</span>
+      </div>
+      <Slider value={[value]} min={min} max={max} step={step} onValueChange={([v]) => onChange(v ?? value)} />
     </div>
   );
 }
