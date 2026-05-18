@@ -16,8 +16,8 @@ import (
 type EditTool struct {
 	workspace       string
 	restrict        bool
-	allowedPrefixes []string                    // extra allowed path prefixes (cross-drive on Windows)
-	deniedPrefixes  []string                    // path prefixes to deny access to (e.g. .goclaw)
+	allowedPrefixes []string // extra allowed path prefixes (cross-drive on Windows)
+	deniedPrefixes  []string // path prefixes to deny access to (e.g. .goclaw)
 	sandboxMgr      sandbox.Manager
 	contextFileIntc *ContextFileInterceptor
 	memIntc         *MemoryInterceptor
@@ -33,9 +33,19 @@ func (t *EditTool) AllowPaths(prefixes ...string) {
 	t.allowedPrefixes = append(t.allowedPrefixes, prefixes...)
 }
 
+// AllowedPaths returns a copy of configured allowed path prefixes.
+func (t *EditTool) AllowedPaths() []string {
+	return append([]string(nil), t.allowedPrefixes...)
+}
+
 // DenyPaths adds path prefixes that edit must reject.
 func (t *EditTool) DenyPaths(prefixes ...string) {
 	t.deniedPrefixes = append(t.deniedPrefixes, prefixes...)
+}
+
+// DeniedPaths returns a copy of configured denied path prefixes.
+func (t *EditTool) DeniedPaths() []string {
+	return append([]string(nil), t.deniedPrefixes...)
 }
 
 func (t *EditTool) SetContextFileInterceptor(intc *ContextFileInterceptor) {

@@ -47,6 +47,8 @@ Expect:
 - Separate footer and hashtags with a blank line.
 - Use icons only when they improve scanability.
 - Do not use font-transform Unicode text for ad copy unless explicitly requested and safe.
+- Do not specify custom font families for Facebook caption text; caption text is plain text on Facebook.
+- If brand fonts are relevant, mention them only as guidance for on-image text in the creative/image brief.
 - For legal/educational/link posts, keep wording cautious and include references outside the publish copy.
 
 ## Common Output Structures

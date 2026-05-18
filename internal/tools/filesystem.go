@@ -23,15 +23,15 @@ var virtualSystemFiles = map[string]string{
 
 // ReadFileTool reads file contents, optionally through a sandbox container.
 type ReadFileTool struct {
-	workspace        string
-	restrict         bool
-	allowedPrefixes  []string                // extra allowed path prefixes (e.g. skills dirs)
-	deniedPrefixes   []string                // path prefixes to deny access to (e.g. .goclaw)
-	sandboxMgr       sandbox.Manager         // nil = direct host access
-	contextFileIntc  *ContextFileInterceptor // nil = no virtual FS routing
-	memIntc          *MemoryInterceptor      // nil = no memory routing
-	permStore        store.ConfigPermissionStore // nil = no group read restriction
-	vaultIntc        *VaultInterceptor           // nil = no vault lazy sync
+	workspace       string
+	restrict        bool
+	allowedPrefixes []string                    // extra allowed path prefixes (e.g. skills dirs)
+	deniedPrefixes  []string                    // path prefixes to deny access to (e.g. .goclaw)
+	sandboxMgr      sandbox.Manager             // nil = direct host access
+	contextFileIntc *ContextFileInterceptor     // nil = no virtual FS routing
+	memIntc         *MemoryInterceptor          // nil = no memory routing
+	permStore       store.ConfigPermissionStore // nil = no group read restriction
+	vaultIntc       *VaultInterceptor           // nil = no vault lazy sync
 }
 
 // SetContextFileInterceptor enables virtual FS routing for context files.
@@ -64,9 +64,19 @@ func (t *ReadFileTool) AllowPaths(prefixes ...string) {
 	t.allowedPrefixes = append(t.allowedPrefixes, prefixes...)
 }
 
+// AllowedPaths returns a copy of configured allowed path prefixes.
+func (t *ReadFileTool) AllowedPaths() []string {
+	return append([]string(nil), t.allowedPrefixes...)
+}
+
 // DenyPaths adds path prefixes that read_file must reject (e.g. hidden dirs).
 func (t *ReadFileTool) DenyPaths(prefixes ...string) {
 	t.deniedPrefixes = append(t.deniedPrefixes, prefixes...)
+}
+
+// DeniedPaths returns a copy of configured denied path prefixes.
+func (t *ReadFileTool) DeniedPaths() []string {
+	return append([]string(nil), t.deniedPrefixes...)
 }
 
 func NewSandboxedReadFileTool(workspace string, restrict bool, mgr sandbox.Manager) *ReadFileTool {
@@ -582,4 +592,3 @@ func resolveThroughExistingAncestors(target string) (string, error) {
 	}
 	return filepath.Clean(target), nil
 }
-

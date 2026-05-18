@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/uuid"
@@ -83,6 +85,74 @@ func TestSubagentExecTool_NilStoreIsSafe(t *testing.T) {
 	}
 	if execTool.HasSecureCLIStore() {
 		t.Fatalf("expected no SecureCLIStore when passed nil (Lite path)")
+	}
+}
+
+func TestSubagentFileTools_InheritPathAccess(t *testing.T) {
+	workspace := t.TempDir()
+	skillsDir := t.TempDir()
+	deniedDir := filepath.Join(workspace, ".goclaw")
+	if err := os.MkdirAll(deniedDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillsDir, "SKILL.md"), []byte("name: Test"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(deniedDir, "config.json"), []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	parent := tools.NewRegistry()
+	readTool := tools.NewReadFileTool(workspace, true)
+	readTool.AllowPaths(skillsDir)
+	readTool.DenyPaths(".goclaw")
+	listTool := tools.NewListFilesTool(workspace, true)
+	listTool.AllowPaths(skillsDir)
+	listTool.DenyPaths(".goclaw")
+	writeTool := tools.NewWriteFileTool(workspace, true)
+	writeTool.AllowPaths(skillsDir)
+	writeTool.DenyPaths(".goclaw")
+	editTool := tools.NewEditTool(workspace, true)
+	editTool.AllowPaths(skillsDir)
+	editTool.DenyPaths(".goclaw")
+	parent.Register(readTool)
+	parent.Register(listTool)
+	parent.Register(writeTool)
+	parent.Register(editTool)
+
+	reg, _ := buildSubagentToolsRegistry(parent, workspace, true, nil, nil)
+
+	childRead, ok := reg.Get("read_file")
+	if !ok {
+		t.Fatal("read_file missing")
+	}
+	if got := childRead.(tools.PathAllowedGetter).AllowedPaths(); len(got) != 1 || got[0] != skillsDir {
+		t.Fatalf("subagent read_file allowed paths = %#v, want %q", got, skillsDir)
+	}
+	if got := childRead.(tools.PathDeniedGetter).DeniedPaths(); len(got) != 1 || got[0] != ".goclaw" {
+		t.Fatalf("subagent read_file denied paths = %#v, want .goclaw", got)
+	}
+
+	res := childRead.Execute(context.Background(), map[string]any{"path": filepath.Join(skillsDir, "SKILL.md")})
+	if res == nil || res.IsError {
+		t.Fatalf("subagent read_file should read allowed skill path, got %#v", res)
+	}
+	res = childRead.Execute(context.Background(), map[string]any{"path": filepath.Join(deniedDir, "config.json")})
+	if res == nil || !res.IsError {
+		t.Fatalf("subagent read_file should deny .goclaw path, got %#v", res)
+	}
+
+	for _, name := range []string{"list_files", "write_file", "edit"} {
+		child, ok := reg.Get(name)
+		if !ok {
+			t.Fatalf("%s missing", name)
+		}
+		if got := child.(tools.PathAllowedGetter).AllowedPaths(); len(got) != 1 || got[0] != skillsDir {
+			t.Fatalf("subagent %s allowed paths = %#v, want %q", name, got, skillsDir)
+		}
+		if got := child.(tools.PathDeniedGetter).DeniedPaths(); len(got) != 1 || got[0] != ".goclaw" {
+			t.Fatalf("subagent %s denied paths = %#v, want .goclaw", name, got)
+		}
 	}
 }
 

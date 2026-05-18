@@ -35,9 +35,19 @@ func (t *ListFilesTool) AllowPaths(prefixes ...string) {
 	t.allowedPrefixes = append(t.allowedPrefixes, prefixes...)
 }
 
+// AllowedPaths returns a copy of configured allowed path prefixes.
+func (t *ListFilesTool) AllowedPaths() []string {
+	return append([]string(nil), t.allowedPrefixes...)
+}
+
 // DenyPaths adds path prefixes that list_files must reject/filter.
 func (t *ListFilesTool) DenyPaths(prefixes ...string) {
 	t.deniedPrefixes = append(t.deniedPrefixes, prefixes...)
+}
+
+// DeniedPaths returns a copy of configured denied path prefixes.
+func (t *ListFilesTool) DeniedPaths() []string {
+	return append([]string(nil), t.deniedPrefixes...)
 }
 
 func NewListFilesTool(workspace string, restrict bool) *ListFilesTool {

@@ -30,6 +30,11 @@ Before returning any Facebook fanpage content, verify:
 - Avoid font-transform text for ad copy because transformed fonts can break display or ad review.
 - Use uppercase sparingly for emphasis.
 
+### Caption Font Scope
+
+- Facebook captions are plain text. Do not promise or request custom font families such as SVN Bango, SVN Avo, Montserrat, or similar for caption text.
+- Brand font rules apply to on-image text inside creative assets only, such as headlines, offer text, CTA labels, price text, or small notes rendered into an image/video.
+
 ### Body
 
 - Start from customer insight, pain point, desire, or occasion.
@@ -93,6 +98,7 @@ Use these rules when creating image prompts, image briefs, or reviewing generate
 - Leave supporting text, CTA, or brand elements in the remaining visual area.
 - Use one coherent background/color direction per post or album. Do not mix unrelated background systems in the same post set.
 - Make sure text contrast is high and typography is readable at feed size.
+- Treat font family instructions as on-image typography instructions only.
 
 ## Facebook Image Sizes
 

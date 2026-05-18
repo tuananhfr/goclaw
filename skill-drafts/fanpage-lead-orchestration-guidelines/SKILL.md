@@ -40,7 +40,7 @@ For each page, keep or retrieve these fields when available:
 - Target audience.
 - Customer insight or pain point.
 - Tone of voice.
-- Visual identity: colors, fonts, image style.
+- Visual identity: colors, on-image fonts, image style.
 - Logo/watermark safe zones.
 - CTA defaults.
 - Footer/footage.
@@ -127,13 +127,17 @@ Pass:
 
 - Brand/page context.
 - Asset type and size.
-- Visual direction: colors, fonts, mood, product focus.
+- Visual direction: colors, on-image fonts, mood, product focus.
 - Required on-image text.
 - Logo/watermark safe zones.
 - Areas to keep clear.
 - Subject priority.
 - Number of images/options.
 - Whether output should be a prompt, layout brief, QA checklist, or final asset request.
+
+If the user asks to create or generate an actual image, set the expected output to final image and tell the design agent to use the available image-generation tool directly. Do not ask for a prompt unless the user specifically wants a prompt or the image tool is unavailable.
+
+When passing font rules, state clearly that they apply to text rendered inside the image/creative asset, not to Facebook caption text.
 
 Do not ask design agents to place important text or product details in reserved watermark zones.
 

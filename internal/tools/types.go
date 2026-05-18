@@ -82,6 +82,16 @@ type PathDenyable interface {
 	DenyPaths(...string)
 }
 
+// PathAllowedGetter exposes configured allowed path prefixes for cloning tool config.
+type PathAllowedGetter interface {
+	AllowedPaths() []string
+}
+
+// PathDeniedGetter exposes configured denied path prefixes for cloning tool config.
+type PathDeniedGetter interface {
+	DeniedPaths() []string
+}
+
 // SessionStoreAware tools can receive a SessionStore for session queries.
 type SessionStoreAware interface {
 	SetSessionStore(store.SessionStore)

@@ -2,8 +2,15 @@ package mcp
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"mime"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -11,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
+	"github.com/nextlevelbuilder/goclaw/internal/bus"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
 	"github.com/nextlevelbuilder/goclaw/internal/tools"
 )
@@ -21,9 +29,9 @@ import (
 // safe reconnection without data races.
 type BridgeTool struct {
 	serverName     string
-	serverID       uuid.UUID    // MCP server ID (for grant recheck)
-	toolName       string       // original MCP tool name
-	registeredName string       // may include prefix: "{prefix}__{toolName}"
+	serverID       uuid.UUID // MCP server ID (for grant recheck)
+	toolName       string    // original MCP tool name
+	registeredName string    // may include prefix: "{prefix}__{toolName}"
 	description    string
 	inputSchema    map[string]any // JSON Schema for parameters
 	requiredSet    map[string]bool
@@ -150,10 +158,20 @@ func (t *BridgeTool) Execute(ctx context.Context, args map[string]any) *tools.Re
 		return tools.ErrorResult(text)
 	}
 
+	mediaFiles, mediaText := t.persistImageContent(ctx, result)
+	if mediaText != "" {
+		if text != "" {
+			text += "\n"
+		}
+		text += mediaText
+	}
+
 	// Wrap MCP tool results as external/untrusted content to prevent prompt injection.
 	// MCP servers may be third-party and return adversarial content.
 	wrapped := wrapMCPContent(text, t.serverName, t.toolName)
-	return tools.NewResult(wrapped)
+	out := tools.NewResult(wrapped)
+	out.Media = mediaFiles
+	return out
 }
 
 // inputSchemaToMap converts mcp.ToolInputSchema to the map format expected by tools.Tool.Parameters().
@@ -305,4 +323,110 @@ func extractTextContent(result *mcpgo.CallToolResult) string {
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+func (t *BridgeTool) persistImageContent(ctx context.Context, result *mcpgo.CallToolResult) ([]bus.MediaFile, string) {
+	if result == nil || len(result.Content) == 0 {
+		return nil, ""
+	}
+	workspace := tools.ToolWorkspaceFromCtx(ctx)
+	if workspace == "" {
+		return nil, ""
+	}
+
+	var mediaFiles []bus.MediaFile
+	var refs []string
+	for i, c := range result.Content {
+		data, mimeType, ok := imageContentData(c)
+		if !ok || data == "" {
+			continue
+		}
+		raw, err := base64.StdEncoding.DecodeString(data)
+		if err != nil {
+			refs = append(refs, fmt.Sprintf("[MCP image content %d could not be decoded: %v]", i, err))
+			continue
+		}
+		if mimeType == "" {
+			mimeType = "image/png"
+		}
+		ext := extFromMime(mimeType)
+		sum := sha256.Sum256(raw)
+		name := fmt.Sprintf("%s-%s.%s", sanitizeMediaName(t.toolName), hex.EncodeToString(sum[:])[:12], ext)
+		outDir := filepath.Join(workspace, "generated", "mcp", time.Now().Format("2006-01-02"))
+		if err := os.MkdirAll(outDir, 0755); err != nil {
+			refs = append(refs, fmt.Sprintf("[MCP image content %d could not be saved: %v]", i, err))
+			continue
+		}
+		outPath := filepath.Join(outDir, name)
+		if err := os.WriteFile(outPath, raw, 0644); err != nil {
+			refs = append(refs, fmt.Sprintf("[MCP image content %d could not be saved: %v]", i, err))
+			continue
+		}
+		mediaFiles = append(mediaFiles, bus.MediaFile{
+			Path:     outPath,
+			MimeType: mimeType,
+			Filename: name,
+		})
+		refs = append(refs, "MEDIA:"+outPath)
+	}
+	return mediaFiles, strings.Join(refs, "\n")
+}
+
+func imageContentData(content mcpgo.Content) (data string, mimeType string, ok bool) {
+	raw, err := json.Marshal(content)
+	if err != nil {
+		return "", "", false
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return "", "", false
+	}
+	typ, _ := m["type"].(string)
+	if typ != "image" {
+		return "", "", false
+	}
+	data, _ = m["data"].(string)
+	mimeType, _ = m["mimeType"].(string)
+	if mimeType == "" {
+		mimeType, _ = m["MIMEType"].(string)
+	}
+	return data, mimeType, true
+}
+
+func extFromMime(mimeType string) string {
+	if exts, err := mime.ExtensionsByType(mimeType); err == nil && len(exts) > 0 {
+		ext := strings.TrimPrefix(exts[0], ".")
+		if ext == "jpeg" {
+			return "jpg"
+		}
+		return ext
+	}
+	switch strings.ToLower(mimeType) {
+	case "image/jpeg", "image/jpg":
+		return "jpg"
+	case "image/webp":
+		return "webp"
+	default:
+		return "png"
+	}
+}
+
+func sanitizeMediaName(name string) string {
+	name = strings.ToLower(name)
+	var b strings.Builder
+	lastDash := false
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			b.WriteRune(r)
+			lastDash = false
+		} else if b.Len() > 0 && !lastDash {
+			b.WriteByte('-')
+			lastDash = true
+		}
+	}
+	out := strings.Trim(b.String(), "-")
+	if out == "" {
+		return "mcp-image"
+	}
+	return out
 }

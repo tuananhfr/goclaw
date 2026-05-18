@@ -224,15 +224,33 @@ func buildSubagentToolsRegistry(
 	reg := parentReg.Clone()
 	var execTool *tools.ExecTool
 	if sandboxMgr != nil {
-		reg.Register(tools.NewSandboxedReadFileTool(workspace, restrict, sandboxMgr))
-		reg.Register(tools.NewSandboxedWriteFileTool(workspace, restrict, sandboxMgr))
-		reg.Register(tools.NewSandboxedListFilesTool(workspace, restrict, sandboxMgr))
+		readTool := tools.NewSandboxedReadFileTool(workspace, restrict, sandboxMgr)
+		writeTool := tools.NewSandboxedWriteFileTool(workspace, restrict, sandboxMgr)
+		listTool := tools.NewSandboxedListFilesTool(workspace, restrict, sandboxMgr)
+		editTool := tools.NewSandboxedEditTool(workspace, restrict, sandboxMgr)
+		copyPathAccess(parentReg, readTool)
+		copyPathAccess(parentReg, writeTool)
+		copyPathAccess(parentReg, listTool)
+		copyPathAccess(parentReg, editTool)
+		reg.Register(readTool)
+		reg.Register(writeTool)
+		reg.Register(listTool)
+		reg.Register(editTool)
 		execTool = tools.NewSandboxedExecTool(workspace, restrict, sandboxMgr)
 		reg.Register(execTool)
 	} else {
-		reg.Register(tools.NewReadFileTool(workspace, restrict))
-		reg.Register(tools.NewWriteFileTool(workspace, restrict))
-		reg.Register(tools.NewListFilesTool(workspace, restrict))
+		readTool := tools.NewReadFileTool(workspace, restrict)
+		writeTool := tools.NewWriteFileTool(workspace, restrict)
+		listTool := tools.NewListFilesTool(workspace, restrict)
+		editTool := tools.NewEditTool(workspace, restrict)
+		copyPathAccess(parentReg, readTool)
+		copyPathAccess(parentReg, writeTool)
+		copyPathAccess(parentReg, listTool)
+		copyPathAccess(parentReg, editTool)
+		reg.Register(readTool)
+		reg.Register(writeTool)
+		reg.Register(listTool)
+		reg.Register(editTool)
 		execTool = tools.NewExecTool(workspace, restrict)
 		reg.Register(execTool)
 	}
@@ -243,6 +261,23 @@ func buildSubagentToolsRegistry(
 		execTool.SetSecureCLIStore(secureCLIStore)
 	}
 	return reg, execTool
+}
+
+func copyPathAccess(parentReg *tools.Registry, child tools.Tool) {
+	parent, ok := parentReg.Get(child.Name())
+	if !ok {
+		return
+	}
+	if getter, ok := parent.(tools.PathAllowedGetter); ok {
+		if setter, ok := child.(tools.PathAllowable); ok {
+			setter.AllowPaths(getter.AllowedPaths()...)
+		}
+	}
+	if getter, ok := parent.(tools.PathDeniedGetter); ok {
+		if setter, ok := child.(tools.PathDenyable); ok {
+			setter.DenyPaths(getter.DeniedPaths()...)
+		}
+	}
 }
 
 // setupTTS creates the TTS manager from config and registers providers.
