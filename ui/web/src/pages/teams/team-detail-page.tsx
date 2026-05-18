@@ -92,6 +92,11 @@ export function TeamDetailPage({ teamId, onBack }: TeamDetailPageProps) {
     await reload();
   }, [teamId, updateTeam, reload]);
 
+  const handleUpdateLead = useCallback(async (agentId: string) => {
+    await updateTeam(teamId, { lead: agentId });
+    await reload();
+  }, [teamId, updateTeam, reload]);
+
   if (loading || !team) {
     return <DetailPageSkeleton tabs={3} />;
   }
@@ -134,6 +139,7 @@ export function TeamDetailPage({ teamId, onBack }: TeamDetailPageProps) {
         members={members}
         onSaved={reload}
         onUpdateDescription={handleUpdateDescription}
+        onUpdateLead={handleUpdateLead}
       />
 
       {/* Members dialog */}

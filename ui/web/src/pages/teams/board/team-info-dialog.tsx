@@ -1,14 +1,18 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import { useTranslation } from "react-i18next";
 import i18next from "i18next";
+import { Loader2 } from "lucide-react";
 import { TeamSettingsTab } from "../team-settings-tab";
 import { TeamFeaturesModal } from "../team-features-modal";
 import { InlineEditText } from "@/components/ui/inline-edit-text";
 import { toast } from "@/stores/use-toast-store";
+import { useAgents } from "@/pages/agents/hooks/use-agents";
 import type { TeamData, TeamMemberData } from "@/types/team";
 
 interface TeamInfoDialogProps {
@@ -19,13 +23,17 @@ interface TeamInfoDialogProps {
   members: TeamMemberData[];
   onSaved: () => void;
   onUpdateDescription?: (newDescription: string) => Promise<void>;
+  onUpdateLead?: (agentId: string) => Promise<void>;
 }
 
 export function TeamInfoDialog({
-  open, onOpenChange, team, teamId, members, onSaved, onUpdateDescription,
+  open, onOpenChange, team, teamId, members, onSaved, onUpdateDescription, onUpdateLead,
 }: TeamInfoDialogProps) {
   const { t } = useTranslation("teams");
+  const { agents, loading: agentsLoading, refresh: refreshAgents } = useAgents(open);
   const [featuresOpen, setFeaturesOpen] = useState(false);
+  const [selectedLead, setSelectedLead] = useState(team.lead_agent_id);
+  const [savingLead, setSavingLead] = useState(false);
 
   const handleDescValidationError = useCallback((err: string) => {
     // Description may be empty (minLength=0), so minLength rarely fires here.
@@ -33,7 +41,36 @@ export function TeamInfoDialog({
     else if (err === "stale") toast.error(i18next.t("teams:rename.staleError"));
   }, []);
 
+  useEffect(() => {
+    if (open) refreshAgents();
+  }, [open, refreshAgents]);
+
+  useEffect(() => {
+    setSelectedLead(team.lead_agent_id);
+  }, [team.lead_agent_id]);
+
   // Resolve lead name from members (more reliable than team.lead_display_name which can be empty)
+  const leadOptions = useMemo(
+    () =>
+      agents
+        .filter((a) => a.status === "active")
+        .map((a) => ({
+          value: a.id,
+          label: a.display_name || a.agent_key,
+        })),
+    [agents],
+  );
+
+  const handleUpdateLead = async () => {
+    if (!selectedLead || selectedLead === team.lead_agent_id || !onUpdateLead) return;
+    setSavingLead(true);
+    try {
+      await onUpdateLead(selectedLead);
+    } finally {
+      setSavingLead(false);
+    }
+  };
+
   const leadMember = members.find((m) => m.role === "lead");
   const leadName = leadMember?.display_name || leadMember?.agent_key
     || team.lead_display_name || team.lead_agent_key || "—";
@@ -85,6 +122,32 @@ export function TeamInfoDialog({
               <span className="text-xs text-muted-foreground">{t("detail.lead")}</span>
               <p className="mt-0.5 font-medium">{leadName}</p>
             </div>
+            {onUpdateLead && (
+              <div className="sm:col-span-2">
+                <span className="text-xs text-muted-foreground">
+                  {t("detail.changeLead", { defaultValue: "Change lead" })}
+                </span>
+                <div className="mt-1 flex gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Combobox
+                      value={selectedLead}
+                      onChange={setSelectedLead}
+                      options={leadOptions}
+                      placeholder={agentsLoading ? t("create.loadingAgents") : t("create.selectLeadAgent")}
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    className="h-9 shrink-0 gap-1"
+                    disabled={!selectedLead || selectedLead === team.lead_agent_id || savingLead}
+                    onClick={handleUpdateLead}
+                  >
+                    {savingLead && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {t("settings.save")}
+                  </Button>
+                </div>
+              </div>
+            )}
             <div>
               <span className="text-xs text-muted-foreground">{t("members.title")}</span>
               <p className="mt-0.5 font-medium">{t("detail.memberCountPlural", { count: members.length })}</p>

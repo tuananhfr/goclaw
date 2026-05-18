@@ -57,16 +57,22 @@ func (c *Channel) handleMessage(_ *discordgo.Session, m *discordgo.MessageCreate
 		}
 	} else {
 		if !c.isChannelAllowed(m.GuildID, channelID) {
-			slog.Debug("discord group message rejected by channel allowlist",
+			slog.Info("discord group message rejected by channel route/allowlist",
 				"channel_id", channelID,
 				"guild_id", m.GuildID,
+				"routes_configured", len(c.config.ChannelAgentRoutes),
+				"allowed_channels", len(c.config.AllowedChannels),
 			)
 			return
 		}
 		if !c.checkGroupPolicy(ctx, senderID, channelID, mentioned) {
-			slog.Debug("discord group message rejected by policy",
+			slog.Info("discord group message rejected by policy",
+				"channel_id", channelID,
+				"guild_id", m.GuildID,
 				"user_id", senderID,
 				"username", senderName,
+				"mentioned", mentioned,
+				"group_policy", c.config.GroupPolicy,
 			)
 			return
 		}
@@ -205,19 +211,26 @@ func (c *Channel) handleMessage(_ *discordgo.Session, m *discordgo.MessageCreate
 				cc.EnsureContact(ctx, c.Type(), c.Name(), senderID, senderID, senderName, m.Author.Username, "group", "user", "", "")
 			}
 
-			slog.Debug("discord group message recorded (no mention)",
+			slog.Info("discord group message recorded without response: missing bot mention",
 				"channel_id", channelID,
+				"guild_id", m.GuildID,
 				"user_id", senderID,
 				"username", senderName,
+				"bot_user_id", c.botUserID,
+				"content", channels.Truncate(m.Content, 200),
+				"mention_ids", discordMentionIDs(m.Mentions),
+				"mention_roles", m.MentionRoles,
 			)
 			return
 		}
 	}
 
-	slog.Debug("discord message received",
+	slog.Info("discord message accepted",
 		"sender_id", senderID,
 		"channel_id", channelID,
+		"guild_id", m.GuildID,
 		"is_dm", isDM,
+		"mentioned", mentioned,
 		"preview", channels.Truncate(content, 50),
 	)
 
@@ -372,6 +385,16 @@ func discordMessageMentionsBot(m *discordgo.MessageCreate, botUserID string) boo
 	return m.ReferencedMessage != nil &&
 		m.ReferencedMessage.Author != nil &&
 		m.ReferencedMessage.Author.ID == botUserID
+}
+
+func discordMentionIDs(users []*discordgo.User) []string {
+	ids := make([]string, 0, len(users))
+	for _, u := range users {
+		if u != nil {
+			ids = append(ids, u.ID)
+		}
+	}
+	return ids
 }
 
 func discordChannelAllowlistMatch(allowed, guildID, channelID string) bool {

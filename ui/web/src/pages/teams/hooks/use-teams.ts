@@ -257,7 +257,7 @@ export function useTeams() {
   );
 
   const updateTeam = useCallback(
-    async (teamId: string, patch: { name?: string; description?: string; settings?: TeamAccessSettings }) => {
+    async (teamId: string, patch: { name?: string; lead?: string; description?: string; settings?: TeamAccessSettings }) => {
       try {
         await ws.call(Methods.TEAMS_UPDATE, { teamId, ...patch });
         toast.success(i18next.t("teams:toast.updated"));

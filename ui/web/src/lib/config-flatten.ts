@@ -14,6 +14,10 @@
  * flattenConfig({ features: { comment_reply: true }, page_id: "123" })
  * // → { "features.comment_reply": true, "page_id": "123" }
  */
+const opaqueConfigKeys = new Set([
+  "channel_agent_routes",
+]);
+
 export function flattenConfig(
   obj: Record<string, unknown>,
   prefix = "",
@@ -25,7 +29,8 @@ export function flattenConfig(
     if (
       value !== null &&
       typeof value === "object" &&
-      !Array.isArray(value)
+      !Array.isArray(value) &&
+      !opaqueConfigKeys.has(fullKey)
     ) {
       Object.assign(result, flattenConfig(value as Record<string, unknown>, fullKey));
     } else {

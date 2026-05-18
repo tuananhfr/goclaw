@@ -262,6 +262,7 @@ func (m *TeamsMethods) handleTaskActiveBySession(ctx context.Context, client *ga
 type teamsUpdateParams struct {
 	TeamID      string          `json:"teamId"`
 	Name        string          `json:"name,omitempty"`
+	Lead        string          `json:"lead,omitempty"` // agent key or UUID
 	Description *string         `json:"description,omitempty"`
 	Settings    *map[string]any `json:"settings,omitempty"`
 }
@@ -312,7 +313,7 @@ func (m *TeamsMethods) handleUpdate(ctx context.Context, client *gateway.Client,
 		EscalationActions     []string `json:"escalation_actions,omitempty"`
 		WorkspaceScope        string   `json:"workspace_scope,omitempty"`
 		WorkspaceQuotaMB      *int     `json:"workspace_quota_mb,omitempty"`
-		Notifications *struct {
+		Notifications         *struct {
 			Dispatched *bool  `json:"dispatched,omitempty"`
 			Progress   *bool  `json:"progress,omitempty"`
 			Failed     *bool  `json:"failed,omitempty"`
@@ -352,6 +353,22 @@ func (m *TeamsMethods) handleUpdate(ctx context.Context, client *gateway.Client,
 	if params.Description != nil {
 		updates["description"] = *params.Description
 	}
+	var newLeadAgent *store.AgentData
+	if params.Lead != "" {
+		ag, err := resolveAgentInfo(ctx, m.agentStore, params.Lead)
+		if err != nil {
+			client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrInvalidRequest, "lead agent: "+err.Error()))
+			return
+		}
+		if ag.ID != team.LeadAgentID {
+			if existingTeam, _ := m.teamStore.GetTeamForAgent(ctx, ag.ID); existingTeam != nil && existingTeam.LeadAgentID == ag.ID && existingTeam.ID != teamID {
+				client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrInvalidRequest, "agent already leads another team"))
+				return
+			}
+			updates["lead_agent_id"] = ag.ID
+			newLeadAgent = ag
+		}
+	}
 
 	// Nothing to update — treat as no-op success to keep client UX simple.
 	if len(updates) == 0 {
@@ -361,6 +378,16 @@ func (m *TeamsMethods) handleUpdate(ctx context.Context, client *gateway.Client,
 	if err := m.teamStore.UpdateTeam(ctx, teamID, updates); err != nil {
 		client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrInternal, i18n.T(locale, i18n.MsgFailedToUpdate, "team", err.Error())))
 		return
+	}
+	if newLeadAgent != nil {
+		if err := m.teamStore.AddMember(ctx, teamID, team.LeadAgentID, store.TeamRoleMember); err != nil {
+			client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrInternal, i18n.T(locale, i18n.MsgFailedToUpdate, "old team lead role", err.Error())))
+			return
+		}
+		if err := m.teamStore.AddMember(ctx, teamID, newLeadAgent.ID, store.TeamRoleLead); err != nil {
+			client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrInternal, i18n.T(locale, i18n.MsgFailedToUpdate, "new team lead role", err.Error())))
+			return
+		}
 	}
 
 	m.invalidateTeamCaches(ctx, teamID)

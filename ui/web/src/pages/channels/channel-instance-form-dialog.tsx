@@ -17,6 +17,7 @@ import { wizardAuthSteps, wizardConfigSteps } from "./channel-wizard-registry";
 import { CHANNEL_TYPES } from "@/constants/channels";
 import { channelInstanceSchema, type ChannelInstanceFormData } from "@/schemas/channel.schema";
 import { ChannelInstanceFormStep } from "./channel-instance-form-step";
+import { syncDiscordRoutesForAgentChange } from "./channel-agent-routes";
 import { flattenConfig, unflattenConfig } from "@/lib/config-flatten";
 
 type WizardStep = "form" | "auth" | "config";
@@ -148,11 +149,10 @@ export function ChannelInstanceFormDialog({
       }
     }
 
-    const cleanConfig = Object.fromEntries(
+    let cleanConfig = Object.fromEntries(
       Object.entries(configValues).filter(([, v]) => v !== undefined && v !== "" && v !== null),
     );
     coerceBoolSelects(cleanConfig, configSchema[values.channelType] ?? []);
-
     // Config required check (create-only): validate after cleanConfig is built so empty strings are caught.
     if (!instance) {
       const cfgSchema = configSchema[values.channelType] ?? [];
@@ -164,6 +164,15 @@ export function ChannelInstanceFormDialog({
         return;
       }
     }
+    const configPayload = instance
+      ? syncDiscordRoutesForAgentChange(
+        values.channelType,
+        unflattenConfig(cleanConfig),
+        instance.agent_id,
+        values.agentId,
+        agents,
+      )
+      : unflattenConfig(cleanConfig);
 
     const cleanCreds = Object.fromEntries(
       Object.entries(credsValues).filter(([, v]) => v !== undefined && v !== "" && v !== null),
@@ -177,7 +186,7 @@ export function ChannelInstanceFormDialog({
         display_name: values.displayName?.trim() || undefined,
         channel_type: values.channelType,
         agent_id: values.agentId,
-        config: Object.keys(cleanConfig).length > 0 ? unflattenConfig(cleanConfig) : undefined,
+        config: Object.keys(cleanConfig).length > 0 ? configPayload : undefined,
         enabled: values.enabled,
       };
       if (Object.keys(cleanCreds).length > 0) data.credentials = cleanCreds;

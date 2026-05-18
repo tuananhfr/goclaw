@@ -13,6 +13,7 @@ import {
 import { StickySaveBar } from "@/components/shared/sticky-save-bar";
 import { ChannelFields } from "../channel-fields";
 import { configSchema } from "../channel-schemas";
+import { syncDiscordRoutesForAgentChange } from "../channel-agent-routes";
 import type { ChannelInstanceData } from "@/types/channel";
 import type { AgentData } from "@/types/agent";
 import { channelTypeLabels } from "../channels-status-view";
@@ -60,7 +61,13 @@ export function ChannelGeneralTab({ instance, agents, onUpdate }: ChannelGeneral
       const cleanPolicies = Object.fromEntries(
         Object.entries(policyValues).filter(([, v]) => v !== undefined && v !== "" && v !== null),
       );
-      const mergedConfig = { ...existingConfig, ...cleanPolicies };
+      const mergedConfig = syncDiscordRoutesForAgentChange(
+        instance.channel_type,
+        { ...existingConfig, ...cleanPolicies },
+        instance.agent_id,
+        agentId,
+        agents,
+      );
       await onUpdate({
         display_name: displayName || null,
         agent_id: agentId,

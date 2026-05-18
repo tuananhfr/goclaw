@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -229,6 +230,7 @@ func (h *ChannelInstancesHandler) handleUpdate(w http.ResponseWriter, r *http.Re
 
 	// Allowlist: only permit known channel instance columns.
 	updates = filterAllowedKeys(updates, channelInstanceAllowedFields)
+	h.syncDiscordAgentRoutesOnAgentUpdate(r.Context(), id, updates)
 
 	if err := h.store.Update(r.Context(), id, updates); err != nil {
 		slog.Error("channel_instances.update", "error", err)
@@ -239,6 +241,89 @@ func (h *ChannelInstancesHandler) handleUpdate(w http.ResponseWriter, r *http.Re
 	h.emitCacheInvalidate()
 	emitAudit(h.msgBus, r, "channel_instance.updated", "channel_instance", id.String())
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+func (h *ChannelInstancesHandler) syncDiscordAgentRoutesOnAgentUpdate(ctx context.Context, id uuid.UUID, updates map[string]any) {
+	rawAgentID, ok := updates["agent_id"]
+	if !ok || h.agentStore == nil {
+		return
+	}
+	newAgentID, err := uuid.Parse(strings.TrimSpace(toString(rawAgentID)))
+	if err != nil {
+		return
+	}
+	inst, err := h.store.Get(ctx, id)
+	if err != nil || inst.ChannelType != "discord" || inst.AgentID == newAgentID {
+		return
+	}
+
+	cfg := map[string]any{}
+	if rawCfg, ok := updates["config"]; ok {
+		cfg = rawConfigMap(rawCfg)
+	} else if len(inst.Config) > 0 {
+		_ = json.Unmarshal(inst.Config, &cfg)
+	}
+	routes := rawConfigMap(cfg["channel_agent_routes"])
+	if len(routes) == 0 {
+		return
+	}
+
+	oldRefs := map[string]bool{inst.AgentID.String(): true}
+	if oldAgent, err := h.agentStore.GetByID(ctx, inst.AgentID); err == nil && oldAgent != nil && oldAgent.AgentKey != "" {
+		oldRefs[oldAgent.AgentKey] = true
+	}
+
+	changed := false
+	for channelID, agentRef := range routes {
+		ref := strings.TrimSpace(toString(agentRef))
+		if ref != "" && oldRefs[ref] {
+			routes[channelID] = newAgentID.String()
+			changed = true
+		}
+	}
+	if !changed {
+		return
+	}
+	cfg["channel_agent_routes"] = routes
+	updates["config"] = cfg
+}
+
+func rawConfigMap(value any) map[string]any {
+	switch v := value.(type) {
+	case map[string]any:
+		return v
+	case map[string]string:
+		out := make(map[string]any, len(v))
+		for k, val := range v {
+			out[k] = val
+		}
+		return out
+	case json.RawMessage:
+		var out map[string]any
+		_ = json.Unmarshal(v, &out)
+		return out
+	case []byte:
+		var out map[string]any
+		_ = json.Unmarshal(v, &out)
+		return out
+	case string:
+		var out map[string]any
+		_ = json.Unmarshal([]byte(v), &out)
+		return out
+	default:
+		return nil
+	}
+}
+
+func toString(value any) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case uuid.UUID:
+		return v.String()
+	default:
+		return ""
+	}
 }
 
 func (h *ChannelInstancesHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
