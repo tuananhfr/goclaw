@@ -75,6 +75,7 @@ type Config struct {
 	SetupCommand    string   `json:"setup_command,omitempty"`
 	ContainerPrefix string   `json:"container_prefix,omitempty"`
 	Workdir         string   `json:"workdir,omitempty"` // container workdir (default "/workspace")
+	ReadOnlyMounts  []string `json:"-"`                 // internal host paths mounted read-only at same container path
 
 	// Pruning (matching TS SandboxPruneSettings)
 	IdleHours        int `json:"idle_hours,omitempty"`         // prune containers idle > N hours (default 24)

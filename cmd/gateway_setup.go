@@ -54,6 +54,8 @@ func setupToolRegistry(
 	// Create tool registry with all tools
 	toolsReg = tools.NewRegistry()
 	agentCfg = cfg.ResolveAgent("default")
+	dataDir = cfg.ResolvedDataDir()
+	os.MkdirAll(dataDir, 0755)
 
 	// Sandbox manager (optional — routes tools through Docker containers)
 	if sbCfg := cfg.Agents.Defaults.Sandbox; sbCfg != nil && sbCfg.Mode != "" && sbCfg.Mode != "off" {
@@ -64,6 +66,15 @@ func setupToolRegistry(
 			)
 		} else {
 			resolved := sbCfg.ToSandboxConfig()
+			for _, dir := range []string{filepath.Join(dataDir, "skills-store"), filepath.Join(dataDir, "tenants")} {
+				if err := os.MkdirAll(dir, 0755); err != nil {
+					slog.Debug("sandbox: skill asset mount path unavailable", "path", dir, "error", err)
+				}
+			}
+			resolved.ReadOnlyMounts = append(resolved.ReadOnlyMounts,
+				filepath.Join(dataDir, "skills-store"),
+				filepath.Join(dataDir, "tenants"),
+			)
 			sandboxMgr = sandbox.NewDockerManager(resolved)
 			slog.Info("sandbox enabled", "mode", string(resolved.Mode), "image", resolved.Image, "scope", string(resolved.Scope))
 		}
@@ -201,10 +212,6 @@ func setupToolRegistry(
 
 	// Tool policy engine (7-step tool filtering pipeline)
 	toolPE = tools.NewPolicyEngine(&cfg.Tools)
-
-	// Data directory for Phase 2 services
-	dataDir = cfg.ResolvedDataDir()
-	os.MkdirAll(dataDir, 0755)
 
 	// Block exec from accessing sensitive directories (data dir, .goclaw, config file).
 	// Prevents `cp /app/data/config.json workspace/` and similar exfiltration.

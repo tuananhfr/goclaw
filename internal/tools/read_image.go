@@ -46,11 +46,22 @@ var visionModelDefaults = map[string]string{
 
 // ReadImageTool uses a vision-capable provider to describe images attached to the current message.
 type ReadImageTool struct {
-	registry *providers.Registry
+	registry        *providers.Registry
+	allowedPrefixes []string
 }
 
 func NewReadImageTool(registry *providers.Registry) *ReadImageTool {
 	return &ReadImageTool{registry: registry}
+}
+
+// AllowPaths lets read_image load images from approved read-only asset roots,
+// such as managed skill directories, while workspace isolation stays enforced.
+func (t *ReadImageTool) AllowPaths(prefixes ...string) {
+	t.allowedPrefixes = append(t.allowedPrefixes, prefixes...)
+}
+
+func (t *ReadImageTool) AllowedPaths() []string {
+	return append([]string(nil), t.allowedPrefixes...)
 }
 
 func (t *ReadImageTool) Name() string { return "read_image" }
@@ -186,7 +197,7 @@ func (t *ReadImageTool) loadImageFromPath(ctx context.Context, path string) ([]p
 
 	// Resolve path within workspace (respect workspace restriction).
 	workspace := ToolWorkspaceFromCtx(ctx)
-	resolved, err := resolvePathWithAllowed(path, workspace, effectiveRestrict(ctx, true), allowedWithTeamWorkspace(ctx, nil))
+	resolved, err := resolvePathWithAllowed(path, workspace, effectiveRestrict(ctx, true), allowedWithTeamWorkspace(ctx, t.allowedPrefixes))
 	if err != nil {
 		return nil, fmt.Errorf("invalid image path: %w", err)
 	}

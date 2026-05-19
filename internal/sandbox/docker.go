@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -38,6 +40,47 @@ type DockerSandbox struct {
 // newDockerSandbox creates and starts a Docker container for sandboxed execution.
 // Matching TS buildSandboxCreateArgs() + createSandboxContainer().
 func newDockerSandbox(ctx context.Context, name string, cfg Config, workspace string) (*DockerSandbox, error) {
+	args := buildDockerRunArgs(ctx, name, cfg, workspace)
+
+	slog.Debug("creating sandbox container", "name", name, "args", args)
+
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("docker run failed: %w\nstderr: %s", err, stderr.String())
+	}
+
+	containerID := strings.TrimSpace(stdout.String())
+	if len(containerID) > 12 {
+		containerID = containerID[:12]
+	}
+
+	slog.Info("sandbox container created", "id", containerID, "name", name, "image", cfg.Image)
+
+	// Run optional setup command (matching TS setupCommand)
+	if cfg.SetupCommand != "" {
+		setupCmd := exec.CommandContext(ctx, "docker", "exec", "-i", containerID, "sh", "-lc", cfg.SetupCommand)
+		if out, err := setupCmd.CombinedOutput(); err != nil {
+			slog.Warn("sandbox setup command failed", "id", containerID, "error", err, "output", string(out))
+		} else {
+			slog.Info("sandbox setup command completed", "id", containerID)
+		}
+	}
+
+	now := time.Now()
+	return &DockerSandbox{
+		containerID: containerID,
+		config:      cfg,
+		workspace:   workspace,
+		createdAt:   now,
+		lastUsed:    now,
+	}, nil
+}
+
+func buildDockerRunArgs(ctx context.Context, name string, cfg Config, workspace string) []string {
 	args := []string{
 		"run", "-d",
 		"--name", name,
@@ -98,6 +141,18 @@ func newDockerSandbox(ctx context.Context, name string, cfg Config, workspace st
 		hostPath := resolveHostWorkspacePath(ctx, workspace)
 		args = append(args, "-v", fmt.Sprintf("%s:%s:%s", hostPath, containerWorkdir, mountOpt))
 	}
+	for _, mountPath := range cfg.ReadOnlyMounts {
+		clean := filepath.Clean(mountPath)
+		if clean == "." || !filepath.IsAbs(clean) {
+			continue
+		}
+		if _, err := os.Stat(clean); err != nil {
+			slog.Debug("sandbox: skipping missing read-only mount", "path", clean, "error", err)
+			continue
+		}
+		hostPath := resolveHostWorkspacePath(ctx, clean)
+		args = append(args, "-v", fmt.Sprintf("%s:%s:ro", hostPath, clean))
+	}
 	args = append(args, "-w", containerWorkdir)
 
 	// Environment variables
@@ -108,42 +163,7 @@ func newDockerSandbox(ctx context.Context, name string, cfg Config, workspace st
 	// Image + keep-alive command
 	args = append(args, cfg.Image, "sleep", "infinity")
 
-	slog.Debug("creating sandbox container", "name", name, "args", args)
-
-	cmd := exec.CommandContext(ctx, "docker", args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("docker run failed: %w\nstderr: %s", err, stderr.String())
-	}
-
-	containerID := strings.TrimSpace(stdout.String())
-	if len(containerID) > 12 {
-		containerID = containerID[:12]
-	}
-
-	slog.Info("sandbox container created", "id", containerID, "name", name, "image", cfg.Image)
-
-	// Run optional setup command (matching TS setupCommand)
-	if cfg.SetupCommand != "" {
-		setupCmd := exec.CommandContext(ctx, "docker", "exec", "-i", containerID, "sh", "-lc", cfg.SetupCommand)
-		if out, err := setupCmd.CombinedOutput(); err != nil {
-			slog.Warn("sandbox setup command failed", "id", containerID, "error", err, "output", string(out))
-		} else {
-			slog.Info("sandbox setup command completed", "id", containerID)
-		}
-	}
-
-	now := time.Now()
-	return &DockerSandbox{
-		containerID: containerID,
-		config:      cfg,
-		workspace:   workspace,
-		createdAt:   now,
-		lastUsed:    now,
-	}, nil
+	return args
 }
 
 // Exec runs a command inside the container.

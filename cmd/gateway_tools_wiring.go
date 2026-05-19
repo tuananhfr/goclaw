@@ -108,6 +108,12 @@ func wireExtraTools(
 			pa.AllowPaths(userAllowPaths...)
 		}
 	}
+	if readImageTool, ok := toolsReg.Get("read_image"); ok {
+		if pa, ok := readImageTool.(tools.PathAllowable); ok {
+			pa.AllowPaths(skillsAllowPaths...)
+			pa.AllowPaths(userAllowPaths...)
+		}
+	}
 	// Write and edit tools also get user-configured allowed paths for cross-drive access.
 	if writeTool, ok := toolsReg.Get("write_file"); ok {
 		if pa, ok := writeTool.(tools.PathAllowable); ok {

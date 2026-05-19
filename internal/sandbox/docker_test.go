@@ -1,6 +1,9 @@
 package sandbox
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -124,5 +127,27 @@ func TestResolveScopeKey(t *testing.T) {
 		if got != tc.expected {
 			t.Errorf("scope=%s key=%q → %q, want %q", tc.scope, tc.key, got, tc.expected)
 		}
+	}
+}
+
+func TestBuildDockerRunArgs_ReadOnlyMounts(t *testing.T) {
+	workspace := t.TempDir()
+	skillsStore := filepath.Join(t.TempDir(), "skills-store")
+	if err := os.MkdirAll(skillsStore, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := DefaultConfig()
+	cfg.Image = "sandbox:test"
+	cfg.ReadOnlyMounts = []string{skillsStore, filepath.Join(t.TempDir(), "missing"), "relative"}
+
+	args := buildDockerRunArgs(context.Background(), "test-sandbox", cfg, workspace)
+	joined := strings.Join(args, "\n")
+	want := skillsStore + ":" + skillsStore + ":ro"
+	if !strings.Contains(joined, want) {
+		t.Fatalf("expected read-only skill mount %q in args:\n%s", want, joined)
+	}
+	if strings.Contains(joined, "relative:relative:ro") {
+		t.Fatalf("relative read-only mount should be ignored:\n%s", joined)
 	}
 }
