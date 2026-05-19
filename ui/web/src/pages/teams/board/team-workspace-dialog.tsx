@@ -93,8 +93,18 @@ export function TeamWorkspaceDialog({ open, onOpenChange, teamId, scopes }: Team
     return m;
   }, [files]);
 
-  // Use provided scopes, or cached scopes from first "all" load.
-  const effectiveScopes = scopes.length > 0 ? scopes : cachedScopes;
+  // Merge provided scopes with scopes discovered from the workspace listing.
+  // Some environments do not pass the full scope list into this dialog.
+  const effectiveScopes = useMemo(() => {
+    const byID = new Map<string, ScopeEntry>();
+    for (const s of scopes) {
+      if (s.chat_id) byID.set(s.chat_id, s);
+    }
+    for (const s of cachedScopes) {
+      if (s.chat_id && !byID.has(s.chat_id)) byID.set(s.chat_id, s);
+    }
+    return Array.from(byID.values()).sort((a, b) => a.chat_id.localeCompare(b.chat_id));
+  }, [scopes, cachedScopes]);
 
   const tree = useMemo(
     () => buildTree(files.map((f) => ({
@@ -216,21 +226,19 @@ export function TeamWorkspaceDialog({ open, onOpenChange, teamId, scopes }: Team
           <div className="flex items-center justify-between">
             <DialogTitle>{t("workspace.title")}</DialogTitle>
             <div className="flex items-center gap-2">
-              {effectiveScopes.length > 1 && (
-                <Select value={selectedScope} onValueChange={setSelectedScope}>
-                  <SelectTrigger className="h-8 w-40 text-xs">
-                    <SelectValue placeholder={t("scope.all")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">{t("scope.all")}</SelectItem>
-                    {effectiveScopes.map((s) => (
-                      <SelectItem key={s.chat_id} value={s.chat_id}>
-                        {s.chat_id.length > 16 ? s.chat_id.slice(0, 16) + "\u2026" : s.chat_id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+              <Select value={selectedScope} onValueChange={setSelectedScope}>
+                <SelectTrigger className="h-8 w-40 text-xs">
+                  <SelectValue placeholder={t("scope.all")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">{t("scope.all")}</SelectItem>
+                  {effectiveScopes.map((s) => (
+                    <SelectItem key={s.chat_id} value={s.chat_id}>
+                      {s.chat_id.length > 16 ? s.chat_id.slice(0, 16) + "\u2026" : s.chat_id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button variant="outline" size="sm" onClick={() => setUploadOpen(true)} className="gap-1">
                 <Upload className="h-3.5 w-3.5" />
               </Button>
