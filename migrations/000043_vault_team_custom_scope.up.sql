@@ -15,13 +15,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_vault_docs_agent_team_scope_path
 -- Index for team_id filtering.
 CREATE INDEX IF NOT EXISTS idx_vault_docs_team ON vault_documents(team_id) WHERE team_id IS NOT NULL;
 
--- Trigger: when team deleted (ON DELETE SET NULL), auto-correct scope to 'personal'.
--- Prevents orphaned scope='team' docs.
+-- Trigger: when team deleted (ON DELETE SET NULL), auto-correct scope.
+-- Team docs without agent ownership become shared; agent-owned docs become personal.
 CREATE OR REPLACE FUNCTION vault_docs_team_null_scope_fix()
 RETURNS TRIGGER AS $$
 BEGIN
     IF NEW.team_id IS NULL AND OLD.team_id IS NOT NULL THEN
-        NEW.scope := 'personal';
+        IF NEW.agent_id IS NOT NULL THEN
+            NEW.scope := 'personal';
+        ELSE
+            NEW.scope := 'shared';
+        END IF;
     END IF;
     RETURN NEW;
 END;

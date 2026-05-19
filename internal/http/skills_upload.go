@@ -193,6 +193,7 @@ func (h *SkillsHandler) handleUpload(w http.ResponseWriter, r *http.Request) {
 		}
 		// Strip wrapper directory prefix if ZIP had one
 		entryName := strings.TrimPrefix(f.Name, "./")
+		entryName = strings.ReplaceAll(entryName, "\\", "/")
 		if stripPrefix != "" {
 			entryName = strings.TrimPrefix(entryName, stripPrefix)
 			if entryName == "" {

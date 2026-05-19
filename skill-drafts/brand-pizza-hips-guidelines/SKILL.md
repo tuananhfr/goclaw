@@ -30,11 +30,11 @@ Use these files when exact on-image typography must be rendered or verified:
 - Headline/title/display text:
   - Font: SVN - Bango.
   - Font file: `{baseDir}/assets/fonts/SVN-Bango.otf`.
-  - Absolute fallback path: `/app/data/skills-store/brand-pizza-hips-guidelines/4/assets/fonts/SVN-Bango.otf`.
+  - Runtime fallback pattern: `<skills.file_path>/assets/fonts/SVN-Bango.otf`, where `skills.file_path` is the active version directory in the skills database.
   - Workspace fallback path for agents/tools: `/app/workspace/brand-assets/pizza-hips/fonts/SVN-Bango.otf`.
   - SHA256: `0C72A0D3D2A61E550E24A35FBF41F0DE3517026F09526F5D8CAF1BBF963FA5D9`.
 
-If `{baseDir}` is not resolved by the current tool/agent context, use the absolute fallback path. If the agent/tool is restricted to the workspace, use the workspace fallback path. If the skill is uploaded as a newer version, replace `/4/` with the current `file_path` version shown in the skills database.
+If `{baseDir}` is not resolved by the current tool/agent context, query the active skill metadata and use `<skills.file_path>/assets/fonts/SVN-Bango.otf`. Do not guess a hardcoded version number. If the agent/tool is restricted to the workspace, use the workspace fallback path.
 
 - Body/supporting text:
   - Font direction: SVN - Avo.
