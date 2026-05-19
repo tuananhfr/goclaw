@@ -76,6 +76,24 @@ func teamWorkspaceDir(ctx context.Context, dataDir string, teamID uuid.UUID, cha
 	return base
 }
 
+func (m *TeamsMethods) workspaceScopeForFileOp(ctx context.Context, teamID uuid.UUID, chatID, fileName string) (string, string, error) {
+	teamRoot := teamWorkspaceDir(ctx, m.dataDir, teamID, "")
+	if team, err := m.teamStore.GetTeam(ctx, teamID); err == nil && tools.IsSharedWorkspace(team.Settings) {
+		return "", teamRoot, nil
+	}
+	if chatID != "" {
+		return chatID, teamWorkspaceDir(ctx, m.dataDir, teamID, chatID), nil
+	}
+	if fileName != "" {
+		if rootPath, err := resolveWorkspacePath(teamRoot, fileName); err == nil {
+			if _, statErr := os.Stat(rootPath); statErr == nil {
+				return "", teamRoot, nil
+			}
+		}
+	}
+	return "", "", fmt.Errorf("chat_id required")
+}
+
 // workspaceFileEntry is the response shape for workspace file listing.
 type workspaceFileEntry struct {
 	Name      string `json:"name"`
@@ -259,16 +277,12 @@ func (m *TeamsMethods) handleWorkspaceRead(ctx context.Context, client *gateway.
 		return
 	}
 
-	// Shared workspace: read from team root. Isolated: require chatID.
-	chatID := params.ChatID
-	if team, err := m.teamStore.GetTeam(ctx, teamID); err == nil && tools.IsSharedWorkspace(team.Settings) {
-		chatID = ""
-	} else if chatID == "" {
+	chatID, scopeDir, scopeErr := m.workspaceScopeForFileOp(ctx, teamID, params.ChatID, params.FileName)
+	if scopeErr != nil {
 		client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrInvalidRequest, i18n.T(locale, i18n.MsgRequired, "chat_id")))
 		return
 	}
 
-	scopeDir := teamWorkspaceDir(ctx, m.dataDir, teamID, chatID)
 	diskPath, pathErr := resolveWorkspacePath(scopeDir, params.FileName)
 	if pathErr != nil {
 		client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrInvalidRequest, pathErr.Error()))
@@ -334,23 +348,33 @@ func (m *TeamsMethods) handleWorkspaceDelete(ctx context.Context, client *gatewa
 		return
 	}
 
-	// Shared workspace: delete from team root. Isolated: require chatID.
-	chatID := params.ChatID
-	if team, err := m.teamStore.GetTeam(ctx, teamID); err == nil && tools.IsSharedWorkspace(team.Settings) {
-		chatID = ""
-	} else if chatID == "" {
+	_, scopeDir, scopeErr := m.workspaceScopeForFileOp(ctx, teamID, params.ChatID, params.FileName)
+	if scopeErr != nil {
 		client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrInvalidRequest, i18n.T(locale, i18n.MsgRequired, "chat_id")))
 		return
 	}
 
-	scopeDir := teamWorkspaceDir(ctx, m.dataDir, teamID, chatID)
 	diskPath, pathErr := resolveWorkspacePath(scopeDir, params.FileName)
 	if pathErr != nil {
 		client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrInvalidRequest, pathErr.Error()))
 		return
 	}
-	if err := os.Remove(diskPath); err != nil {
+	if filepath.Clean(diskPath) == filepath.Clean(scopeDir) {
+		client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrInvalidRequest, "cannot delete workspace root"))
+		return
+	}
+	info, statErr := os.Stat(diskPath)
+	if statErr != nil {
 		client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrNotFound, fmt.Sprintf("file not found: %s", params.FileName)))
+		return
+	}
+	if info.IsDir() {
+		if err := os.RemoveAll(diskPath); err != nil {
+			client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrInternal, fmt.Sprintf("failed to delete: %s", params.FileName)))
+			return
+		}
+	} else if err := os.Remove(diskPath); err != nil {
+		client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrInternal, fmt.Sprintf("failed to delete: %s", params.FileName)))
 		return
 	}
 

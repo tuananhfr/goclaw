@@ -1,6 +1,7 @@
 package http
 
 import (
+	"archive/zip"
 	"fmt"
 	"io"
 	"log/slog"
@@ -74,12 +75,8 @@ func (h *WorkspaceUploadHandler) handleUpload(w http.ResponseWriter, r *http.Req
 		return
 	}
 	shared := tools.IsSharedWorkspace(team.Settings)
-	if !shared && chatID == "" && !teamWide {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": i18n.T(locale, i18n.MsgRequired, "chat_id")})
-		return
-	}
-	if shared || teamWide {
-		chatID = "" // shared mode ignores chat_id
+	if shared || teamWide || chatID == "" {
+		chatID = "" // shared mode and unscoped uploads write to the team root
 	}
 
 	// Enforce file size limit at HTTP level.
@@ -148,6 +145,32 @@ func (h *WorkspaceUploadHandler) handleUpload(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	if ext == ".zip" {
+		extracted, totalBytes, err := extractWorkspaceZip(file, scopeDir)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		if h.msgBus != nil {
+			bus.BroadcastForTenant(h.msgBus, protocol.EventWorkspaceFileChanged, tenantID, map[string]string{
+				"team_id":   teamID.String(),
+				"chat_id":   chatID,
+				"file_name": origName,
+				"action":    "extracted",
+			})
+		}
+		slog.Info("workspace_upload: zip extracted", "team", teamID, "chat_id", chatID, "file", origName, "files", len(extracted), "size", totalBytes)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"path":            scopeDir,
+			"filename":        origName,
+			"size":            totalBytes,
+			"mime_type":       "application/zip",
+			"extracted":       true,
+			"extracted_files": extracted,
+		})
+		return
+	}
+
 	// Write file to disk.
 	out, err := os.Create(diskPath)
 	if err != nil {
@@ -183,6 +206,128 @@ func (h *WorkspaceUploadHandler) handleUpload(w http.ResponseWriter, r *http.Req
 		"size":      written,
 		"mime_type": mimeType,
 	})
+}
+
+func extractWorkspaceZip(src io.Reader, scopeDir string) ([]string, int64, error) {
+	tmp, err := os.CreateTemp("", "goclaw-workspace-upload-*.zip")
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to stage zip upload")
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+
+	written, err := io.Copy(tmp, src)
+	closeErr := tmp.Close()
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to read zip upload")
+	}
+	if closeErr != nil {
+		return nil, 0, fmt.Errorf("failed to stage zip upload")
+	}
+	if written > tools.MaxFileSizeBytes {
+		return nil, 0, fmt.Errorf("zip file too large")
+	}
+
+	zr, err := zip.OpenReader(tmpPath)
+	if err != nil {
+		return nil, 0, fmt.Errorf("invalid zip file")
+	}
+	defer zr.Close()
+
+	scopeReal, err := filepath.EvalSymlinks(filepath.Clean(scopeDir))
+	if err != nil {
+		scopeReal = filepath.Clean(scopeDir)
+	}
+
+	var extracted []string
+	var totalBytes int64
+	for _, entry := range zr.File {
+		if len(extracted) >= tools.MaxFilesPerScope {
+			return nil, 0, fmt.Errorf("zip contains too many files (limit %d)", tools.MaxFilesPerScope)
+		}
+		name := filepath.ToSlash(entry.Name)
+		name = strings.TrimPrefix(name, "/")
+		if name == "" {
+			continue
+		}
+		if strings.Contains(name, "\\") || strings.Contains(name, "..") {
+			return nil, 0, fmt.Errorf("zip contains invalid path: %s", entry.Name)
+		}
+		cleanName := filepath.Clean(filepath.FromSlash(name))
+		if cleanName == "." || filepath.IsAbs(cleanName) {
+			return nil, 0, fmt.Errorf("zip contains invalid path: %s", entry.Name)
+		}
+		ext := strings.ToLower(filepath.Ext(cleanName))
+		if tools.IsBlockedExtension(ext) {
+			return nil, 0, fmt.Errorf("zip contains blocked file type %s: %s", ext, entry.Name)
+		}
+		if entry.FileInfo().IsDir() {
+			targetDir, err := safeWorkspaceZipTarget(scopeDir, scopeReal, cleanName)
+			if err != nil {
+				return nil, 0, err
+			}
+			if err := os.MkdirAll(targetDir, 0750); err != nil {
+				return nil, 0, fmt.Errorf("failed to create zip directory: %s", name)
+			}
+			continue
+		}
+		if entry.UncompressedSize64 > uint64(tools.MaxFileSizeBytes) {
+			return nil, 0, fmt.Errorf("zip entry too large: %s", entry.Name)
+		}
+		totalBytes += int64(entry.UncompressedSize64)
+		if totalBytes > tools.MaxFileSizeBytes {
+			return nil, 0, fmt.Errorf("zip extracted content too large")
+		}
+
+		target, err := safeWorkspaceZipTarget(scopeDir, scopeReal, cleanName)
+		if err != nil {
+			return nil, 0, err
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0750); err != nil {
+			return nil, 0, fmt.Errorf("failed to create zip parent directory: %s", name)
+		}
+		rc, err := entry.Open()
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to open zip entry: %s", entry.Name)
+		}
+		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0640)
+		if err != nil {
+			rc.Close()
+			return nil, 0, fmt.Errorf("failed to create extracted file: %s", name)
+		}
+		n, copyErr := io.Copy(out, io.LimitReader(rc, tools.MaxFileSizeBytes+1))
+		closeOutErr := out.Close()
+		closeRcErr := rc.Close()
+		if copyErr != nil {
+			return nil, 0, fmt.Errorf("failed to extract zip entry: %s", entry.Name)
+		}
+		if closeOutErr != nil || closeRcErr != nil {
+			return nil, 0, fmt.Errorf("failed to close extracted zip entry: %s", entry.Name)
+		}
+		if n > tools.MaxFileSizeBytes {
+			_ = os.Remove(target)
+			return nil, 0, fmt.Errorf("zip entry too large: %s", entry.Name)
+		}
+		extracted = append(extracted, filepath.ToSlash(cleanName))
+	}
+	if len(extracted) == 0 {
+		return nil, 0, fmt.Errorf("zip file did not contain any extractable files")
+	}
+	return extracted, totalBytes, nil
+}
+
+func safeWorkspaceZipTarget(scopeDir, scopeReal, cleanName string) (string, error) {
+	target := filepath.Clean(filepath.Join(scopeDir, cleanName))
+	targetReal := target
+	if real, err := filepath.EvalSymlinks(target); err == nil {
+		targetReal = real
+	} else if parentReal, parentErr := filepath.EvalSymlinks(filepath.Dir(target)); parentErr == nil {
+		targetReal = filepath.Join(parentReal, filepath.Base(target))
+	}
+	if targetReal != scopeReal && !strings.HasPrefix(targetReal, scopeReal+string(filepath.Separator)) {
+		return "", fmt.Errorf("zip contains path outside workspace: %s", cleanName)
+	}
+	return target, nil
 }
 
 // handleMove moves/renames a file within a team workspace.
