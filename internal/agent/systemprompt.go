@@ -206,6 +206,7 @@ var coreToolSummaries = map[string]string{
 	"create_video":           "Generate videos from text descriptions using AI",
 	"read_document":          "Analyze documents (PDF, DOCX) from <media:document> tags. If fails, use a skill instead. Path is directly accessible",
 	"create_image":           "Generate images from text descriptions using AI",
+	"render_creative":        "Render brand text into a flattened PNG using real .otf/.ttf font files",
 	"create_audio":           "Generate music or sound effects from text descriptions using AI",
 	"knowledge_graph_search": "Find people, projects, and their connections — use for relationship questions (who works with whom, project dependencies) that memory_search may miss",
 	"team_tasks":             "Team task board — track progress, manage dependencies (spawn auto-creates delegation tasks)",

@@ -89,6 +89,14 @@ func (t *TeamTasksTool) Parameters() map[string]any {
 				"type":        "string",
 				"description": "Task type for create: 'general' (default), 'request', or 'note'",
 			},
+			"brand_kit": map[string]any{
+				"type":        "string",
+				"description": "Optional team workspace brand kit/materials path for create, e.g. 'brand-kits/pizza-hips'. The assignee will be told to read BRAND.md and use assets/fonts from this folder.",
+			},
+			"materials_path": map[string]any{
+				"type":        "string",
+				"description": "Alias for brand_kit. Optional team workspace materials path for create.",
+			},
 			"assignee": map[string]any{
 				"type":        "string",
 				"description": "Agent key to assign task to (REQUIRED for create). Auto-dispatches to that team member.",
@@ -118,7 +126,7 @@ func (t *TeamTasksTool) buildActionDescription() string {
 	guide := map[string]string{
 		"list":           "- list: status?, page?\n",
 		"get":            "- get: task_id\n",
-		"create":         "- create: subject, description, assignee, priority?, blocked_by?, require_approval?, task_type?\n",
+		"create":         "- create: subject, description, assignee, priority?, blocked_by?, require_approval?, task_type?, brand_kit?/materials_path?\n",
 		"claim":          "- claim: task_id\n",
 		"complete":       "- complete: task_id?, result\n",
 		"cancel":         "- cancel: task_id, text\n",

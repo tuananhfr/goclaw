@@ -100,6 +100,10 @@ func (m *TeamToolManager) dispatchTaskToAgent(ctx context.Context, task *store.T
 	// Hint: tell the agent it's on a team task and where the shared workspace is.
 	if ws := taskTeamWorkspace(task); ws != "" {
 		content.WriteString(fmt.Sprintf("\n\n[Team workspace: %s — use read_file/write_file/list_files to access shared files. All files you write are visible to the team lead and other members.]", ws))
+		if brandKit := taskBrandKit(task.Metadata); brandKit != "" {
+			brandKitPath := filepath.Join(ws, filepath.FromSlash(brandKit))
+			content.WriteString(fmt.Sprintf("\n\n[Brand kit/materials: %s]\n- Read BRAND.md first if present.\n- Use render-preset.json if present for machine-readable colors, font paths, and text treatment.\n- For on-image brand text, use the real font files under assets/fonts and render text into a flattened final image.\n- Write final images back to the team workspace so they can be reviewed and sent as chat/Discord previews.", brandKitPath))
+		}
 	}
 	// List attached files so member knows what's available to read.
 	if files, ok := task.Metadata["attached_files"].([]any); ok && len(files) > 0 {
@@ -165,15 +169,15 @@ func (m *TeamToolManager) dispatchTaskToAgent(ctx context.Context, task *store.T
 	}
 
 	meta := map[string]string{
-		MetaOriginChannel:   originChannel,
-		MetaOriginPeerKind:  originPeerKind,
-		MetaOriginChatID:    originChatID,
-		MetaOriginUserID:    originUserID,
-		MetaFromAgent:       fromAgent,
-		MetaToAgent:         ag.AgentKey,
-		MetaToAgentDisplay:  ag.DisplayName,
-		MetaTeamTaskID:      task.ID.String(),
-		MetaTeamID:          teamID.String(),
+		MetaOriginChannel:  originChannel,
+		MetaOriginPeerKind: originPeerKind,
+		MetaOriginChatID:   originChatID,
+		MetaOriginUserID:   originUserID,
+		MetaFromAgent:      fromAgent,
+		MetaToAgent:        ag.AgentKey,
+		MetaToAgentDisplay: ag.DisplayName,
+		MetaTeamTaskID:     task.ID.String(),
+		MetaTeamID:         teamID.String(),
 	}
 	if originSenderID != "" {
 		meta[MetaOriginSenderID] = originSenderID

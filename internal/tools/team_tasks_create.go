@@ -61,6 +61,10 @@ func (t *TeamTasksTool) executeCreate(ctx context.Context, args map[string]any) 
 	if p, ok := args["priority"].(float64); ok {
 		priority = int(p)
 	}
+	brandKit, err := cleanTeamMaterialsPath(args)
+	if err != nil {
+		return ErrorResult(err.Error())
+	}
 
 	var blockedBy []uuid.UUID
 	if raw, ok := args["blocked_by"].([]any); ok {
@@ -150,6 +154,9 @@ func (t *TeamTasksTool) executeCreate(ctx context.Context, args map[string]any) 
 		UserChatLayer(chatID, shared),
 	)
 	taskMeta[TaskMetaTeamWorkspace] = teamWsDir
+	if brandKit != "" {
+		taskMeta[TaskMetaBrandKit] = brandKit
+	}
 	// Auto-collect media files from current run to team workspace.
 	// When leader received files from user and creates a task, copy those
 	// files to the team workspace so members can access them via read_file.
@@ -215,12 +222,12 @@ func (t *TeamTasksTool) executeCreate(ctx context.Context, args map[string]any) 
 	}
 
 	task := &store.TeamTaskData{
-		TeamID:           team.ID,
-		Subject:          subject,
-		Description:      description,
-		Status:           status,
-		BlockedBy:        blockedBy,
-		Priority:         priority,
+		TeamID:      team.ID,
+		Subject:     subject,
+		Description: description,
+		Status:      status,
+		BlockedBy:   blockedBy,
+		Priority:    priority,
 		// SCOPE-intentional (#915 audit 2026-04-16): team task visibility is
 		// per-chat, not per-user. team_tasks_read.go filters end-user lists by
 		// this same UserID. Migrating to ActorIDFromContext would hide group

@@ -55,6 +55,69 @@ func TestCreate(t *testing.T) {
 		}
 	})
 
+	t.Run("StoresBrandKitMetadata", func(t *testing.T) {
+		mb, tool, _, _, ctx := newTestTeamSetup()
+		ptd := NewPendingTeamDispatch()
+		ptd.MarkListed()
+		ctx = WithPendingTeamDispatch(ctx, ptd)
+
+		result := tool.Execute(ctx, map[string]any{
+			"action":      "create",
+			"subject":     "Design page",
+			"description": "Create final image",
+			"assignee":    "member-agent",
+			"brand_kit":   "brand-kits/pizza-hips",
+		})
+		if result.IsError {
+			t.Fatalf("unexpected error: %s", result.ForLLM)
+		}
+		mb.taskStore.mu.Lock()
+		var task *store.TeamTaskData
+		for _, v := range mb.taskStore.tasks {
+			task = v
+		}
+		mb.taskStore.mu.Unlock()
+		if got, _ := task.Metadata[TaskMetaBrandKit].(string); got != "brand-kits/pizza-hips" {
+			t.Fatalf("brand kit metadata = %q", got)
+		}
+	})
+
+	t.Run("RejectsEscapingBrandKit", func(t *testing.T) {
+		_, tool, _, _, ctx := newTestTeamSetup()
+		ptd := NewPendingTeamDispatch()
+		ptd.MarkListed()
+		ctx = WithPendingTeamDispatch(ctx, ptd)
+
+		result := tool.Execute(ctx, map[string]any{
+			"action":      "create",
+			"subject":     "Design page",
+			"description": "Create final image",
+			"assignee":    "member-agent",
+			"brand_kit":   "../outside",
+		})
+		if !result.IsError {
+			t.Fatal("expected invalid brand_kit to fail")
+		}
+	})
+
+	t.Run("RejectsAbsoluteBrandKit", func(t *testing.T) {
+		_, tool, _, _, ctx := newTestTeamSetup()
+		ptd := NewPendingTeamDispatch()
+		ptd.MarkListed()
+		ctx = WithPendingTeamDispatch(ctx, ptd)
+
+		result := tool.Execute(ctx, map[string]any{
+			"action":      "create",
+			"subject":     "Design page",
+			"description": "Create final image",
+			"assignee":    "member-agent",
+			"brand_kit":   "C:/outside",
+		})
+		if !result.IsError {
+			t.Fatal("expected absolute brand_kit to fail")
+		}
+	})
+
 	t.Run("MemberGeneralBlocked", func(t *testing.T) {
 		mb, tool, _, memberID, ctx := newTestTeamSetup()
 		ptd := NewPendingTeamDispatch()

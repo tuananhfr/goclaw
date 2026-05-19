@@ -114,6 +114,12 @@ func wireExtraTools(
 			pa.AllowPaths(userAllowPaths...)
 		}
 	}
+	if renderTool, ok := toolsReg.Get("render_creative"); ok {
+		if pa, ok := renderTool.(tools.PathAllowable); ok {
+			pa.AllowPaths(skillsAllowPaths...)
+			pa.AllowPaths(userAllowPaths...)
+		}
+	}
 	// Write and edit tools also get user-configured allowed paths for cross-drive access.
 	if writeTool, ok := toolsReg.Get("write_file"); ok {
 		if pa, ok := writeTool.(tools.PathAllowable); ok {

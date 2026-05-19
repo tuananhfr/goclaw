@@ -55,6 +55,7 @@ func builtinToolSeedData() []store.BuiltinToolDef {
 		{Name: "create_image", DisplayName: "Create Image", Description: "Generate images from text prompts using an image generation provider", Category: "media", Enabled: false,
 			Requires: []string{"image_gen_provider"},
 		},
+		{Name: "render_creative", DisplayName: "Render Creative", Description: "Render text into a flattened image using real font files for brand-accurate previews", Category: "media", Enabled: true},
 		{Name: "read_audio", DisplayName: "Read Audio", Description: "Analyze audio files (speech, music, sounds) using an audio-capable LLM provider", Category: "media", Enabled: false,
 			Requires: []string{"audio_provider"},
 		},

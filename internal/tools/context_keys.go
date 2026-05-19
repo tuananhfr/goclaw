@@ -568,6 +568,12 @@ func (p *PendingTeamDispatch) TryMarkListed() bool {
 	return true
 }
 
+// MarkListed records that list/search was called in this turn.
+// Kept for older tests/helpers that do not need the first-call signal.
+func (p *PendingTeamDispatch) MarkListed() {
+	_ = p.TryMarkListed()
+}
+
 // HasListed reports whether list was called in this turn.
 func (p *PendingTeamDispatch) HasListed() bool {
 	p.mu.Lock()
