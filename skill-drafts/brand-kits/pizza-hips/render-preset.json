@@ -1,0 +1,40 @@
+{
+  "brand_slug": "pizza-hips",
+  "brand_name": "Pizza Hip'S",
+  "headline_font": {
+    "name": "SVN - Bango",
+    "path": "assets/fonts/SVN-Bango.otf",
+    "sha256": "0C72A0D3D2A61E550E24A35FBF41F0DE3517026F09526F5D8CAF1BBF963FA5D9"
+  },
+  "palette": {
+    "orange": "#F97316",
+    "blue": "#1D4ED8",
+    "black": "#111111",
+    "white": "#FFFFFF",
+    "yellow": "#FFD84A",
+    "red": "#E53935"
+  },
+  "headline_style": {
+    "font_path": "assets/fonts/SVN-Bango.otf",
+    "default_size": 96,
+    "min_size": 56,
+    "max_size": 132,
+    "max_lines": 2,
+    "max_width_ratio": 0.78,
+    "default_color": "#FFD84A",
+    "stroke_color": "#E53935",
+    "stroke_width": 3,
+    "shadow": true
+  },
+  "layout_rules": {
+    "preferred_zones": ["top", "left", "bottom"],
+    "avoid_zones": ["top_center_logo", "bottom_right_contact"],
+    "generate_variants": 3,
+    "background_prompt_hint": "no text, leave a clear safe area for headline and CTA"
+  },
+  "final_output": {
+    "format": "png",
+    "flatten_text": true,
+    "return_font_sha256": true
+  }
+}

@@ -159,6 +159,7 @@ export function TeamWorkspaceDialog({ open, onOpenChange, teamId, scopes }: Team
   const handleUploadFile = useCallback(async (file: File) => {
     const params: Record<string, string> = {};
     if (scopeValue) params["chat_id"] = scopeValue;
+    else params["team_wide"] = "true";
     await http.upload(`/v1/teams/${teamId}/workspace/upload?` + new URLSearchParams(params).toString(), (() => {
       const fd = new FormData();
       fd.append("file", file);

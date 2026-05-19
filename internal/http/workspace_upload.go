@@ -67,17 +67,18 @@ func (h *WorkspaceUploadHandler) handleUpload(w http.ResponseWriter, r *http.Req
 
 	// Determine workspace mode (shared vs isolated).
 	chatID := r.URL.Query().Get("chat_id")
+	teamWide := r.URL.Query().Get("team_wide") == "true" || r.URL.Query().Get("team_wide") == "1"
 	team, err := h.teamStore.GetTeam(ctx, teamID)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "team not found"})
 		return
 	}
 	shared := tools.IsSharedWorkspace(team.Settings)
-	if !shared && chatID == "" {
+	if !shared && chatID == "" && !teamWide {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": i18n.T(locale, i18n.MsgRequired, "chat_id")})
 		return
 	}
-	if shared {
+	if shared || teamWide {
 		chatID = "" // shared mode ignores chat_id
 	}
 

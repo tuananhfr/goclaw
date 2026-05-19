@@ -142,7 +142,26 @@ func (m *TeamsMethods) handleWorkspaceList(ctx context.Context, client *gateway.
 			return
 		}
 		for _, entry := range entries {
+			if entry.Name() == "brand-kits" {
+				files = append(files, workspaceFileEntry{
+					Name:  entry.Name(),
+					Path:  filepath.Join(baseDir, entry.Name()),
+					IsDir: true,
+				})
+				files = append(files, walkDir(filepath.Join(baseDir, entry.Name()), entry.Name(), "")...)
+				continue
+			}
 			if !entry.IsDir() {
+				info, err := entry.Info()
+				if err != nil {
+					continue
+				}
+				files = append(files, workspaceFileEntry{
+					Name:      entry.Name(),
+					Path:      filepath.Join(baseDir, entry.Name()),
+					Size:      info.Size(),
+					UpdatedAt: info.ModTime().UTC().Format("2006-01-02T15:04:05Z"),
+				})
 				continue
 			}
 			chatID := entry.Name()
