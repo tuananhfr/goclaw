@@ -212,10 +212,11 @@ For Pizza Hip'S image prompts, briefs, or QA:
 - For text rendered inside the image, use SVN - Bango direction for headline/title text and SVN - Avo direction for supporting/body text when typography is requested.
 - Watermark is handled by the existing system/tooling. Do not instruct the agent to add, move, resize, or modify watermark assets.
 - Reserve safe zones for existing watermark overlays:
-  - Top center is reserved for the Pizza Hip'S logo/brand watermark.
-  - Bottom right is reserved for hotline/contact/CTA watermark.
+  - Top center is reserved for the Pizza Hip'S logo/brand watermark; keep it visually clean.
+  - Bottom right is reserved for hotline/contact/CTA watermark; keep it visually clean.
 - Do not place important content in those reserved zones: headline text, prices, CTA, product hero details, faces, QR codes, legal notes, or small readable text.
 - When creating image prompts, explicitly leave clean negative space at top center and bottom right so the existing watermark can overlay without covering content.
+- Create and return one final image by default. Do not generate multiple visual variants unless the Lead explicitly asks for comparison variants.
 - Minimum 1 image, maximum 10 images for a Facebook post set.
 - Prefer realistic product imagery: pizza, fried chicken, spicy noodles, combo meals, store/customer scenes, or kiosk/franchise visuals depending on the brief.
 - Do not include logos from other food brands.

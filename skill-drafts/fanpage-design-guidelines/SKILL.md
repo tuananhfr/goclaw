@@ -22,6 +22,8 @@ If the Lead provides watermark or logo safe zones, do not place important text, 
 
 Do not instruct tools to add, move, resize, or modify watermark assets unless the Lead explicitly asks. If watermark is handled by system tooling, only reserve clean space for it.
 
+Create and return one final image by default. Generate multiple variants only when the Lead explicitly asks for comparison variants.
+
 Font family instructions are for on-image typography only. They apply to text rendered inside generated images, design briefs, banners, covers, stories, or video frames. Do not apply custom fonts to Facebook caption text.
 
 ## Required Input From Lead

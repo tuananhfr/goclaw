@@ -78,7 +78,11 @@ func (t *RenderCreativeTool) Parameters() map[string]any {
 			},
 			"variants": map[string]any{
 				"type":        "integer",
-				"description": "Number of layout variants to render when layer layout is 'auto'. Default 1, max 5.",
+				"description": "Number of layout variants to render when layer layout is 'auto'. Default 1. Values above 1 are ignored unless allow_variants is true.",
+			},
+			"allow_variants": map[string]any{
+				"type":        "boolean",
+				"description": "Set true only when the user explicitly asks for comparison variants. Otherwise render_creative returns one final image.",
 			},
 		},
 		"required": []string{"output_path", "font_path", "texts"},
@@ -134,6 +138,10 @@ func (t *RenderCreativeTool) Execute(ctx context.Context, args map[string]any) *
 
 	variantCount := intParam(args, "variants", 1)
 	if variantCount < 1 {
+		variantCount = 1
+	}
+	allowVariants, _ := args["allow_variants"].(bool)
+	if !allowVariants {
 		variantCount = 1
 	}
 	if variantCount > 5 {

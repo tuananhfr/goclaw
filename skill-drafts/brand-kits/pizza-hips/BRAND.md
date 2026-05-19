@@ -11,10 +11,11 @@ Use this folder as the shared team material source for Pizza Hip'S creative work
 ## Image Workflow
 
 1. Generate or choose a background image with no baked-in text.
-2. Leave a clear safe area for headline and CTA text.
+2. Leave clear safe areas for headline/CTA text and for system watermark overlays.
 3. Render final on-image text with `render_creative`, using the real font file above.
 4. Output a flattened PNG/JPG so chat and Discord previews show the full design.
 5. Keep `font_sha256` in the result when reporting final output.
+6. Create and attach one final image by default. Do not generate multiple variants unless the Lead explicitly asks for comparison variants.
 
 ## Typography Rules
 
@@ -27,8 +28,10 @@ Use this folder as the shared team material source for Pizza Hip'S creative work
 
 - Main color system: orange, blue, black, with white/yellow accents when needed for contrast.
 - Keep food/product details visible; do not cover key food, faces, price, hotline, or CTA.
-- Top center is reserved for brand/logo watermark when present.
-- Bottom right is reserved for hotline/contact/CTA watermark when present.
+- Top center is reserved for brand/logo watermark when present. Keep this zone visually clean; do not place headline text there.
+- Bottom right is reserved for hotline/contact/CTA watermark when present. Keep this zone visually clean; do not place headline text, CTA, price, food hero details, QR codes, or small readable text there.
+- Treat watermark zones as overlay zones that may be applied after the image is generated. Final art must still look complete after those overlays are added.
+- Put headline text in a clean non-watermark area, usually upper-left, upper-right, or center-top only when the top-center logo zone remains clear.
 
 ## Suggested `render_creative` Example
 
@@ -48,6 +51,6 @@ Use this folder as the shared team material source for Pizza Hip'S creative work
       "max_width": 820
     }
   ],
-  "variants": 3
+  "variants": 1
 }
 ```
