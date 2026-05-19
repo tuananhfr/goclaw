@@ -401,6 +401,25 @@ func ToolTeamWorkspaceFromCtx(ctx context.Context) string {
 	return ""
 }
 
+const ctxTeamGlobalWorkspace toolContextKey = "tool_team_global_workspace"
+
+// WithToolTeamGlobalWorkspace stores the team-wide global workspace directory.
+// Relative reads fall back here when the file is not present in the active session scope.
+func WithToolTeamGlobalWorkspace(ctx context.Context, dir string) context.Context {
+	return context.WithValue(ctx, ctxTeamGlobalWorkspace, dir)
+}
+
+// ToolTeamGlobalWorkspaceFromCtx returns the team-wide global workspace directory.
+func ToolTeamGlobalWorkspaceFromCtx(ctx context.Context) string {
+	if v, _ := ctx.Value(ctxTeamGlobalWorkspace).(string); v != "" {
+		return v
+	}
+	if rc := store.RunContextFromCtx(ctx); rc != nil {
+		return rc.TeamGlobalWorkspace
+	}
+	return ""
+}
+
 // --- Team root (team-wide shared root, above UserChatLayer) ---
 
 const ctxTeamRoot toolContextKey = "tool_team_root"

@@ -115,8 +115,21 @@ func (t *ListFilesTool) Execute(ctx context.Context, args map[string]any) *Resul
 	}
 
 	entries, err := os.ReadDir(resolved)
+	globalResolved := ""
+	if !filepath.IsAbs(path) && path != "" {
+		if globalWs := ToolTeamGlobalWorkspaceFromCtx(ctx); globalWs != "" && !sameCleanPath(globalWs, workspace) {
+			if gr, grErr := resolvePathWithAllowed(path, globalWs, true, allowed); grErr == nil {
+				globalResolved = gr
+			}
+		}
+	}
 	if err != nil {
 		if os.IsNotExist(err) {
+			if globalResolved != "" {
+				if globalEntries, globalErr := os.ReadDir(globalResolved); globalErr == nil {
+					return SilentResult(formatDirectoryEntries(globalResolved, globalEntries, t.deniedPrefixes, t.workspace))
+				}
+			}
 			msg := fmt.Sprintf("Directory does not exist: %s", path)
 			if teamWs := ToolTeamWorkspaceFromCtx(ctx); teamWs != "" && !strings.HasPrefix(resolved, teamWs) {
 				msg += fmt.Sprintf("\nHint: try the team workspace path: list_files(path=\"%s/%s\")", teamWs, path)
@@ -126,27 +139,55 @@ func (t *ListFilesTool) Execute(ctx context.Context, args map[string]any) *Resul
 		return ErrorResult(fmt.Sprintf("failed to list directory: %v", err))
 	}
 
-	var sb strings.Builder
-	for _, entry := range entries {
-		// Filter out denied entries (both files and directories) from listing.
-		if len(t.deniedPrefixes) > 0 {
-			entryPath := filepath.Join(resolved, entry.Name())
-			if checkDeniedPath(entryPath, t.workspace, t.deniedPrefixes) != nil {
-				continue
-			}
-		}
-
-		info, _ := entry.Info()
-		if entry.IsDir() {
-			fmt.Fprintf(&sb, "[DIR]  %s/\n", entry.Name())
-		} else if info != nil {
-			fmt.Fprintf(&sb, "[FILE] %s (%d bytes)\n", entry.Name(), info.Size())
-		} else {
-			fmt.Fprintf(&sb, "[FILE] %s\n", entry.Name())
+	if globalResolved != "" {
+		if globalEntries, globalErr := os.ReadDir(globalResolved); globalErr == nil {
+			return SilentResult(formatMergedDirectoryEntries(resolved, entries, globalResolved, globalEntries, t.deniedPrefixes, t.workspace))
 		}
 	}
+	return SilentResult(formatDirectoryEntries(resolved, entries, t.deniedPrefixes, t.workspace))
+}
 
-	return SilentResult(sb.String())
+func formatDirectoryEntries(resolved string, entries []os.DirEntry, deniedPrefixes []string, workspace string) string {
+	var sb strings.Builder
+	for _, entry := range entries {
+		writeDirectoryEntry(&sb, resolved, entry, deniedPrefixes, workspace, "")
+	}
+	return sb.String()
+}
+
+func formatMergedDirectoryEntries(sessionDir string, sessionEntries []os.DirEntry, globalDir string, globalEntries []os.DirEntry, deniedPrefixes []string, workspace string) string {
+	var sb strings.Builder
+	seen := make(map[string]bool)
+	for _, entry := range sessionEntries {
+		if writeDirectoryEntry(&sb, sessionDir, entry, deniedPrefixes, workspace, "") {
+			seen[entry.Name()] = true
+		}
+	}
+	for _, entry := range globalEntries {
+		if seen[entry.Name()] {
+			continue
+		}
+		writeDirectoryEntry(&sb, globalDir, entry, deniedPrefixes, workspace, " [global]")
+	}
+	return sb.String()
+}
+
+func writeDirectoryEntry(sb *strings.Builder, dir string, entry os.DirEntry, deniedPrefixes []string, workspace, suffix string) bool {
+	if len(deniedPrefixes) > 0 {
+		entryPath := filepath.Join(dir, entry.Name())
+		if checkDeniedPath(entryPath, workspace, deniedPrefixes) != nil {
+			return false
+		}
+	}
+	info, _ := entry.Info()
+	if entry.IsDir() {
+		fmt.Fprintf(sb, "[DIR]  %s/%s\n", entry.Name(), suffix)
+	} else if info != nil {
+		fmt.Fprintf(sb, "[FILE] %s (%d bytes)%s\n", entry.Name(), info.Size(), suffix)
+	} else {
+		fmt.Fprintf(sb, "[FILE] %s%s\n", entry.Name(), suffix)
+	}
+	return true
 }
 
 func (t *ListFilesTool) executeInSandbox(ctx context.Context, path, sandboxKey string) *Result {

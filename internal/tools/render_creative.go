@@ -108,7 +108,7 @@ func (t *RenderCreativeTool) Execute(ctx context.Context, args map[string]any) *
 	}
 
 	readAllowed := allowedWithTeamWorkspace(ctx, t.allowedPrefixes)
-	resolvedFont, err := resolvePathWithAllowed(fontPath, workspace, effectiveRestrict(ctx, t.restrict), readAllowed)
+	resolvedFont, err := resolveReadPathWithGlobalOverlay(ctx, fontPath, workspace, effectiveRestrict(ctx, t.restrict), readAllowed)
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("invalid font_path: %v", err))
 	}
@@ -190,7 +190,7 @@ func (t *RenderCreativeTool) Execute(ctx context.Context, args map[string]any) *
 func (t *RenderCreativeTool) loadBaseImage(ctx context.Context, args map[string]any, workspace string, allowed []string) (image.Image, error) {
 	basePath, _ := args["base_image_path"].(string)
 	if basePath != "" {
-		resolved, err := resolvePathWithAllowed(basePath, workspace, effectiveRestrict(ctx, t.restrict), allowed)
+		resolved, err := resolveReadPathWithGlobalOverlay(ctx, basePath, workspace, effectiveRestrict(ctx, t.restrict), allowed)
 		if err != nil {
 			return nil, fmt.Errorf("invalid base_image_path: %v", err)
 		}

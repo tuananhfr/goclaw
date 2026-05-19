@@ -216,6 +216,7 @@ func (l *Loop) buildMessages(ctx context.Context, history []providers.Message, s
 		HasSpawn:               l.tools != nil && hasSpawn,
 		IsTeamContext:          injectTeamContext,
 		TeamWorkspace:          tools.ToolTeamWorkspaceFromCtx(ctx),
+		TeamGlobalWorkspace:    tools.ToolTeamGlobalWorkspaceFromCtx(ctx),
 		TeamMembers:            teamMembers,
 		TeamGuidance:           teamGuidance(edition.Current().TeamFullMode),
 		HasSkillSearch:         hasSkillSearch,

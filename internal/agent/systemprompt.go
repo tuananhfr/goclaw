@@ -92,29 +92,30 @@ const CacheBoundaryMarker = "<!-- GOCLAW_CACHE_BOUNDARY -->"
 // SystemPromptConfig holds all inputs for system prompt construction.
 // Matches the params of TS buildAgentSystemPrompt().
 type SystemPromptConfig struct {
-	AgentID       string
-	AgentUUID     string // agent UUID for runtime identification
-	DisplayName   string // human-readable agent display name
-	Model         string
-	Workspace     string
-	Channel       string                  // runtime channel instance name (e.g. "my-telegram-bot")
-	ChannelType   string                  // platform type (e.g. "zalo_personal", "telegram")
-	ChatID        string                  // current reply target chat id (drives <current_reply_target>)
-	ChatTitle     string                  // group chat display name (shown in identity line)
-	PeerKind      string                  // "direct" or "group"
-	OwnerIDs      []string                // owner sender IDs
-	Mode          PromptMode              // full or minimal
-	ToolNames     []string                // registered tool names
-	SkillsSummary string                  // XML from skills.Loader.BuildSummary()
-	HasMemory     bool                    // memory_search/memory_get available?
-	HasSpawn      bool                    // spawn tool available?
-	IsTeamContext bool                    // inject team sections (leader inbound OR team dispatch)
-	TeamWorkspace string                  // absolute path to team shared workspace (empty if not in team)
-	TeamMembers   []store.TeamMemberData  // team member roster for task assignment
-	TeamGuidance  string                  // edition-specific guidance from TeamActionPolicy.MemberGuidance()
-	ContextFiles  []bootstrap.ContextFile // bootstrap files for # Project Context
-	ExtraPrompt   string                  // extra system prompt (subagent context, etc.)
-	AgentType     string                  // "open" or "predefined" — affects context file framing
+	AgentID             string
+	AgentUUID           string // agent UUID for runtime identification
+	DisplayName         string // human-readable agent display name
+	Model               string
+	Workspace           string
+	Channel             string                  // runtime channel instance name (e.g. "my-telegram-bot")
+	ChannelType         string                  // platform type (e.g. "zalo_personal", "telegram")
+	ChatID              string                  // current reply target chat id (drives <current_reply_target>)
+	ChatTitle           string                  // group chat display name (shown in identity line)
+	PeerKind            string                  // "direct" or "group"
+	OwnerIDs            []string                // owner sender IDs
+	Mode                PromptMode              // full or minimal
+	ToolNames           []string                // registered tool names
+	SkillsSummary       string                  // XML from skills.Loader.BuildSummary()
+	HasMemory           bool                    // memory_search/memory_get available?
+	HasSpawn            bool                    // spawn tool available?
+	IsTeamContext       bool                    // inject team sections (leader inbound OR team dispatch)
+	TeamWorkspace       string                  // absolute path to team shared workspace (empty if not in team)
+	TeamGlobalWorkspace string                  // absolute path to team global workspace (empty if not in team)
+	TeamMembers         []store.TeamMemberData  // team member roster for task assignment
+	TeamGuidance        string                  // edition-specific guidance from TeamActionPolicy.MemberGuidance()
+	ContextFiles        []bootstrap.ContextFile // bootstrap files for # Project Context
+	ExtraPrompt         string                  // extra system prompt (subagent context, etc.)
+	AgentType           string                  // "open" or "predefined" — affects context file framing
 
 	HasSkillSearch      bool              // skill_search tool registered? (for search-mode prompt)
 	HasSkillManage      bool              // skill_manage tool registered + skill_evolve enabled for this agent
@@ -415,7 +416,7 @@ func BuildSystemPrompt(cfg SystemPromptConfig) string {
 	// 6.3. ## Team Workspace — only when team context is active (leader inbound OR team dispatch)
 	// None mode skips team sections entirely — identity-only prompt has no team awareness.
 	if !isNone && !cfg.IsBootstrap && cfg.IsTeamContext && hasTeamWorkspace(cfg.ToolNames) {
-		lines = append(lines, buildTeamWorkspaceSection(cfg.TeamWorkspace)...)
+		lines = append(lines, buildTeamWorkspaceSection(cfg.TeamWorkspace, cfg.TeamGlobalWorkspace)...)
 	}
 
 	// 6.4. ## Team Members — inject roster so agent knows who to assign tasks to

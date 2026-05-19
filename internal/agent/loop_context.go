@@ -194,6 +194,7 @@ func (l *Loop) injectContext(ctx context.Context, req *RunRequest) (contextSetup
 				tools.TeamLayer(teamUUID),
 			)
 			ctx = tools.WithToolTeamRoot(ctx, teamRoot)
+			ctx = tools.WithToolTeamGlobalWorkspace(ctx, tools.ResolveWorkspace(teamRoot, tools.UserChatLayer(tools.TeamGlobalScope, false)))
 		}
 	}
 	if req.LeaderAgentID != "" {
@@ -239,6 +240,7 @@ func (l *Loop) injectContext(ctx context.Context, req *RunRequest) (contextSetup
 				tools.TeamLayer(team.ID),
 			)
 			ctx = tools.WithToolTeamRoot(ctx, teamRoot)
+			ctx = tools.WithToolTeamGlobalWorkspace(ctx, tools.ResolveWorkspace(teamRoot, tools.UserChatLayer(tools.TeamGlobalScope, false)))
 			// Leader keeps personal workspace (set at line 110-132) as default.
 			// Team workspace accessible via ToolTeamWorkspaceFromCtx for delegation.
 			if req.TeamID == "" {
@@ -370,6 +372,7 @@ func (l *Loop) injectContext(ctx context.Context, req *RunRequest) (contextSetup
 		ShellDenyGroups:     l.shellDenyGroups,
 		Workspace:           tools.ToolWorkspaceFromCtx(ctx),
 		TeamWorkspace:       tools.ToolTeamWorkspaceFromCtx(ctx),
+		TeamGlobalWorkspace: tools.ToolTeamGlobalWorkspaceFromCtx(ctx),
 		TeamID:              tools.ToolTeamIDFromCtx(ctx),
 		WorkspaceChannel:    req.WorkspaceChannel,
 		WorkspaceChatID:     effectiveWorkspaceChatID,

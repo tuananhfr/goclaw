@@ -172,7 +172,7 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any) *Result
 		workspace = t.workspace
 	}
 	allowed := allowedWithTeamWorkspace(ctx, t.allowedPrefixes)
-	resolved, err := resolvePathWithAllowed(path, workspace, effectiveRestrict(ctx, t.restrict), allowed)
+	resolved, err := resolveReadPathWithGlobalOverlay(ctx, path, workspace, effectiveRestrict(ctx, t.restrict), allowed)
 	if err != nil {
 		return ErrorResult(err.Error())
 	}
@@ -345,17 +345,21 @@ func allowedWriteWithTeamWorkspace(ctx context.Context, base []string) []string 
 func buildAllowedPrefixes(ctx context.Context, base []string, includeTeamRoot bool) []string {
 	tenantPaths := TenantAllowedPathsFromCtx(ctx)
 	teamWs := ToolTeamWorkspaceFromCtx(ctx)
+	teamGlobal := ToolTeamGlobalWorkspaceFromCtx(ctx)
 	var teamRoot string
 	if includeTeamRoot {
 		teamRoot = ToolTeamRootFromCtx(ctx)
 	}
 
-	if len(tenantPaths) == 0 && teamWs == "" && teamRoot == "" {
+	if len(tenantPaths) == 0 && teamWs == "" && teamRoot == "" && teamGlobal == "" {
 		return base
 	}
 
 	capacity := len(base) + len(tenantPaths)
 	if teamWs != "" {
+		capacity++
+	}
+	if includeTeamRoot && teamGlobal != "" && teamGlobal != teamWs {
 		capacity++
 	}
 	if teamRoot != "" && teamRoot != teamWs {
@@ -368,10 +372,45 @@ func buildAllowedPrefixes(ctx context.Context, base []string, includeTeamRoot bo
 	if teamWs != "" {
 		out = append(out, teamWs)
 	}
+	if includeTeamRoot && teamGlobal != "" && teamGlobal != teamWs {
+		out = append(out, teamGlobal)
+	}
 	if teamRoot != "" && teamRoot != teamWs {
 		out = append(out, teamRoot)
 	}
 	return out
+}
+
+func resolveReadPathWithGlobalOverlay(ctx context.Context, path, workspace string, restrict bool, allowed []string) (string, error) {
+	resolved, err := resolvePathWithAllowed(path, workspace, restrict, allowed)
+	if err != nil {
+		return "", err
+	}
+	if filepath.IsAbs(path) || path == "" {
+		return resolved, nil
+	}
+	if _, statErr := os.Stat(resolved); statErr == nil || !os.IsNotExist(statErr) {
+		return resolved, nil
+	}
+	globalWs := ToolTeamGlobalWorkspaceFromCtx(ctx)
+	if globalWs == "" || sameCleanPath(globalWs, workspace) {
+		return resolved, nil
+	}
+	globalResolved, globalErr := resolvePathWithAllowed(path, globalWs, true, allowed)
+	if globalErr != nil {
+		return resolved, nil
+	}
+	if _, statErr := os.Stat(globalResolved); statErr == nil {
+		return globalResolved, nil
+	}
+	return resolved, nil
+}
+
+func sameCleanPath(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	return filepath.Clean(a) == filepath.Clean(b)
 }
 
 // resolvePathWithAllowed is like resolvePath but also allows paths under extra prefixes.
