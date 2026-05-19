@@ -1,0 +1,65 @@
+{
+  "brand_slug": "pizza-hips",
+  "brand_name": "Pizza Hip'S",
+  "headline_font": {
+    "name": "SVN - Bango",
+    "path": "assets/fonts/SVN-Bango.otf",
+    "sha256": "0C72A0D3D2A61E550E24A35FBF41F0DE3517026F09526F5D8CAF1BBF963FA5D9"
+  },
+  "palette": {
+    "orange": "#F97316",
+    "blue": "#1D4ED8",
+    "black": "#111111",
+    "white": "#FFFFFF",
+    "yellow": "#FFD84A",
+    "red": "#E53935"
+  },
+  "headline_style": {
+    "font_path": "assets/fonts/SVN-Bango.otf",
+    "default_size": 96,
+    "min_size": 56,
+    "max_size": 132,
+    "max_lines": 2,
+    "max_width_ratio": 0.78,
+    "default_color": "#FFD84A",
+    "stroke_color": "#E53935",
+    "stroke_width": 3,
+    "shadow": true
+  },
+  "layout_rules": {
+    "preferred_zones": ["upper_left", "upper_right", "mid_left"],
+    "avoid_zones": ["top_center_logo", "bottom_right_contact"],
+    "generate_variants": 1,
+    "default_variants": 1,
+    "max_variants": 1,
+    "background_prompt_hint": "no text, leave clean negative space outside top-center logo and bottom-right contact watermark zones",
+    "reserved_areas": [
+      {
+        "name": "top_center_logo_watermark",
+        "anchor": "top-center",
+        "x_pct": 32,
+        "y_pct": 0,
+        "width_pct": 36,
+        "height_pct": 14,
+        "padding_pct": 3,
+        "rule": "Do not place headline, CTA, price, product hero details, QR codes, faces, or small readable text here."
+      },
+      {
+        "name": "bottom_right_contact_watermark",
+        "anchor": "bottom-right",
+        "x_pct": 72,
+        "y_pct": 78,
+        "width_pct": 28,
+        "height_pct": 22,
+        "padding_pct": 3,
+        "rule": "Do not place headline, CTA, price, product hero details, QR codes, faces, or small readable text here."
+      }
+    ]
+  },
+  "final_output": {
+    "format": "png",
+    "flatten_text": true,
+    "default_count": 1,
+    "return_font_sha256": true
+  }
+}

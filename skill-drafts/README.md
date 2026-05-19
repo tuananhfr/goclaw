@@ -1,51 +1,84 @@
-# Skill Draft Packages
+# Skill Drafts Layout
 
-This folder now keeps only upload-ready ZIP packages plus this README.
-
-Source/unpacked skill folders were intentionally removed to keep the workspace clean for multiple pages.
+This folder keeps both editable source folders and upload-ready ZIP packages.
 
 ## Current Layout
 
 ```text
 skill-drafts/
   shared/
+    facebook-fanpage-content-guidelines/
+    fanpage-content-creator-guidelines/
+    fanpage-design-guidelines/
+    fanpage-internet-research-guidelines/
+    fanpage-lead-orchestration-guidelines/
     packages/
-      facebook-fanpage-content-guidelines.zip
-      fanpage-content-creator-guidelines.zip
-      fanpage-design-guidelines.zip
-      fanpage-internet-research-guidelines.zip
-      fanpage-lead-orchestration-guidelines.zip
 
   pages/
     pizza-hips/
+      skills/
+        brand-pizza-hips-guidelines/
+        pizza-hips-franchise-knowledge/
+      brand-kits/
+        pizza-hips/
+          BRAND.md
+          render-preset.json
+          assets/fonts/SVN-Bango.otf
       packages/
-        brand-pizza-hips-guidelines.zip
-        pizza-hips-franchise-knowledge.zip
-        brand-kits.zip
-        SVN-Bango.zip
 ```
 
-## Usage
+## What Goes Where
 
-Use `shared/packages` for reusable fanpage skills that apply across many pages.
+- `shared/*`: reusable skills for many pages and teams.
+- `pages/{page_slug}/skills/*`: page-specific skills.
+- `pages/{page_slug}/brand-kits/*`: team/global workspace materials, such as fonts, brand rules, render presets, and image references.
+- `packages/`: ZIP files ready to upload.
 
-Use `pages/{page_slug}/packages` for page-specific skills and brand kits.
+## Pizza Hip'S Uploads
 
-For Pizza Hip'S:
+Skill system uploads:
 
-- Upload skill ZIPs from `skill-drafts/pages/pizza-hips/packages/` into the skill system when needed.
-- Upload `brand-kits.zip` into the team/global workspace when agents need shared brand materials such as fonts and render presets.
+```text
+skill-drafts/shared/packages/facebook-fanpage-content-guidelines.zip
+skill-drafts/shared/packages/fanpage-content-creator-guidelines.zip
+skill-drafts/shared/packages/fanpage-design-guidelines.zip
+skill-drafts/shared/packages/fanpage-internet-research-guidelines.zip
+skill-drafts/shared/packages/fanpage-lead-orchestration-guidelines.zip
+skill-drafts/pages/pizza-hips/packages/brand-pizza-hips-guidelines.zip
+skill-drafts/pages/pizza-hips/packages/pizza-hips-franchise-knowledge.zip
+```
 
-## Add A New Page
+Team/global workspace upload:
 
-Create only a packages folder:
+```text
+skill-drafts/pages/pizza-hips/packages/brand-kits.zip
+```
+
+## Rebuild ZIPs After Editing Folders
+
+Shared skill example:
 
 ```powershell
-New-Item -ItemType Directory -Force `
-  -Path "skill-drafts\pages\new-page\packages"
+tar -a -cf `
+  skill-drafts\shared\packages\facebook-fanpage-content-guidelines.zip `
+  -C skill-drafts\shared\facebook-fanpage-content-guidelines .
 ```
 
-Put that page's upload-ready ZIP files there.
+Pizza Hip'S skill example:
+
+```powershell
+tar -a -cf `
+  skill-drafts\pages\pizza-hips\packages\brand-pizza-hips-guidelines.zip `
+  -C skill-drafts\pages\pizza-hips\skills\brand-pizza-hips-guidelines .
+```
+
+Pizza Hip'S brand kit:
+
+```powershell
+tar -a -cf `
+  skill-drafts\pages\pizza-hips\packages\brand-kits.zip `
+  -C skill-drafts\pages\pizza-hips brand-kits
+```
 
 ## ZIP Path Rule
 
@@ -64,7 +97,7 @@ assets\fonts\SVN-Bango.otf
 brand-kits\pizza-hips\BRAND.md
 ```
 
-Backslash entries caused the earlier font/path bug: the file existed, but the runtime looked for `assets/fonts/SVN-Bango.otf` while the ZIP contained a Windows-style name.
+Backslash entries caused the earlier font/path bug.
 
 ## Verify ZIP Entries
 

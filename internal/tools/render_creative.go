@@ -296,6 +296,7 @@ func (l renderTextLayer) withAutoLayout(variant int, bounds image.Rectangle) ren
 }
 
 func renderLayer(img *image.RGBA, fnt *opentype.Font, layer renderTextLayer) {
+	layer = fitLayerToSafeBounds(fnt, layer, img.Bounds())
 	face, err := opentype.NewFace(fnt, &opentype.FaceOptions{
 		Size:    layer.Size,
 		DPI:     72,
@@ -329,6 +330,136 @@ func renderLayer(img *image.RGBA, fnt *opentype.Font, layer renderTextLayer) {
 		}
 		d.DrawString(line)
 	}
+}
+
+func fitLayerToSafeBounds(fnt *opentype.Font, layer renderTextLayer, bounds image.Rectangle) renderTextLayer {
+	if layer.MaxWidth <= 0 {
+		layer.MaxWidth = bounds.Dx() * 9 / 20
+	}
+	if layer.Size <= 0 {
+		layer.Size = 96
+	}
+	marginX := max(12, bounds.Dx()*5/100)
+	marginY := max(12, bounds.Dy()*5/100)
+	topLogo := image.Rect(
+		bounds.Min.X+bounds.Dx()*30/100,
+		bounds.Min.Y,
+		bounds.Min.X+bounds.Dx()*72/100,
+		bounds.Min.Y+bounds.Dy()*28/100,
+	)
+	bottomContact := image.Rect(
+		bounds.Min.X+bounds.Dx()*68/100,
+		bounds.Min.Y+bounds.Dy()*74/100,
+		bounds.Max.X,
+		bounds.Max.Y,
+	)
+
+	movedFromWatermark := false
+	for range 18 {
+		box, ok := measureLayerBounds(fnt, layer)
+		if !ok {
+			return layer
+		}
+		if rectIntersects(box, topLogo) && !movedFromWatermark {
+			layer = moveLayerAwayFromTopCenter(layer, bounds)
+			movedFromWatermark = true
+			continue
+		}
+		if rectIntersects(box, topLogo) || rectIntersects(box, bottomContact) ||
+			box.Min.X < bounds.Min.X+marginX || box.Max.X > bounds.Max.X-marginX ||
+			box.Min.Y < bounds.Min.Y+marginY || box.Max.Y > bounds.Max.Y-marginY {
+			if layer.Size > 28 {
+				layer.Size *= 0.92
+				continue
+			}
+			layer = shiftLayerInsideBounds(layer, box, bounds, marginX, marginY)
+			if rectIntersects(box, topLogo) {
+				layer = moveLayerAwayFromTopCenter(layer, bounds)
+			}
+			return layer
+		}
+		return layer
+	}
+	box, ok := measureLayerBounds(fnt, layer)
+	if ok {
+		layer = shiftLayerInsideBounds(layer, box, bounds, marginX, marginY)
+	}
+	return layer
+}
+
+func moveLayerAwayFromTopCenter(layer renderTextLayer, bounds image.Rectangle) renderTextLayer {
+	if layer.X <= bounds.Min.X+bounds.Dx()/2 {
+		layer.Align = "left"
+		layer.X = bounds.Min.X + bounds.Dx()*6/100
+	} else {
+		layer.Align = "right"
+		layer.X = bounds.Min.X + bounds.Dx()*94/100
+	}
+	layer.Y = max(layer.Y, bounds.Min.Y+bounds.Dy()*32/100)
+	layer.MaxWidth = min(layer.MaxWidth, bounds.Dx()*27/100)
+	return layer
+}
+
+func shiftLayerInsideBounds(layer renderTextLayer, box image.Rectangle, bounds image.Rectangle, marginX, marginY int) renderTextLayer {
+	minX := bounds.Min.X + marginX
+	maxX := bounds.Max.X - marginX
+	minY := bounds.Min.Y + marginY
+	maxY := bounds.Max.Y - marginY
+	if box.Min.X < minX {
+		layer.X += minX - box.Min.X
+	}
+	if box.Max.X > maxX {
+		layer.X -= box.Max.X - maxX
+	}
+	if box.Min.Y < minY {
+		layer.Y += minY - box.Min.Y
+	}
+	if box.Max.Y > maxY {
+		layer.Y -= box.Max.Y - maxY
+	}
+	return layer
+}
+
+func measureLayerBounds(fnt *opentype.Font, layer renderTextLayer) (image.Rectangle, bool) {
+	face, err := opentype.NewFace(fnt, &opentype.FaceOptions{
+		Size:    layer.Size,
+		DPI:     72,
+		Hinting: font.HintingFull,
+	})
+	if err != nil {
+		return image.Rectangle{}, false
+	}
+	lines := wrapText(layer.Text, face, layer.MaxWidth)
+	if len(lines) == 0 {
+		return image.Rectangle{}, false
+	}
+	lineHeight := int(layer.Size * 1.15)
+	startY := layer.Y - (len(lines)-1)*lineHeight/2
+	metrics := face.Metrics()
+	ascent := metrics.Ascent.Round()
+	descent := metrics.Descent.Round()
+	minX := int(^uint(0) >> 1)
+	maxX := -minX
+	for _, line := range lines {
+		width := font.MeasureString(face, line).Round()
+		x := layer.X
+		switch strings.ToLower(layer.Align) {
+		case "right":
+			x -= width
+		case "center", "":
+			x -= width / 2
+		}
+		minX = min(minX, x)
+		maxX = max(maxX, x+width)
+	}
+	top := startY - ascent
+	bottom := startY + (len(lines)-1)*lineHeight + descent
+	stroke := max(layer.StrokeWidth, int(layer.Size*0.04))
+	return image.Rect(minX-stroke, top-stroke, maxX+stroke, bottom+stroke), true
+}
+
+func rectIntersects(a, b image.Rectangle) bool {
+	return a.Min.X < b.Max.X && a.Max.X > b.Min.X && a.Min.Y < b.Max.Y && a.Max.Y > b.Min.Y
 }
 
 func drawTextStroke(img *image.RGBA, face font.Face, text string, x, y, width int, col color.Color) {

@@ -227,6 +227,14 @@ func TestFormatForComment(t *testing.T) {
 		{"# Heading\nbody", "Heading\nbody"},
 		{"<b>html</b>", "html"},
 		{"`code`", "code"},
+		{
+			"C\u00f3 1 comment m\u1edbi ki\u1ec3u khen nh\u1eb9, an to\u00e0n \u0111\u1ec3 t\u01b0\u01a1ng t\u00e1c.\n\n" +
+				"G\u1ee3i \u00fd reply:\n" +
+				"**D\u1ea1 c\u1ea3m \u01a1n anh Tu\u1ea5n Anh nhi\u1ec1u \u1ea1. Pizza Hip'S lu\u00f4n theo \u0111u\u1ed5i m\u00f4 h\u00ecnh tinh g\u1ecdn.**\n\n" +
+				"N\u1ebfu anh mu\u1ed1n, m\u00ecnh c\u00f3 th\u1ec3 l\u00e0m ti\u1ebfp cho b\u1ea1n:\n" +
+				"- 3 m\u1eabu reply ng\u1eafn h\u01a1n",
+			"D\u1ea1 c\u1ea3m \u01a1n anh Tu\u1ea5n Anh nhi\u1ec1u \u1ea1. Pizza Hip'S lu\u00f4n theo \u0111u\u1ed5i m\u00f4 h\u00ecnh tinh g\u1ecdn.",
+		},
 		// Long text truncated at 8000 chars.
 		{strings.Repeat("a", 9000), strings.Repeat("a", 8000)},
 	}

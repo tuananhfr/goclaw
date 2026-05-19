@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/image/font/opentype"
 )
 
 func TestRenderCreativeTool_RendersFontImage(t *testing.T) {
@@ -120,6 +122,77 @@ func TestRenderCreativeAutoLayoutAvoidsTopCenterWatermark(t *testing.T) {
 	}
 	if got.MaxWidth > bounds.Dx()/2 {
 		t.Fatalf("default auto layout max width = %d, want narrow enough to avoid center watermark", got.MaxWidth)
+	}
+}
+
+func TestRenderCreativeFitLayerPreventsTopClipping(t *testing.T) {
+	fontPath, err := filepath.Abs(filepath.Join("..", "..", "skill-drafts", "pages", "pizza-hips", "skills", "brand-pizza-hips-guidelines", "assets", "fonts", "SVN-Bango.otf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(fontPath)
+	if err != nil {
+		t.Skipf("test font not available: %v", err)
+	}
+	fnt, err := opentype.Parse(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bounds := imageRect(1080, 1080)
+	layer := renderTextLayer{
+		Text:        "PIZZA\nNONG\nHOI",
+		X:           120,
+		Y:           20,
+		Size:        150,
+		Align:       "left",
+		MaxWidth:    500,
+		StrokeWidth: 4,
+	}
+
+	got := fitLayerToSafeBounds(fnt, layer, bounds)
+	box, ok := measureLayerBounds(fnt, got)
+	if !ok {
+		t.Fatal("expected measurable layer")
+	}
+	if box.Min.Y < bounds.Min.Y+bounds.Dy()*5/100 {
+		t.Fatalf("text still clips top safe margin: box=%v", box)
+	}
+}
+
+func TestRenderCreativeFitLayerAvoidsTopCenterWatermark(t *testing.T) {
+	fontPath, err := filepath.Abs(filepath.Join("..", "..", "skill-drafts", "pages", "pizza-hips", "skills", "brand-pizza-hips-guidelines", "assets", "fonts", "SVN-Bango.otf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(fontPath)
+	if err != nil {
+		t.Skipf("test font not available: %v", err)
+	}
+	fnt, err := opentype.Parse(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bounds := imageRect(1080, 1080)
+	layer := renderTextLayer{
+		Text:        "PIZZA\nNONG\nHOI",
+		X:           170,
+		Y:           120,
+		Size:        150,
+		Align:       "left",
+		MaxWidth:    520,
+		StrokeWidth: 4,
+	}
+
+	got := fitLayerToSafeBounds(fnt, layer, bounds)
+	box, ok := measureLayerBounds(fnt, got)
+	if !ok {
+		t.Fatal("expected measurable layer")
+	}
+	topLogo := image.Rect(bounds.Dx()*30/100, 0, bounds.Dx()*72/100, bounds.Dy()*28/100)
+	if rectIntersects(box, topLogo) {
+		t.Fatalf("text still intersects top-center watermark zone: box=%v logo=%v layer=%+v", box, topLogo, got)
 	}
 }
 
