@@ -15,9 +15,8 @@ import (
 	"github.com/nextlevelbuilder/goclaw/internal/store"
 )
 
-// resolveAgentUUID looks up the agent UUID from the channel's agent key.
-func (c *Channel) resolveAgentUUID(ctx context.Context) (uuid.UUID, error) {
-	key := c.AgentID()
+// resolveAgentUUID looks up the agent UUID from an agent key or UUID string.
+func (c *Channel) resolveAgentUUID(ctx context.Context, key string) (uuid.UUID, error) {
 	if key == "" {
 		return uuid.Nil, fmt.Errorf("no agent key configured")
 	}
@@ -30,6 +29,17 @@ func (c *Channel) resolveAgentUUID(ctx context.Context) (uuid.UUID, error) {
 		return uuid.Nil, fmt.Errorf("agent %q not found: %w", key, err)
 	}
 	return agent.ID, nil
+}
+
+// writerCommandAgentRef returns the same target agent ref normal Discord
+// messages use, so writer grants apply to the routed bot for this channel.
+func (c *Channel) writerCommandAgentRef(guildID, channelID string) string {
+	if guildID != "" {
+		if routedAgentID, ok := c.channelAgentRoute(guildID, channelID); ok {
+			return routedAgentID
+		}
+	}
+	return c.AgentID()
 }
 
 // tryHandleCommand checks if the message is a known bot command and handles it.
@@ -86,7 +96,7 @@ func (c *Channel) handleWriterCommand(m *discordgo.MessageCreate, action string)
 		return
 	}
 
-	agentID, err := c.resolveAgentUUID(ctx)
+	agentID, err := c.resolveAgentUUID(ctx, c.writerCommandAgentRef(m.GuildID, channelID))
 	if err != nil {
 		slog.Debug("discord writer command: agent resolve failed", "error", err)
 		send("File writer management is not available (no agent).")
@@ -204,7 +214,7 @@ func (c *Channel) handleListWriters(m *discordgo.MessageCreate) {
 		return
 	}
 
-	agentID, err := c.resolveAgentUUID(ctx)
+	agentID, err := c.resolveAgentUUID(ctx, c.writerCommandAgentRef(m.GuildID, channelID))
 	if err != nil {
 		slog.Debug("discord list writers: agent resolve failed", "error", err)
 		send("File writer management is not available (no agent).")

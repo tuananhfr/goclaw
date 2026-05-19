@@ -113,6 +113,23 @@ func TestChannelAgentRoute(t *testing.T) {
 	}
 }
 
+func TestWriterCommandAgentRefUsesChannelRoute(t *testing.T) {
+	ch := &Channel{
+		BaseChannel: channels.NewBaseChannel(channels.TypeDiscord, nil, nil),
+		config: config.DiscordConfig{ChannelAgentRoutes: map[string]string{
+			"guild-1/chan-1": "marketing",
+		}},
+	}
+	ch.SetAgentID("default")
+
+	if got := ch.writerCommandAgentRef("guild-1", "chan-1"); got != "marketing" {
+		t.Fatalf("writerCommandAgentRef routed channel = %q, want marketing", got)
+	}
+	if got := ch.writerCommandAgentRef("guild-1", "chan-2"); got != "default" {
+		t.Fatalf("writerCommandAgentRef fallback = %q, want default", got)
+	}
+}
+
 func TestDiscordMessageMentionsBot(t *testing.T) {
 	tests := []struct {
 		name string
