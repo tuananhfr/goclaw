@@ -51,7 +51,7 @@ func (t *RenderCreativeTool) Parameters() map[string]any {
 		"properties": map[string]any{
 			"base_image_path": map[string]any{
 				"type":        "string",
-				"description": "Optional background image path in workspace/team workspace. If omitted, a blank canvas is created.",
+				"description": "Optional background image path in workspace/team workspace. If this comes from create_image, call create_image with deliver=false so only the final rendered creative is attached.",
 			},
 			"output_path": map[string]any{
 				"type":        "string",

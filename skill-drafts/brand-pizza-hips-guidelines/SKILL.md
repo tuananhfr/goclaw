@@ -217,6 +217,7 @@ For Pizza Hip'S image prompts, briefs, or QA:
 - Do not place important content in those reserved zones: headline text, prices, CTA, product hero details, faces, QR codes, legal notes, or small readable text.
 - When creating image prompts, explicitly leave clean negative space at top center and bottom right so the existing watermark can overlay without covering content.
 - Create and return one final image by default. Do not generate multiple visual variants unless the Lead explicitly asks for comparison variants.
+- If using `create_image` only to generate a textless background before `render_creative`, call `create_image` with `deliver=false` and attach only the final flattened image.
 - Minimum 1 image, maximum 10 images for a Facebook post set.
 - Prefer realistic product imagery: pizza, fried chicken, spicy noodles, combo meals, store/customer scenes, or kiosk/franchise visuals depending on the brief.
 - Do not include logos from other food brands.

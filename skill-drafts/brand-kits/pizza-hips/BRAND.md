@@ -11,6 +11,7 @@ Use this folder as the shared team material source for Pizza Hip'S creative work
 ## Image Workflow
 
 1. Generate or choose a background image with no baked-in text.
+   - If using `create_image` only as the background before text rendering, call it with `"deliver": false` so the raw background is not attached.
 2. Leave clear safe areas for headline/CTA text and for system watermark overlays.
 3. Render final on-image text with `render_creative`, using the real font file above.
 4. Output a flattened PNG/JPG so chat and Discord previews show the full design.
@@ -34,6 +35,18 @@ Use this folder as the shared team material source for Pizza Hip'S creative work
 - Put headline text in a clean non-watermark area, usually upper-left, upper-right, or center-top only when the top-center logo zone remains clear.
 
 ## Suggested `render_creative` Example
+
+```json
+{
+  "tool": "create_image",
+  "prompt": "Pizza product background, no text, leave clean non-watermark text area...",
+  "aspect_ratio": "1:1",
+  "filename_hint": "pizza-hips-bg",
+  "deliver": false
+}
+```
+
+Then render the final attached image:
 
 ```json
 {

@@ -71,6 +71,10 @@ func (t *CreateImageTool) Parameters() map[string]any {
 				"type":        "string",
 				"description": "Short descriptive filename (no extension). Example: 'sunset-beach', 'company-logo'.",
 			},
+			"deliver": map[string]any{
+				"type":        "boolean",
+				"description": "Whether to attach the generated image to the user. Default true. Set false when this image is only an intermediate background for render_creative.",
+			},
 		},
 		"required": []string{"prompt"},
 	}
@@ -86,6 +90,7 @@ func (t *CreateImageTool) Execute(ctx context.Context, args map[string]any) *Res
 		aspectRatio = "1:1"
 	}
 	filenameHint, _ := args["filename_hint"].(string)
+	deliver := boolParam(args, "deliver", true)
 
 	chain := ResolveMediaProviderChain(ctx, "create_image", "", "",
 		imageGenProviderPriority, imageGenModelDefaults, t.registry)
@@ -130,10 +135,15 @@ func (t *CreateImageTool) Execute(ctx context.Context, args map[string]any) *Res
 		slog.Info("create_image: file saved", "path", imagePath, "size", fi.Size(), "data_len", len(imageData))
 	}
 
-	result := &Result{ForLLM: fmt.Sprintf("MEDIA:%s\nUse the EXACT filename when referencing: %s", imagePath, filepath.Base(imagePath))}
-	result.Media = []bus.MediaFile{{Path: imagePath, MimeType: "image/png", Filename: filepath.Base(imagePath)}}
-	result.MediaPrompts = map[int]string{0: prompt}
-	result.Deliverable = fmt.Sprintf("[Generated image: %s]\nPrompt: %s", filepath.Base(imagePath), prompt)
+	result := &Result{}
+	if deliver {
+		result.ForLLM = fmt.Sprintf("MEDIA:%s\nUse the EXACT filename when referencing: %s", imagePath, filepath.Base(imagePath))
+		result.Media = []bus.MediaFile{{Path: imagePath, MimeType: "image/png", Filename: filepath.Base(imagePath)}}
+		result.MediaPrompts = map[int]string{0: prompt}
+		result.Deliverable = fmt.Sprintf("[Generated image: %s]\nPrompt: %s", filepath.Base(imagePath), prompt)
+	} else {
+		result.ForLLM = fmt.Sprintf("image_path: %s\nUse this as an intermediate input path. It is not attached to the user.", imagePath)
+	}
 	if t.vaultIntc != nil {
 		go t.vaultIntc.AfterWriteMedia(context.WithoutCancel(ctx), imagePath, prompt, "image/png")
 	}
@@ -494,4 +504,11 @@ func truncateBytes(b []byte, max int) string {
 		return string(b)
 	}
 	return string(b[:max]) + "..."
+}
+
+func boolParam(args map[string]any, key string, fallback bool) bool {
+	if v, ok := args[key].(bool); ok {
+		return v
+	}
+	return fallback
 }

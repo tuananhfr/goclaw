@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/nextlevelbuilder/goclaw/internal/providers"
@@ -18,7 +19,7 @@ type nativeImageProvider struct {
 }
 
 func (p *nativeImageProvider) Name() string         { return p.name }
-func (p *nativeImageProvider) DefaultModel() string  { return p.model }
+func (p *nativeImageProvider) DefaultModel() string { return p.model }
 func (p *nativeImageProvider) Chat(_ context.Context, _ providers.ChatRequest) (*providers.ChatResponse, error) {
 	return &providers.ChatResponse{}, nil
 }
@@ -171,6 +172,52 @@ func TestCreateImageTool_RoutesNativePath_WithPrompt(t *testing.T) {
 	// Media must have one entry.
 	if len(result.Media) != 1 {
 		t.Errorf("result.Media length = %d, want 1", len(result.Media))
+	}
+}
+
+func TestCreateImageTool_DeliverFalseSuppressesMedia(t *testing.T) {
+	pngMagic := []byte{
+		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+		0x00, 0x00, 0x00, 0x00,
+		0x49, 0x45, 0x4e, 0x44,
+		0xae, 0x42, 0x60, 0x82,
+	}
+	wantPrompt := "a textless pizza background"
+
+	fakeProvider := &nativeImageProvider{
+		name:       "openai-codex",
+		model:      "gpt-image-2",
+		returnData: pngMagic,
+	}
+
+	reg := providers.NewRegistry(nil)
+	reg.Register(fakeProvider)
+
+	chainJSON := []byte(`{"providers":[{"provider":"openai-codex","model":"gpt-image-2","enabled":true,"timeout":30,"max_retries":1}]}`)
+	settings := BuiltinToolSettings{"create_image": chainJSON}
+	ctx := WithBuiltinToolSettings(context.Background(), settings)
+	ctx = WithToolWorkspace(ctx, t.TempDir())
+
+	tool := NewCreateImageTool(reg)
+	result := tool.Execute(ctx, map[string]any{
+		"prompt":  wantPrompt,
+		"deliver": false,
+	})
+
+	if result.IsError {
+		t.Fatalf("Execute returned error: %q", result.ForLLM)
+	}
+	if len(result.Media) != 0 {
+		t.Fatalf("expected no attached media for deliver=false, got %+v", result.Media)
+	}
+	if strings.Contains(result.ForLLM, "MEDIA:") {
+		t.Fatalf("deliver=false should not expose MEDIA prefix, got %q", result.ForLLM)
+	}
+	if !strings.Contains(result.ForLLM, "image_path:") {
+		t.Fatalf("expected intermediate image_path, got %q", result.ForLLM)
+	}
+	if result.Deliverable != "" {
+		t.Fatalf("expected no deliverable for intermediate image, got %q", result.Deliverable)
 	}
 }
 
