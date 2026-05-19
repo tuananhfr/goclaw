@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"image"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -100,4 +101,28 @@ func TestRenderCreativeTool_IgnoresVariantsUnlessAllowed(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(workspace, "generated", "brand-final_v2.png")); !os.IsNotExist(err) {
 		t.Fatalf("unexpected second variant file exists or stat failed: %v", err)
 	}
+}
+
+func TestRenderCreativeAutoLayoutAvoidsTopCenterWatermark(t *testing.T) {
+	bounds := imageRect(1080, 1080)
+	layer := renderTextLayer{Text: "PIZZA", Layout: "auto", Size: 96}
+
+	got := layer.withAutoLayout(0, bounds)
+
+	if got.Align != "left" {
+		t.Fatalf("default auto layout align = %q, want left", got.Align)
+	}
+	if got.X > bounds.Dx()/3 {
+		t.Fatalf("default auto layout X = %d, want outside top-center watermark zone", got.X)
+	}
+	if got.Y < bounds.Dy()*24/100 {
+		t.Fatalf("default auto layout Y = %d, want below top watermark zone", got.Y)
+	}
+	if got.MaxWidth > bounds.Dx()/2 {
+		t.Fatalf("default auto layout max width = %d, want narrow enough to avoid center watermark", got.MaxWidth)
+	}
+}
+
+func imageRect(width, height int) image.Rectangle {
+	return image.Rect(0, 0, width, height)
 }

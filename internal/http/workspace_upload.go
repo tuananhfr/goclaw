@@ -247,7 +247,8 @@ func extractWorkspaceZip(src io.Reader, scopeDir string) ([]string, int64, error
 		if len(extracted) >= tools.MaxFilesPerScope {
 			return nil, 0, fmt.Errorf("zip contains too many files (limit %d)", tools.MaxFilesPerScope)
 		}
-		name := filepath.ToSlash(entry.Name)
+		name := strings.ReplaceAll(entry.Name, "\\", "/")
+		name = filepath.ToSlash(name)
 		name = strings.TrimPrefix(name, "/")
 		if name == "" {
 			continue

@@ -267,7 +267,7 @@ func parseRenderTextLayers(raw []any) []renderTextLayer {
 
 func (l renderTextLayer) withAutoLayout(variant int, bounds image.Rectangle) renderTextLayer {
 	if l.MaxWidth <= 0 {
-		l.MaxWidth = bounds.Dx() * 4 / 5
+		l.MaxWidth = bounds.Dx() * 9 / 20
 	}
 	if l.X >= 0 && l.Y >= 0 && l.Layout != "auto" {
 		return l
@@ -276,11 +276,11 @@ func (l renderTextLayer) withAutoLayout(variant int, bounds image.Rectangle) ren
 		x, y  int
 		align string
 	}{
-		{bounds.Min.X + bounds.Dx()/2, bounds.Min.Y + bounds.Dy()/5, "center"},
-		{bounds.Min.X + bounds.Dx()/10, bounds.Min.Y + bounds.Dy()/2, "left"},
-		{bounds.Min.X + bounds.Dx()/2, bounds.Min.Y + bounds.Dy()*4/5, "center"},
-		{bounds.Min.X + bounds.Dx()*9/10, bounds.Min.Y + bounds.Dy()/2, "right"},
-		{bounds.Min.X + bounds.Dx()/2, bounds.Min.Y + bounds.Dy()/2, "center"},
+		{bounds.Min.X + bounds.Dx()*8/100, bounds.Min.Y + bounds.Dy()*28/100, "left"},
+		{bounds.Min.X + bounds.Dx()*92/100, bounds.Min.Y + bounds.Dy()*28/100, "right"},
+		{bounds.Min.X + bounds.Dx()*8/100, bounds.Min.Y + bounds.Dy()*48/100, "left"},
+		{bounds.Min.X + bounds.Dx()*8/100, bounds.Min.Y + bounds.Dy()*68/100, "left"},
+		{bounds.Min.X + bounds.Dx()*92/100, bounds.Min.Y + bounds.Dy()*48/100, "right"},
 	}
 	z := zones[variant%len(zones)]
 	if l.X < 0 || l.Layout == "auto" {

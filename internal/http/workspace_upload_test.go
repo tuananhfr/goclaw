@@ -44,6 +44,28 @@ func TestExtractWorkspaceZipBrandKit(t *testing.T) {
 	}
 }
 
+func TestExtractWorkspaceZipNormalizesWindowsPaths(t *testing.T) {
+	scopeDir := t.TempDir()
+	buf := new(bytes.Buffer)
+	zw := zip.NewWriter(buf)
+	writeZipEntry(t, zw, `brand-kits\pizza-hips\BRAND.md`, "font: SVN-Bango")
+	writeZipEntry(t, zw, `brand-kits\pizza-hips\assets\fonts\SVN-Bango.otf`, "fake-font")
+	if err := zw.Close(); err != nil {
+		t.Fatalf("close zip: %v", err)
+	}
+
+	extracted, _, err := extractWorkspaceZip(bytes.NewReader(buf.Bytes()), scopeDir)
+	if err != nil {
+		t.Fatalf("extractWorkspaceZip returned error: %v", err)
+	}
+	if len(extracted) != 2 {
+		t.Fatalf("expected 2 extracted files, got %d: %#v", len(extracted), extracted)
+	}
+	if _, err := os.Stat(filepath.Join(scopeDir, "brand-kits", "pizza-hips", "assets", "fonts", "SVN-Bango.otf")); err != nil {
+		t.Fatalf("expected normalized font path: %v", err)
+	}
+}
+
 func TestExtractWorkspaceZipRejectsUnsafePath(t *testing.T) {
 	scopeDir := t.TempDir()
 	buf := new(bytes.Buffer)
