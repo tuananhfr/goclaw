@@ -12,7 +12,7 @@ import (
 
 func TestRenderCreativeTool_RendersFontImage(t *testing.T) {
 	workspace := t.TempDir()
-	fontPath, err := filepath.Abs(filepath.Join("..", "..", "skill-drafts", "brand-pizza-hips-guidelines", "assets", "fonts", "SVN-Bango.otf"))
+	fontPath, err := filepath.Abs(filepath.Join("..", "..", "skill-drafts", "pages", "pizza-hips", "skills", "brand-pizza-hips-guidelines", "assets", "fonts", "SVN-Bango.otf"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestRenderCreativeTool_RendersFontImage(t *testing.T) {
 
 func TestRenderCreativeTool_IgnoresVariantsUnlessAllowed(t *testing.T) {
 	workspace := t.TempDir()
-	fontPath, err := filepath.Abs(filepath.Join("..", "..", "skill-drafts", "brand-pizza-hips-guidelines", "assets", "fonts", "SVN-Bango.otf"))
+	fontPath, err := filepath.Abs(filepath.Join("..", "..", "skill-drafts", "pages", "pizza-hips", "skills", "brand-pizza-hips-guidelines", "assets", "fonts", "SVN-Bango.otf"))
 	if err != nil {
 		t.Fatal(err)
 	}

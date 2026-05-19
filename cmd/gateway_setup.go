@@ -141,6 +141,7 @@ func setupToolRegistry(
 	toolsReg.Register(tools.NewReadImageTool(providerRegistry))
 	toolsReg.Register(tools.NewCreateImageTool(providerRegistry))
 	toolsReg.Register(tools.NewRenderCreativeTool(workspace, agentCfg.RestrictToWorkspace))
+	toolsReg.Register(tools.NewApplyWatermarkTool(workspace, agentCfg.RestrictToWorkspace))
 
 	// Audio system: build Manager first so Music/SFX providers are registered
 	// before the create_audio tool is constructed.

@@ -1,91 +1,75 @@
-# Skill ZIP Packaging Notes
+# Skill Draft Packages
 
-This folder contains draft skills and their upload-ready ZIP files.
+This folder now keeps only upload-ready ZIP packages plus this README.
 
-## Important Path Rule
+Source/unpacked skill folders were intentionally removed to keep the workspace clean for multiple pages.
 
-Skill ZIP entries must use Unix-style forward slashes:
+## Current Layout
+
+```text
+skill-drafts/
+  shared/
+    packages/
+      facebook-fanpage-content-guidelines.zip
+      fanpage-content-creator-guidelines.zip
+      fanpage-design-guidelines.zip
+      fanpage-internet-research-guidelines.zip
+      fanpage-lead-orchestration-guidelines.zip
+
+  pages/
+    pizza-hips/
+      packages/
+        brand-pizza-hips-guidelines.zip
+        pizza-hips-franchise-knowledge.zip
+        brand-kits.zip
+        SVN-Bango.zip
+```
+
+## Usage
+
+Use `shared/packages` for reusable fanpage skills that apply across many pages.
+
+Use `pages/{page_slug}/packages` for page-specific skills and brand kits.
+
+For Pizza Hip'S:
+
+- Upload skill ZIPs from `skill-drafts/pages/pizza-hips/packages/` into the skill system when needed.
+- Upload `brand-kits.zip` into the team/global workspace when agents need shared brand materials such as fonts and render presets.
+
+## Add A New Page
+
+Create only a packages folder:
+
+```powershell
+New-Item -ItemType Directory -Force `
+  -Path "skill-drafts\pages\new-page\packages"
+```
+
+Put that page's upload-ready ZIP files there.
+
+## ZIP Path Rule
+
+ZIP entries must use Unix-style forward slashes:
 
 ```text
 SKILL.md
 assets/fonts/SVN-Bango.otf
+brand-kits/pizza-hips/BRAND.md
 ```
 
-Do not create ZIP entries with Windows backslashes:
+Do not package entries with Windows backslashes:
 
 ```text
 assets\fonts\SVN-Bango.otf
+brand-kits\pizza-hips\BRAND.md
 ```
 
-That second form can become a single filename containing backslash characters in some extraction/runtime contexts. When that happens, a skill that references:
-
-```text
-{baseDir}/assets/fonts/SVN-Bango.otf
-```
-
-will fail because the actual extracted file is named:
-
-```text
-assets\fonts\SVN-Bango.otf
-```
-
-instead of being inside real `assets/fonts/` directories.
-
-## Do Not Use PowerShell Compress-Archive For Skills
-
-On this Windows setup, `Compress-Archive` created ZIP entries like:
-
-```text
-assets\fonts\SVN-Bango.otf
-```
-
-That was the root cause of the font lookup issue. The font existed, permissions were fine, but the ZIP entry path did not match the skill reference.
-
-## Recommended Packaging Command
-
-Run this from the repo root, replacing the skill name if needed:
-
-```powershell
-$skill = "brand-pizza-hips-guidelines"
-$src = (Resolve-Path "skill-drafts\$skill").Path
-$out = Join-Path (Resolve-Path "skill-drafts") "$skill.zip"
-
-if (Test-Path -LiteralPath $out) {
-  Remove-Item -LiteralPath $out
-}
-
-Add-Type -AssemblyName System.IO.Compression
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-
-$zip = [System.IO.Compression.ZipFile]::Open(
-  $out,
-  [System.IO.Compression.ZipArchiveMode]::Create
-)
-
-try {
-  $prefix = $src.TrimEnd('\') + '\'
-  Get-ChildItem -LiteralPath $src -Recurse -File |
-    Sort-Object FullName |
-    ForEach-Object {
-      $rel = $_.FullName.Substring($prefix.Length).Replace('\', '/')
-      [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-        $zip,
-        $_.FullName,
-        $rel,
-        [System.IO.Compression.CompressionLevel]::Optimal
-      ) | Out-Null
-    }
-} finally {
-  $zip.Dispose()
-}
-```
+Backslash entries caused the earlier font/path bug: the file existed, but the runtime looked for `assets/fonts/SVN-Bango.otf` while the ZIP contained a Windows-style name.
 
 ## Verify ZIP Entries
 
-After packaging, inspect the ZIP entries:
-
 ```powershell
-$zipPath = "skill-drafts\brand-pizza-hips-guidelines.zip"
+$zipPath = "skill-drafts\pages\pizza-hips\packages\brand-kits.zip"
 
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -105,30 +89,3 @@ try {
   $zip.Dispose()
 }
 ```
-
-Expected output for the Pizza Hip'S brand skill:
-
-```text
-FullName                    Length
---------                    ------
-assets/fonts/SVN-Bango.otf   29792
-SKILL.md                     12303
-
-OK: no backslash entries
-```
-
-## Font Hash Check
-
-For `brand-pizza-hips-guidelines`, the expected font hash is:
-
-```text
-0C72A0D3D2A61E550E24A35FBF41F0DE3517026F09526F5D8CAF1BBF963FA5D9
-```
-
-Verify it with:
-
-```powershell
-Get-FileHash -Algorithm SHA256 `
-  "skill-drafts\brand-pizza-hips-guidelines\assets\fonts\SVN-Bango.otf"
-```
-

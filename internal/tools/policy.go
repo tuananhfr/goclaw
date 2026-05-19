@@ -23,7 +23,7 @@ var builtinToolGroups = map[string][]string{
 	"messaging":  {"message", "create_forum_topic", "list_group_members"},
 	"team":       {"team_tasks"},
 	"vault":      {"vault_search", "vault_read"},
-	"media":      {"read_image", "read_document", "read_audio", "read_video", "create_image", "create_video", "create_audio", "render_creative"},
+	"media":      {"read_image", "read_document", "read_audio", "read_video", "create_image", "create_video", "create_audio", "render_creative", "apply_watermark"},
 	// Composite group: all goclaw native tools (excludes MCP/custom plugins).
 	"goclaw": {
 		"read_file", "write_file", "list_files", "edit", "exec",
@@ -35,7 +35,7 @@ var builtinToolGroups = map[string][]string{
 		"cron", "datetime", "heartbeat",
 		"message", "create_forum_topic", "list_group_members",
 		"read_image", "read_document", "read_audio", "read_video",
-		"create_image", "create_video", "create_audio", "render_creative",
+		"create_image", "create_video", "create_audio", "render_creative", "apply_watermark",
 		"skill_search", "skill_manage", "publish_skill", "use_skill",
 		"mcp_tool_search", "tts",
 		"team_tasks",
@@ -48,7 +48,7 @@ var builtinToolGroups = map[string][]string{
 // Tool profiles define preset allow sets.
 var toolProfiles = map[string][]string{
 	"minimal":   {"session_status"},
-	"coding":    {"group:fs", "group:runtime", "group:sessions", "group:memory", "group:web", "group:vault", "read_image", "create_image", "render_creative", "skill_search"},
+	"coding":    {"group:fs", "group:runtime", "group:sessions", "group:memory", "group:web", "group:vault", "read_image", "create_image", "render_creative", "apply_watermark", "skill_search"},
 	"messaging": {"group:messaging", "group:web", "group:vault", "sessions_list", "sessions_history", "sessions_send", "session_status", "read_image", "skill_search"},
 	"full":      {}, // empty = no restrictions
 }
