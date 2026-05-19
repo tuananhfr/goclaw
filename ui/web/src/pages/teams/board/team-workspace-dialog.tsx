@@ -19,6 +19,8 @@ import { useHttp } from "@/hooks/use-ws";
 import { toast } from "@/stores/use-toast-store";
 import type { ScopeEntry } from "@/types/team";
 
+const GLOBAL_SCOPE = "global";
+
 /** Strip chatID prefix from name for WS file ops (backend already scopes by chat_id). */
 function wsFileName(name: string, chatID: string | undefined): string {
   if (chatID && name.startsWith(chatID + "/")) return name.slice(chatID.length + 1);
@@ -36,55 +38,64 @@ export function TeamWorkspaceDialog({ open, onOpenChange, teamId, scopes }: Team
   const { t } = useTranslation("teams");
   const http = useHttp();
   const { files, loading, listFiles, readFile, deleteFile } = useTeamWorkspace();
-  const [selectedScope, setSelectedScope] = useState<string>("__all__");
+  const [selectedScope, setSelectedScope] = useState<string>("__global__");
   const [fileContent, setFileContent] = useState<{ content: string; path: string; size: number } | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
   const [activePath, setActivePath] = useState<string | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
 
-  const scopeValue = selectedScope === "__all__" ? "" : selectedScope;
+  const scopeValue = selectedScope === "__all__" || selectedScope === "__global__" ? "" : selectedScope;
+  const selectedChatID = selectedScope === "__global__" ? GLOBAL_SCOPE : scopeValue;
   // Stable scope list: populated once from "all" listing, not recalculated on filter.
   const [cachedScopes, setCachedScopes] = useState<ScopeEntry[]>([]);
+
+  const cacheScopes = useCallback((result: Awaited<ReturnType<typeof listFiles>>) => {
+    if (result.length === 0) return;
+    const seen = new Set<string>();
+    const derived: ScopeEntry[] = [];
+    for (const f of result) {
+      if (f.chat_id && f.chat_id !== GLOBAL_SCOPE && !seen.has(f.chat_id)) {
+        seen.add(f.chat_id);
+        derived.push({ channel: "", chat_id: f.chat_id });
+      }
+    }
+    derived.sort((a, b) => a.chat_id.localeCompare(b.chat_id));
+    setCachedScopes(derived);
+  }, []);
 
   // Load files for the selected scope. On "all" load, also cache scope list.
   // silent=true skips loading spinner (used after move to avoid tree flash).
   const load = useCallback((opts?: { silent?: boolean }) => {
-    listFiles(teamId, scopeValue || undefined, opts).then((result) => {
+    listFiles(teamId, selectedChatID || undefined, opts).then((result) => {
       // Only update cached scopes from the "all" listing (no filter applied).
-      if (!scopeValue && result.length > 0) {
-        const seen = new Set<string>();
-        const derived: ScopeEntry[] = [];
-        for (const f of result) {
-          if (f.chat_id && !seen.has(f.chat_id)) {
-            seen.add(f.chat_id);
-            derived.push({ channel: "", chat_id: f.chat_id });
-          }
-        }
-        derived.sort((a, b) => a.chat_id.localeCompare(b.chat_id));
-        setCachedScopes(derived);
+      if (selectedScope === "__all__") {
+        cacheScopes(result);
       }
     });
     if (!opts?.silent) {
       setFileContent(null);
       setActivePath(null);
     }
-  }, [teamId, listFiles, scopeValue]);
+  }, [teamId, listFiles, selectedChatID, selectedScope, cacheScopes]);
 
   useEffect(() => {
     if (open) {
-      setSelectedScope("__all__"); // reset filter on open
-      load();
+      setSelectedScope("__global__"); // reset filter on open
+      listFiles(teamId, GLOBAL_SCOPE);
+      listFiles(teamId, undefined, { silent: true, cacheOnly: true }).then(cacheScopes);
     }
   }, [open]); // intentionally only depend on `open`, not `load`
 
   // Re-fetch when scope changes (but not on initial open — handled above).
   useEffect(() => {
-    if (open && scopeValue) {
-      listFiles(teamId, scopeValue);
+    if (open) {
+      listFiles(teamId, selectedChatID || undefined).then((result) => {
+        if (selectedScope === "__all__") cacheScopes(result);
+      });
       setFileContent(null);
       setActivePath(null);
     }
-  }, [open, scopeValue, teamId, listFiles]);
+  }, [open, selectedChatID, selectedScope, teamId, listFiles, cacheScopes]);
 
   // Map relative name → absolute disk path (for HTTP file serving).
   const nameToAbsPath = useMemo(() => {
@@ -169,7 +180,7 @@ export function TeamWorkspaceDialog({ open, onOpenChange, teamId, scopes }: Team
   const handleUploadFile = useCallback(async (file: File) => {
     const params: Record<string, string> = {};
     if (scopeValue) params["chat_id"] = scopeValue;
-    else params["team_wide"] = "true";
+    else params["chat_id"] = GLOBAL_SCOPE;
     await http.upload(`/v1/teams/${teamId}/workspace/upload?` + new URLSearchParams(params).toString(), (() => {
       const fd = new FormData();
       fd.append("file", file);
@@ -231,6 +242,7 @@ export function TeamWorkspaceDialog({ open, onOpenChange, teamId, scopes }: Team
                   <SelectValue placeholder={t("scope.all")} />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__global__">Global</SelectItem>
                   <SelectItem value="__all__">{t("scope.all")}</SelectItem>
                   {effectiveScopes.map((s) => (
                     <SelectItem key={s.chat_id} value={s.chat_id}>

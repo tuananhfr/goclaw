@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
@@ -299,4 +300,29 @@ func taskTeamWorkspace(task *store.TeamTaskData) string {
 	}
 	ws, _ := task.Metadata[TaskMetaTeamWorkspace].(string)
 	return ws
+}
+
+func taskTeamRootWorkspace(task *store.TeamTaskData, team *store.TeamData) string {
+	if task.Metadata == nil {
+		return ""
+	}
+	if root, _ := task.Metadata[TaskMetaTeamRoot].(string); root != "" {
+		return root
+	}
+	ws, _ := task.Metadata[TaskMetaTeamWorkspace].(string)
+	if ws == "" {
+		return ""
+	}
+	if team != nil && !IsSharedWorkspace(team.Settings) {
+		return filepath.Dir(ws)
+	}
+	return ws
+}
+
+func taskTeamGlobalWorkspace(task *store.TeamTaskData) string {
+	if task.Metadata == nil {
+		return ""
+	}
+	global, _ := task.Metadata[TaskMetaTeamGlobal].(string)
+	return global
 }

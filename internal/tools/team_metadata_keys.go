@@ -61,5 +61,7 @@ const (
 	TaskMetaOriginTrace    = "origin_trace_id"
 	TaskMetaOriginRootSpan = "origin_root_span_id"
 	TaskMetaTeamWorkspace  = "team_workspace"
+	TaskMetaTeamRoot       = "team_root"
+	TaskMetaTeamGlobal     = "team_global_workspace"
 	TaskMetaBrandKit       = "brand_kit"
 )

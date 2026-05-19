@@ -13,6 +13,8 @@ import (
 const (
 	maxFileSizeBytes = 50 * 1024 * 1024 // 50MB
 	maxFilesPerScope = 100
+	// TeamGlobalScope is the reserved team-wide workspace scope for shared materials.
+	TeamGlobalScope = "global"
 
 	// MaxFileSizeBytes is the exported form of maxFileSizeBytes for HTTP handlers.
 	MaxFileSizeBytes int64 = maxFileSizeBytes

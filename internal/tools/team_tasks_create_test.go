@@ -80,6 +80,27 @@ func TestCreate(t *testing.T) {
 		if got, _ := task.Metadata[TaskMetaBrandKit].(string); got != "brand-kits/pizza-hips" {
 			t.Fatalf("brand kit metadata = %q", got)
 		}
+		teamRoot, _ := task.Metadata[TaskMetaTeamRoot].(string)
+		teamWorkspace, _ := task.Metadata[TaskMetaTeamWorkspace].(string)
+		if teamRoot == "" {
+			t.Fatalf("expected team root metadata")
+		}
+		teamGlobal, _ := task.Metadata[TaskMetaTeamGlobal].(string)
+		if teamGlobal == "" {
+			t.Fatalf("expected team global metadata")
+		}
+		if !strings.HasSuffix(teamGlobal, "/global") {
+			t.Fatalf("expected team global scope path, got %q", teamGlobal)
+		}
+		if teamWorkspace == "" {
+			t.Fatalf("expected team workspace metadata")
+		}
+		if teamRoot == teamWorkspace {
+			t.Fatalf("expected isolated team workspace to differ from team root")
+		}
+		if got := taskTeamRootWorkspace(task, mb.team); got != teamRoot {
+			t.Fatalf("taskTeamRootWorkspace = %q, want %q", got, teamRoot)
+		}
 	})
 
 	t.Run("RejectsEscapingBrandKit", func(t *testing.T) {

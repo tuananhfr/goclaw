@@ -12,14 +12,14 @@ export function useTeamWorkspace() {
   const [loading, setLoading] = useState(false);
 
   const listFiles = useCallback(
-    async (teamId: string, chatId?: string, opts?: { silent?: boolean }) => {
+    async (teamId: string, chatId?: string, opts?: { silent?: boolean; cacheOnly?: boolean }) => {
       if (!opts?.silent) setLoading(true);
       try {
         const res = await ws.call<{ files: TeamWorkspaceFile[]; count: number }>(
           Methods.TEAMS_WORKSPACE_LIST,
           { team_id: teamId, chat_id: chatId ?? "" },
         );
-        setFiles(res.files ?? []);
+        if (!opts?.cacheOnly) setFiles(res.files ?? []);
         return res.files ?? [];
       } catch {
         return [];

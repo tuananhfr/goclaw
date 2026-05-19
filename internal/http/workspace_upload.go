@@ -75,8 +75,10 @@ func (h *WorkspaceUploadHandler) handleUpload(w http.ResponseWriter, r *http.Req
 		return
 	}
 	shared := tools.IsSharedWorkspace(team.Settings)
-	if shared || teamWide || chatID == "" {
-		chatID = "" // shared mode and unscoped uploads write to the team root
+	if shared {
+		chatID = "" // shared mode ignores chat_id
+	} else if teamWide || chatID == "" {
+		chatID = tools.TeamGlobalScope
 	}
 
 	// Enforce file size limit at HTTP level.

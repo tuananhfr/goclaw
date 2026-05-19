@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -100,8 +101,23 @@ func (m *TeamToolManager) dispatchTaskToAgent(ctx context.Context, task *store.T
 	// Hint: tell the agent it's on a team task and where the shared workspace is.
 	if ws := taskTeamWorkspace(task); ws != "" {
 		content.WriteString(fmt.Sprintf("\n\n[Team workspace: %s — use read_file/write_file/list_files to access shared files. All files you write are visible to the team lead and other members.]", ws))
+		if globalWs := taskTeamGlobalWorkspace(task); globalWs != "" && globalWs != ws {
+			content.WriteString(fmt.Sprintf("\n\n[Team global workspace: %s — shared team materials uploaded here are readable from every session/scope. Use this for brand kits, source docs, references, and reusable assets.]", globalWs))
+		}
 		if brandKit := taskBrandKit(task.Metadata); brandKit != "" {
-			brandKitPath := filepath.Join(ws, filepath.FromSlash(brandKit))
+			brandKitBase := taskTeamGlobalWorkspace(task)
+			if brandKitBase == "" {
+				brandKitBase = taskTeamRootWorkspace(task, team)
+			}
+			if brandKitBase == "" {
+				brandKitBase = ws
+			}
+			if root := taskTeamRootWorkspace(task, team); root != "" && brandKitBase != root {
+				if _, err := os.Stat(filepath.Join(brandKitBase, filepath.FromSlash(brandKit))); err != nil {
+					brandKitBase = root
+				}
+			}
+			brandKitPath := filepath.Join(brandKitBase, filepath.FromSlash(brandKit))
 			content.WriteString(fmt.Sprintf("\n\n[Brand kit/materials: %s]\n- Read BRAND.md first if present.\n- Use render-preset.json if present for machine-readable colors, font paths, and text treatment.\n- For on-image brand text, use the real font files under assets/fonts and render text into a flattened final image.\n- Write final images back to the team workspace so they can be reviewed and sent as chat/Discord previews.", brandKitPath))
 		}
 	}
