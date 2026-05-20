@@ -43,7 +43,7 @@ If a final creative must be confirmed as brand-font accurate, do not rely on AI 
 
 Exact font workflow:
 
-- When the user asks for exact SVN - Bango on-image text, use `fb_render_creative` or an equivalent deterministic font-render tool with the real `SVN-Bango.otf` file path.
+- When the user asks for exact SVN - Bango on-image text, use `render_creative` or an equivalent deterministic font-render tool with the real `SVN-Bango.otf` file path.
 - Do not claim exact SVN - Bango if the image was produced only by `create_image` or an AI image prompt.
 - If the render tool cannot read the font path, report the tool/path access error clearly. Do not silently switch to "near SVN - Bango" or "similar display rounded font".
 - After rendering, keep the returned `font_path` and `font_sha256` metadata so the user can verify the exact font file used.

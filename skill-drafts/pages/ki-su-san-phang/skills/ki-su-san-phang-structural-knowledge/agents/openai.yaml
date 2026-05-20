@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ki Su San Phang Structural Knowledge"
+  short_description: "Structural engineering content rules"
+  default_prompt: "Use this skill for Ki su san phang content about construction standards, flat slabs, UBoot Beton, complex structural design, ESG, and Vietnam comparisons."

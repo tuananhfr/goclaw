@@ -1,0 +1,4 @@
+interface:
+  display_name: "Brand Ki Su San Phang Guidelines"
+  short_description: "Vietnamese flat slab page rules"
+  default_prompt: "Use this skill for Ki su san phang Facebook content, Vietnamese technical posts, image briefs, footer, hashtags, watermark, and page voice."

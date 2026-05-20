@@ -1,0 +1,4 @@
+interface:
+  display_name: "Brand LPC France Guidelines"
+  short_description: "LPC France bilingual brand rules"
+  default_prompt: "Use this skill for LPC France fanpage content, bilingual French/English captions, image briefs, lead-generation posts, and review of French-market outsourcing content."

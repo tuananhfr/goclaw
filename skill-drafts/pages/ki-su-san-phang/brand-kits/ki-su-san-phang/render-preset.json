@@ -1,0 +1,85 @@
+{
+  "brand_slug": "ki-su-san-phang",
+  "brand_name": "Kĩ sư sàn phẳng",
+  "fonts": {
+    "headline": {
+      "name": "Be Vietnam Pro ExtraBold",
+      "path": "assets/fonts/BeVietnamPro-ExtraBold.ttf",
+      "sha256": "10FCB42B9CEE8E30918843416676AE059E8F77FE439D0C3A4350617EF9F77A75"
+    },
+    "emphasis": {
+      "name": "Be Vietnam Pro Bold",
+      "path": "assets/fonts/BeVietnamPro-Bold.ttf",
+      "sha256": "2FE6C3F9DBB65F61554D530C16B2EB4EC32CA437DC8F9999A6EC0F6403B30BFE"
+    },
+    "body": {
+      "name": "Be Vietnam Pro Medium",
+      "path": "assets/fonts/BeVietnamPro-Medium.ttf",
+      "sha256": "F493144CB53C78C6F0819BC9B73DE274486618AC609BC92B3B79D4EFC76F95C6"
+    },
+    "note": {
+      "name": "Be Vietnam Pro Regular",
+      "path": "assets/fonts/BeVietnamPro-Regular.ttf",
+      "sha256": "CB6F53D6FD56316356C55B067474D9621C27B7182B124063B8F6EAB6ACEF63BD"
+    }
+  },
+  "palette": {
+    "technical_blue": "#1D4ED8",
+    "deep_blue": "#0F172A",
+    "concrete_gray": "#64748B",
+    "light_gray": "#E5E7EB",
+    "white": "#FFFFFF",
+    "black": "#111827",
+    "green": "#16A34A",
+    "amber": "#F59E0B"
+  },
+  "headline_style": {
+    "font_path": "assets/fonts/BeVietnamPro-ExtraBold.ttf",
+    "default_size": 78,
+    "min_size": 46,
+    "max_size": 110,
+    "max_lines": 2,
+    "max_width_ratio": 0.72,
+    "default_color": "#FFFFFF",
+    "stroke_color": "#0F172A",
+    "stroke_width": 2,
+    "shadow": true
+  },
+  "body_style": {
+    "font_path": "assets/fonts/BeVietnamPro-Medium.ttf",
+    "default_size": 34,
+    "min_size": 24,
+    "max_size": 44,
+    "max_lines": 4,
+    "max_width_ratio": 0.76,
+    "default_color": "#111827",
+    "background_color": "#FFFFFF",
+    "background_opacity": 0.88
+  },
+  "layout_rules": {
+    "preferred_zones": ["upper_right", "mid_left", "mid_right", "lower_left"],
+    "avoid_zones": ["top_left_watermark"],
+    "generate_variants": 1,
+    "default_variants": 1,
+    "max_variants": 1,
+    "background_prompt_hint": "no text, leave clean negative space outside the top-left watermark zone, technical engineering visual, clear slab or drawing detail",
+    "reserved_areas": [
+      {
+        "name": "top_left_watermark",
+        "anchor": "top-left",
+        "x_pct": 0,
+        "y_pct": 0,
+        "width_pct": 24,
+        "height_pct": 16,
+        "padding_pct": 3,
+        "rule": "Do not place headline, CTA, drawing labels, QR codes, faces, project identifiers, or small readable text here."
+      }
+    ]
+  },
+  "final_output": {
+    "format": "png",
+    "flatten_text": true,
+    "default_count": 1,
+    "return_font_sha256": true
+  }
+}

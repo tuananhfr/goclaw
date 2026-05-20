@@ -84,6 +84,10 @@ func (t *RenderCreativeTool) Parameters() map[string]any {
 				"type":        "boolean",
 				"description": "Set true only when the user explicitly asks for comparison variants. Otherwise render_creative returns one final image.",
 			},
+			"watermark": map[string]any{
+				"type":        "object",
+				"description": "Optional watermark config from fb_get_watermark_config. When present, text is kept outside the configured watermark overlay zones.",
+			},
 		},
 		"required": []string{"output_path", "font_path", "texts"},
 	}
@@ -135,6 +139,7 @@ func (t *RenderCreativeTool) Execute(ctx context.Context, args map[string]any) *
 	if len(layers) == 0 {
 		return ErrorResult("texts must contain at least one layer with non-empty text")
 	}
+	avoidZones := watermarkAvoidZonesFromArgs(args, base.Bounds())
 
 	variantCount := intParam(args, "variants", 1)
 	if variantCount < 1 {
@@ -160,8 +165,8 @@ func (t *RenderCreativeTool) Execute(ctx context.Context, args map[string]any) *
 	outputs := make([]string, 0, variantCount)
 	for i := 0; i < variantCount; i++ {
 		canvas := cloneToRGBA(base)
-		for _, layer := range layers {
-			renderLayer(canvas, parsedFont, layer.withAutoLayout(i, canvas.Bounds()))
+		for layerIndex, layer := range layers {
+			renderLayer(canvas, parsedFont, layer.withAutoLayout(i, layerIndex, canvas.Bounds()), avoidZones)
 		}
 		out := resolvedOutput
 		if variantCount > 1 {
@@ -265,7 +270,7 @@ func parseRenderTextLayers(raw []any) []renderTextLayer {
 	return out
 }
 
-func (l renderTextLayer) withAutoLayout(variant int, bounds image.Rectangle) renderTextLayer {
+func (l renderTextLayer) withAutoLayout(variant, layerIndex int, bounds image.Rectangle) renderTextLayer {
 	if l.MaxWidth <= 0 {
 		l.MaxWidth = bounds.Dx() * 9 / 20
 	}
@@ -282,7 +287,7 @@ func (l renderTextLayer) withAutoLayout(variant int, bounds image.Rectangle) ren
 		{bounds.Min.X + bounds.Dx()*8/100, bounds.Min.Y + bounds.Dy()*68/100, "left"},
 		{bounds.Min.X + bounds.Dx()*92/100, bounds.Min.Y + bounds.Dy()*48/100, "right"},
 	}
-	z := zones[variant%len(zones)]
+	z := zones[(variant+layerIndex)%len(zones)]
 	if l.X < 0 || l.Layout == "auto" {
 		l.X = z.x
 	}
@@ -295,8 +300,8 @@ func (l renderTextLayer) withAutoLayout(variant int, bounds image.Rectangle) ren
 	return l
 }
 
-func renderLayer(img *image.RGBA, fnt *opentype.Font, layer renderTextLayer) {
-	layer = fitLayerToSafeBounds(fnt, layer, img.Bounds())
+func renderLayer(img *image.RGBA, fnt *opentype.Font, layer renderTextLayer, avoidZones []image.Rectangle) {
+	layer = fitLayerToSafeBounds(fnt, layer, img.Bounds(), avoidZones)
 	face, err := opentype.NewFace(fnt, &opentype.FaceOptions{
 		Size:    layer.Size,
 		DPI:     72,
@@ -332,7 +337,7 @@ func renderLayer(img *image.RGBA, fnt *opentype.Font, layer renderTextLayer) {
 	}
 }
 
-func fitLayerToSafeBounds(fnt *opentype.Font, layer renderTextLayer, bounds image.Rectangle) renderTextLayer {
+func fitLayerToSafeBounds(fnt *opentype.Font, layer renderTextLayer, bounds image.Rectangle, avoidZones []image.Rectangle) renderTextLayer {
 	if layer.MaxWidth <= 0 {
 		layer.MaxWidth = bounds.Dx() * 9 / 20
 	}
@@ -341,41 +346,23 @@ func fitLayerToSafeBounds(fnt *opentype.Font, layer renderTextLayer, bounds imag
 	}
 	marginX := max(12, bounds.Dx()*5/100)
 	marginY := max(12, bounds.Dy()*5/100)
-	topLogo := image.Rect(
-		bounds.Min.X+bounds.Dx()*30/100,
-		bounds.Min.Y,
-		bounds.Min.X+bounds.Dx()*72/100,
-		bounds.Min.Y+bounds.Dy()*28/100,
-	)
-	bottomContact := image.Rect(
-		bounds.Min.X+bounds.Dx()*68/100,
-		bounds.Min.Y+bounds.Dy()*74/100,
-		bounds.Max.X,
-		bounds.Max.Y,
-	)
 
-	movedFromWatermark := false
 	for range 18 {
 		box, ok := measureLayerBounds(fnt, layer)
 		if !ok {
 			return layer
 		}
-		if rectIntersects(box, topLogo) && !movedFromWatermark {
-			layer = moveLayerAwayFromTopCenter(layer, bounds)
-			movedFromWatermark = true
+		if zone, ok := intersectingZone(box, avoidZones); ok {
+			layer = moveLayerAwayFromZone(fnt, layer, bounds, zone, marginX, marginY)
 			continue
 		}
-		if rectIntersects(box, topLogo) || rectIntersects(box, bottomContact) ||
-			box.Min.X < bounds.Min.X+marginX || box.Max.X > bounds.Max.X-marginX ||
+		if box.Min.X < bounds.Min.X+marginX || box.Max.X > bounds.Max.X-marginX ||
 			box.Min.Y < bounds.Min.Y+marginY || box.Max.Y > bounds.Max.Y-marginY {
 			if layer.Size > 28 {
 				layer.Size *= 0.92
 				continue
 			}
 			layer = shiftLayerInsideBounds(layer, box, bounds, marginX, marginY)
-			if rectIntersects(box, topLogo) {
-				layer = moveLayerAwayFromTopCenter(layer, bounds)
-			}
 			return layer
 		}
 		return layer
@@ -387,17 +374,78 @@ func fitLayerToSafeBounds(fnt *opentype.Font, layer renderTextLayer, bounds imag
 	return layer
 }
 
-func moveLayerAwayFromTopCenter(layer renderTextLayer, bounds image.Rectangle) renderTextLayer {
-	if layer.X <= bounds.Min.X+bounds.Dx()/2 {
+func moveLayerAwayFromZone(fnt *opentype.Font, layer renderTextLayer, bounds, zone image.Rectangle, marginX, marginY int) renderTextLayer {
+	zoneCenterX := zone.Min.X + zone.Dx()/2
+	if zoneCenterX <= bounds.Min.X+bounds.Dx()/2 {
 		layer.Align = "left"
-		layer.X = bounds.Min.X + bounds.Dx()*6/100
+		layer.X = min(bounds.Max.X-marginX, zone.Max.X+marginX)
 	} else {
 		layer.Align = "right"
-		layer.X = bounds.Min.X + bounds.Dx()*94/100
+		layer.X = max(bounds.Min.X+marginX, zone.Min.X-marginX)
 	}
-	layer.Y = max(layer.Y, bounds.Min.Y+bounds.Dy()*32/100)
-	layer.MaxWidth = min(layer.MaxWidth, bounds.Dx()*27/100)
+	zoneCenterY := zone.Min.Y + zone.Dy()/2
+	if zoneCenterY <= bounds.Min.Y+bounds.Dy()/2 {
+		layer.Y = max(layer.Y, zone.Max.Y+marginY)
+	} else {
+		layer.Y = min(layer.Y, zone.Min.Y-marginY)
+	}
+	layer.MaxWidth = min(layer.MaxWidth, max(120, bounds.Dx()*42/100))
+	box, ok := measureLayerBounds(fnt, layer)
+	if ok {
+		layer = shiftLayerInsideBounds(layer, box, bounds, marginX, marginY)
+	}
 	return layer
+}
+
+func intersectingZone(box image.Rectangle, zones []image.Rectangle) (image.Rectangle, bool) {
+	for _, zone := range zones {
+		if rectIntersects(box, zone) {
+			return zone, true
+		}
+	}
+	return image.Rectangle{}, false
+}
+
+func watermarkAvoidZonesFromArgs(args map[string]any, bounds image.Rectangle) []image.Rectangle {
+	raw, ok := args["watermark"].(map[string]any)
+	if !ok || len(raw) == 0 {
+		return nil
+	}
+	cfg := parseWatermarkConfig(raw)
+	zones := watermarkAvoidZones(cfg, bounds)
+	if len(zones) == 0 {
+		return nil
+	}
+	return zones
+}
+
+func watermarkAvoidZones(cfg watermarkConfig, bounds image.Rectangle) []image.Rectangle {
+	if !cfg.Enabled {
+		return nil
+	}
+	if len(cfg.Items) > 0 {
+		var zones []image.Rectangle
+		for _, item := range cfg.Items {
+			zones = append(zones, watermarkAvoidZones(item, bounds)...)
+		}
+		return zones
+	}
+	shortSide := bounds.Dx()
+	if bounds.Dy() < shortSide {
+		shortSide = bounds.Dy()
+	}
+	size := int(float64(shortSide) * clampFloat(defaultFloat(cfg.ScalePct, 0.18), 0.04, 0.6))
+	if size < 1 {
+		size = 1
+	}
+	pad := max(12, shortSide*3/100)
+	cx := bounds.Min.X + int(float64(bounds.Dx())*clampFloat(defaultFloat(cfg.XPct, 0.5), 0, 1))
+	cy := bounds.Min.Y + int(float64(bounds.Dy())*clampFloat(defaultFloat(cfg.YPct, 0.12), 0, 1))
+	zone := image.Rect(cx-size/2-pad, cy-size/2-pad, cx+size/2+pad, cy+size/2+pad).Intersect(bounds)
+	if zone.Empty() {
+		return nil
+	}
+	return []image.Rectangle{zone}
 }
 
 func shiftLayerInsideBounds(layer renderTextLayer, box image.Rectangle, bounds image.Rectangle, marginX, marginY int) renderTextLayer {

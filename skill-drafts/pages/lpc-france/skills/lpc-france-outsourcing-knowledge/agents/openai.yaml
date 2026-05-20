@@ -1,0 +1,4 @@
+interface:
+  display_name: "LPC France Outsourcing Knowledge"
+  short_description: "BIM outsourcing content guidance"
+  default_prompt: "Use this skill for LPC France BIM, design, drafting, UBoot Beton, green construction, ESG, and French-market construction outsourcing lead-generation content."
