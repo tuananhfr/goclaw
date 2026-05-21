@@ -98,10 +98,15 @@ func (t *FacebookPostWithCommentsTool) Parameters() map[string]any {
 }
 
 func (t *FacebookPostWithCommentsTool) Execute(ctx context.Context, args map[string]any) *Result {
-	if t.registry == nil {
+	reg := RegistryFromContext(ctx)
+	if reg == nil {
+		reg = t.registry
+	}
+	activeTool := t.withRegistry(reg)
+	if activeTool.registry == nil {
 		return ErrorResult("tool registry not available")
 	}
-	if t.cron == nil {
+	if activeTool.cron == nil {
 		return ErrorResult("cron store not available")
 	}
 
@@ -122,18 +127,18 @@ func (t *FacebookPostWithCommentsTool) Execute(ctx context.Context, args map[str
 		}
 	}
 
-	postTool, err := t.resolveTool(stringArg(args, "mcp_post_tool_name"), postSuffix)
+	postTool, err := activeTool.resolveTool(stringArg(args, "mcp_post_tool_name"), postSuffix)
 	if err != nil {
 		return ErrorResult(err.Error())
 	}
 
-	plan, planSource, err := t.resolveCommentPlan(ctx, args, pageID)
+	plan, planSource, err := activeTool.resolveCommentPlan(ctx, args, pageID)
 	if err != nil {
 		return ErrorResult(err.Error())
 	}
 
 	internalCtx := context.WithValue(ctx, fbAutoCommentHookSkipKey{}, true)
-	postResult := t.registry.ExecuteWithContext(internalCtx, postTool, postArgs, ToolChannelFromCtx(ctx), ToolChatIDFromCtx(ctx), ToolPeerKindFromCtx(ctx), ToolSessionKeyFromCtx(ctx), nil)
+	postResult := activeTool.registry.ExecuteWithContext(internalCtx, postTool, postArgs, ToolChannelFromCtx(ctx), ToolChatIDFromCtx(ctx), ToolPeerKindFromCtx(ctx), ToolSessionKeyFromCtx(ctx), nil)
 	if postResult == nil {
 		return ErrorResult(fmt.Sprintf("post tool %q returned nil result", postTool))
 	}
@@ -148,11 +153,11 @@ func (t *FacebookPostWithCommentsTool) Execute(ctx context.Context, args map[str
 
 	var scheduled []fbScheduledComment
 	if plan.Enabled && len(plan.Comments) > 0 {
-		commentTool, err := t.resolveTool(stringArg(args, "mcp_comment_tool_name"), "__fb_create_post_comment")
+		commentTool, err := activeTool.resolveTool(stringArg(args, "mcp_comment_tool_name"), "__fb_create_post_comment")
 		if err != nil {
 			return ErrorResult(err.Error())
 		}
-		scheduled, err = t.scheduleComments(ctx, postID, pageID, commentTool, plan)
+		scheduled, err = activeTool.scheduleComments(ctx, postID, pageID, commentTool, plan)
 		if err != nil {
 			return ErrorResult(err.Error())
 		}
@@ -169,11 +174,14 @@ func (t *FacebookPostWithCommentsTool) Execute(ctx context.Context, args map[str
 	return NewResult(string(b))
 }
 
-func (t *FacebookPostWithCommentsTool) BeforeExecute(ctx context.Context, name string, args map[string]any) *Result {
+func (t *FacebookPostWithCommentsTool) BeforeExecute(ctx context.Context, reg *Registry, name string, args map[string]any) *Result {
 	if ctx.Value(fbAutoCommentHookSkipKey{}) == true || !isFacebookMCPPostTool(name) {
 		return nil
 	}
-	plan, _, err := t.resolveCommentPlan(ctx, t.autoHookArgs(name, args), stringArg(args, "page_id"))
+	if reg == nil {
+		reg = t.registry
+	}
+	plan, _, err := t.withRegistry(reg).resolveCommentPlan(ctx, t.autoHookArgs(reg, name, args), stringArg(args, "page_id"))
 	if err != nil {
 		return ErrorResult(err.Error())
 	}
@@ -183,11 +191,15 @@ func (t *FacebookPostWithCommentsTool) BeforeExecute(ctx context.Context, name s
 	return nil
 }
 
-func (t *FacebookPostWithCommentsTool) AfterExecute(ctx context.Context, name string, args map[string]any, result *Result) *Result {
+func (t *FacebookPostWithCommentsTool) AfterExecute(ctx context.Context, reg *Registry, name string, args map[string]any, result *Result) *Result {
 	if ctx.Value(fbAutoCommentHookSkipKey{}) == true || !isFacebookMCPPostTool(name) || result == nil || result.IsError {
 		return nil
 	}
-	plan, source, err := t.resolveCommentPlan(ctx, t.autoHookArgs(name, args), stringArg(args, "page_id"))
+	if reg == nil {
+		reg = t.registry
+	}
+	activeTool := t.withRegistry(reg)
+	plan, source, err := activeTool.resolveCommentPlan(ctx, activeTool.autoHookArgs(reg, name, args), stringArg(args, "page_id"))
 	if err != nil || !plan.Enabled || len(plan.Comments) == 0 {
 		return nil
 	}
@@ -196,10 +208,10 @@ func (t *FacebookPostWithCommentsTool) AfterExecute(ctx context.Context, name st
 		return nil
 	}
 	commentTool := companionFacebookMCPTool(name, "__fb_create_post_comment")
-	if _, ok := t.registry.Get(commentTool); !ok {
+	if _, ok := reg.Get(commentTool); !ok {
 		return nil
 	}
-	scheduled, err := t.scheduleComments(ctx, postID, stringArg(args, "page_id"), commentTool, plan)
+	scheduled, err := activeTool.scheduleComments(ctx, postID, stringArg(args, "page_id"), commentTool, plan)
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("Facebook post was created but scheduling comments failed: %v", err))
 	}
@@ -222,13 +234,23 @@ func (t *FacebookPostWithCommentsTool) AfterExecute(ctx context.Context, name st
 	return &next
 }
 
-func (t *FacebookPostWithCommentsTool) autoHookArgs(postTool string, args map[string]any) map[string]any {
+func (t *FacebookPostWithCommentsTool) withRegistry(reg *Registry) *FacebookPostWithCommentsTool {
+	if reg == nil || reg == t.registry {
+		return t
+	}
+	return &FacebookPostWithCommentsTool{registry: reg, cron: t.cron}
+}
+
+func (t *FacebookPostWithCommentsTool) autoHookArgs(reg *Registry, postTool string, args map[string]any) map[string]any {
 	out := map[string]any{}
 	if v, ok := args["post_comments"]; ok {
 		out["post_comments"] = v
 	}
 	if configTool := companionFacebookMCPTool(postTool, "__fb_get_comment_schedule_config"); configTool != "" {
-		if _, ok := t.registry.Get(configTool); ok {
+		if reg == nil {
+			reg = t.registry
+		}
+		if _, ok := reg.Get(configTool); ok {
 			out["mcp_comment_schedule_tool_name"] = configTool
 		}
 	}

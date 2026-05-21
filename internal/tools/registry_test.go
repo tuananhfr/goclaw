@@ -38,6 +38,23 @@ func TestRegistry_RegisterAndGet(t *testing.T) {
 	}
 }
 
+func TestRegistryCloneCopiesExecuteHooks(t *testing.T) {
+	reg := NewRegistry()
+	reg.Register(&mockTool{name: "test_tool"})
+	reg.AddBeforeExecuteHook(func(ctx context.Context, reg *Registry, name string, args map[string]any) *Result {
+		if name == "test_tool" {
+			return ErrorResult("blocked by cloned hook")
+		}
+		return nil
+	})
+
+	clone := reg.Clone()
+	result := clone.ExecuteWithContext(context.Background(), "test_tool", map[string]any{}, "", "", "", "", nil)
+	if result == nil || !result.IsError || !strings.Contains(result.ForLLM, "blocked by cloned hook") {
+		t.Fatalf("expected cloned hook to block execution, got %#v", result)
+	}
+}
+
 func TestRegistry_GetUnknown(t *testing.T) {
 	reg := NewRegistry()
 	_, ok := reg.Get("nonexistent")

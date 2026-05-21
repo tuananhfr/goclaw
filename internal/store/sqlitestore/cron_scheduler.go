@@ -298,7 +298,7 @@ func (s *SQLiteCronStore) executeOneJob(job store.CronJob, handler func(job *sto
 		}
 	}
 
-	if job.DeleteAfterRun {
+	if job.DeleteAfterRun && err == nil {
 		if id, parseErr := uuid.Parse(job.ID); parseErr == nil {
 			if _, err := s.db.ExecContext(s.baseCtx, "DELETE FROM cron_jobs WHERE id = ?", id); err != nil {
 				slog.Warn("cron: failed to delete one-shot job", "job_id", job.ID, "error", err)
@@ -311,7 +311,9 @@ func (s *SQLiteCronStore) executeOneJob(job store.CronJob, handler func(job *sto
 		// For "every" (interval) jobs, compute next run from the original scheduled
 		// time (anchor) instead of "now". This prevents drift and synchronization
 		// of interval-based jobs after server restarts.
-		if schedule.Kind == "every" && scheduledAtMS != nil && schedule.EveryMS != nil && *schedule.EveryMS > 0 {
+		if job.DeleteAfterRun {
+			nextRunValue = nil
+		} else if schedule.Kind == "every" && scheduledAtMS != nil && schedule.EveryMS != nil && *schedule.EveryMS > 0 {
 			anchor := time.UnixMilli(*scheduledAtMS)
 			interval := time.Duration(*schedule.EveryMS) * time.Millisecond
 			// O(1) advance to the next future slot from anchor

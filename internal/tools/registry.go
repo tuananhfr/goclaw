@@ -37,8 +37,18 @@ type Registry struct {
 	afterHooks  []AfterExecuteHook
 }
 
-type BeforeExecuteHook func(ctx context.Context, name string, args map[string]any) *Result
-type AfterExecuteHook func(ctx context.Context, name string, args map[string]any, result *Result) *Result
+type BeforeExecuteHook func(ctx context.Context, reg *Registry, name string, args map[string]any) *Result
+type AfterExecuteHook func(ctx context.Context, reg *Registry, name string, args map[string]any, result *Result) *Result
+
+type executeRegistryKey struct{}
+
+func RegistryFromContext(ctx context.Context) *Registry {
+	if ctx == nil {
+		return nil
+	}
+	reg, _ := ctx.Value(executeRegistryKey{}).(*Registry)
+	return reg
+}
 
 func NewRegistry() *Registry {
 	r := &Registry{
@@ -225,6 +235,7 @@ func (r *Registry) ExecuteWithContext(ctx context.Context, name string, args map
 	if asyncCB != nil {
 		ctx = WithToolAsyncCB(ctx, asyncCB)
 	}
+	ctx = context.WithValue(ctx, executeRegistryKey{}, r)
 
 	// Rate limit check (per session key)
 	if r.rateLimiter != nil && sessionKey != "" {
@@ -249,7 +260,7 @@ func (r *Registry) ExecuteWithContext(ctx context.Context, name string, args map
 	}
 
 	for _, hook := range beforeHooks {
-		if result := hook(ctx, name, args); result != nil {
+		if result := hook(ctx, r, name, args); result != nil {
 			return result
 		}
 	}
@@ -259,7 +270,7 @@ func (r *Registry) ExecuteWithContext(ctx context.Context, name string, args map
 	duration := time.Since(start)
 
 	for _, hook := range afterHooks {
-		if next := hook(ctx, name, args, result); next != nil {
+		if next := hook(ctx, r, name, args, result); next != nil {
 			result = next
 		}
 	}
@@ -397,6 +408,8 @@ func (r *Registry) Clone() *Registry {
 		toolGroups:  make(map[string][]string, len(r.toolGroups)),
 		rateLimiter: r.rateLimiter,
 		scrubbing:   r.scrubbing,
+		beforeHooks: append([]BeforeExecuteHook(nil), r.beforeHooks...),
+		afterHooks:  append([]AfterExecuteHook(nil), r.afterHooks...),
 	}
 	maps.Copy(clone.tools, r.tools)
 	maps.Copy(clone.metadata, r.metadata)

@@ -44,7 +44,7 @@ func TestRunCronToolCall(t *testing.T) {
 		},
 	}
 
-	result, err := runCronToolCall(job, &config.Config{}, reg)
+	result, err := runCronToolCall(job, &config.Config{}, reg, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("runCronToolCall returned error: %v", err)
 	}

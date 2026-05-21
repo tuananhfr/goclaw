@@ -73,6 +73,35 @@ func TestFacebookPostWithComments_SchedulesComments(t *testing.T) {
 	}
 }
 
+func TestFacebookPostWithComments_ExecuteUsesCallingRegistry(t *testing.T) {
+	base := NewRegistry()
+	cron := &fakeCronStore{}
+	base.Register(NewFacebookPostWithCommentsTool(base, cron))
+
+	clone := base.Clone()
+	clone.Register(&fakeFBMCPTool{name: "mcp_fb__fb_create_photo_post", out: `{"id":"123_456"}`})
+	clone.Register(&fakeFBMCPTool{name: "mcp_fb__fb_create_post_comment", out: `{"id":"c1"}`})
+
+	result := clone.ExecuteWithContext(context.Background(), "facebook_post_with_comments", map[string]any{
+		"post_kind":             "photo",
+		"mcp_post_tool_name":    "mcp_fb__fb_create_photo_post",
+		"mcp_comment_tool_name": "mcp_fb__fb_create_post_comment",
+		"post_args":             map[string]any{"image_url": "MEDIA:/x.jpg", "caption": "caption"},
+		"post_comments": map[string]any{
+			"enabled":   true,
+			"window_ms": float64(30 * 60 * 1000),
+			"comments":  []any{"Comment one", "Comment two"},
+		},
+	}, "", "", "", "s1", nil)
+
+	if result.IsError {
+		t.Fatalf("Execute returned error: %s", result.ForLLM)
+	}
+	if len(cron.toolCallJobs) != 2 {
+		t.Fatalf("scheduled jobs = %d, want 2", len(cron.toolCallJobs))
+	}
+}
+
 func TestFacebookPostWithComments_DisabledCommentsOnlyPosts(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(&fakeFBMCPTool{name: "mcp_fb__fb_create_photo_post", out: `{"id":"123_456"}`})
@@ -155,6 +184,30 @@ func TestFacebookPostWithComments_AutoHookBlocksMCPPostWithoutComments(t *testin
 
 	if !result.IsError || !strings.Contains(result.ForLLM, "no final comments") {
 		t.Fatalf("expected pre-post final comment error, got: %#v", result)
+	}
+	if postTool.args != nil {
+		t.Fatalf("post tool should not be called")
+	}
+}
+
+func TestFacebookPostWithComments_AutoHookUsesClonedRegistryMCPTools(t *testing.T) {
+	base := NewRegistry()
+	tool := NewFacebookPostWithCommentsTool(base, &fakeCronStore{})
+	base.AddBeforeExecuteHook(tool.BeforeExecute)
+	base.AddAfterExecuteHook(tool.AfterExecute)
+
+	clone := base.Clone()
+	postTool := &fakeFBMCPTool{name: "mcp_fb__fb_create_photo_post", out: `{"id":"123_456"}`}
+	clone.Register(postTool)
+	clone.Register(&fakeFBMCPTool{name: "mcp_fb__fb_get_comment_schedule_config", out: `{"enabled":true,"comment_schedule":{"enabled":true,"comment_count":2,"window_ms":1800000}}`})
+
+	result := clone.ExecuteWithContext(context.Background(), "mcp_fb__fb_create_photo_post", map[string]any{
+		"image_url": "MEDIA:/x.jpg",
+		"caption":   "caption",
+	}, "", "", "", "s1", nil)
+
+	if !result.IsError || !strings.Contains(result.ForLLM, "no final comments") {
+		t.Fatalf("expected cloned registry hook to read MCP policy and block, got: %#v", result)
 	}
 	if postTool.args != nil {
 		t.Fatalf("post tool should not be called")

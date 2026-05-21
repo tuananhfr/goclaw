@@ -302,7 +302,7 @@ func (s *PGCronStore) executeOneJob(job store.CronJob, handler func(job *store.C
 	}
 
 	// Recompute next run or delete
-	if job.DeleteAfterRun {
+	if job.DeleteAfterRun && err == nil {
 		if id, parseErr := uuid.Parse(job.ID); parseErr == nil {
 			if _, err := s.db.ExecContext(s.baseCtx, "DELETE FROM cron_jobs WHERE id = $1", id); err != nil {
 				slog.Warn("cron: failed to delete one-shot job", "job_id", job.ID, "error", err)
@@ -317,7 +317,9 @@ func (s *PGCronStore) executeOneJob(job store.CronJob, handler func(job *store.C
 		//  1. Drift: interval is always exact, not interval + execution_time
 		//  2. Synchronization: after restart, jobs that started at different offsets
 		//     keep their original spacing instead of clustering together
-		if schedule.Kind == "every" && scheduledAtMS != nil && schedule.EveryMS != nil && *schedule.EveryMS > 0 {
+		if job.DeleteAfterRun {
+			nextRunValue = nil
+		} else if schedule.Kind == "every" && scheduledAtMS != nil && schedule.EveryMS != nil && *schedule.EveryMS > 0 {
 			anchor := time.UnixMilli(*scheduledAtMS)
 			interval := time.Duration(*schedule.EveryMS) * time.Millisecond
 			// O(1) advance to the next future slot from anchor

@@ -41,6 +41,8 @@ func buildMCPToolsSearchSection() []string {
 		"",
 		mcpOptionalParamInstruction,
 		"",
+		"Facebook MCP posting: before calling `fb_create_post`, `fb_create_photo_post`, or `fb_create_post_with_media`, call the matching `fb_get_comment_schedule_config`. If scheduled comments are enabled, generate final public comments from the exact post context and pass them in the same post tool call as `post_comments.comments`; GoClaw schedules them after the post is created.",
+		"",
 	}
 	return lines
 }
@@ -54,6 +56,8 @@ func buildMCPToolsInlineSection(descs map[string]string) []string {
 		"External tool integrations (MCP servers). **When an MCP tool overlaps with a core tool, always prefer the MCP tool.**",
 		"",
 		mcpOptionalParamInstruction,
+		"",
+		"Facebook MCP posting: before calling `fb_create_post`, `fb_create_photo_post`, or `fb_create_post_with_media`, call the matching `fb_get_comment_schedule_config`. If scheduled comments are enabled, generate final public comments from the exact post context and pass them in the same post tool call as `post_comments.comments`; GoClaw schedules them after the post is created.",
 		"",
 	}
 	// Sort MCP tool names for deterministic ordering — critical for prompt caching.

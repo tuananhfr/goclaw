@@ -13,6 +13,7 @@ import (
 	"github.com/nextlevelbuilder/goclaw/internal/gateway"
 	"github.com/nextlevelbuilder/goclaw/internal/gateway/methods"
 	"github.com/nextlevelbuilder/goclaw/internal/heartbeat"
+	mcpbridge "github.com/nextlevelbuilder/goclaw/internal/mcp"
 	"github.com/nextlevelbuilder/goclaw/internal/providers"
 	"github.com/nextlevelbuilder/goclaw/internal/scheduler"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
@@ -41,9 +42,14 @@ func startCronAndHeartbeat(
 	heartbeatTool *tools.HeartbeatTool,
 	heartbeatMethods *methods.HeartbeatMethods,
 	toolsReg *tools.Registry,
+	mcpPool *mcpbridge.Pool,
 ) *heartbeat.Ticker {
 	// Start cron service with job handler (routes through scheduler's cron lane)
-	pgStores.Cron.SetOnJob(makeCronJobHandler(sched, msgBus, cfg, channelMgr, pgStores.Sessions, pgStores.Agents, toolsReg))
+	var mcpGrantChecker mcpbridge.GrantChecker
+	if pgStores.MCP != nil {
+		mcpGrantChecker = mcpbridge.NewStoreGrantChecker(pgStores.MCP, msgBus)
+	}
+	pgStores.Cron.SetOnJob(makeCronJobHandler(sched, msgBus, cfg, channelMgr, pgStores.Sessions, pgStores.Agents, toolsReg, pgStores.MCP, mcpPool, mcpGrantChecker))
 	pgStores.Cron.SetOnEvent(func(event store.CronEvent) {
 		server.BroadcastEvent(*protocol.NewEvent(protocol.EventCron, event))
 	})

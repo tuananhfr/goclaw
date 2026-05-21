@@ -12,6 +12,7 @@ import (
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
 	"github.com/nextlevelbuilder/goclaw/internal/channels"
 	"github.com/nextlevelbuilder/goclaw/internal/config"
+	mcpbridge "github.com/nextlevelbuilder/goclaw/internal/mcp"
 	"github.com/nextlevelbuilder/goclaw/internal/scheduler"
 	"github.com/nextlevelbuilder/goclaw/internal/sessions"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
@@ -25,10 +26,10 @@ import (
 // Safe because cron jobs only fire after Start(), well after this is set.
 var cronHeartbeatWakeFn func(agentID string)
 
-func makeCronJobHandler(sched *scheduler.Scheduler, msgBus *bus.MessageBus, cfg *config.Config, channelMgr *channels.Manager, sessionMgr store.SessionStore, agentStore store.AgentStore, toolsReg *tools.Registry) func(job *store.CronJob) (*store.CronJobResult, error) {
+func makeCronJobHandler(sched *scheduler.Scheduler, msgBus *bus.MessageBus, cfg *config.Config, channelMgr *channels.Manager, sessionMgr store.SessionStore, agentStore store.AgentStore, toolsReg *tools.Registry, mcpStore store.MCPServerStore, mcpPool *mcpbridge.Pool, mcpGrantChecker mcpbridge.GrantChecker) func(job *store.CronJob) (*store.CronJobResult, error) {
 	return func(job *store.CronJob) (*store.CronJobResult, error) {
 		if job.Payload.Kind == "tool_call" {
-			return runCronToolCall(job, cfg, toolsReg)
+			return runCronToolCall(job, cfg, toolsReg, mcpStore, mcpPool, mcpGrantChecker)
 		}
 
 		agentID := job.AgentID
@@ -163,7 +164,7 @@ func makeCronJobHandler(sched *scheduler.Scheduler, msgBus *bus.MessageBus, cfg 
 	}
 }
 
-func runCronToolCall(job *store.CronJob, cfg *config.Config, toolsReg *tools.Registry) (*store.CronJobResult, error) {
+func runCronToolCall(job *store.CronJob, cfg *config.Config, toolsReg *tools.Registry, mcpStore store.MCPServerStore, mcpPool *mcpbridge.Pool, mcpGrantChecker mcpbridge.GrantChecker) (*store.CronJobResult, error) {
 	if toolsReg == nil {
 		return nil, fmt.Errorf("cron tool-call job %s cannot run: tool registry unavailable", job.ID)
 	}
@@ -181,8 +182,13 @@ func runCronToolCall(job *store.CronJob, cfg *config.Config, toolsReg *tools.Reg
 		ctx = store.WithAgentID(ctx, aid)
 	}
 
+	execReg, err := registryForCronToolCall(ctx, job, toolsReg, mcpStore, mcpPool, mcpGrantChecker)
+	if err != nil {
+		return nil, err
+	}
+
 	sessionKey := sessions.BuildCronSessionKey("tool-call", job.ID)
-	result := toolsReg.ExecuteWithContext(ctx, job.Payload.ToolName, job.Payload.Args, "cron", "", "", sessionKey, nil)
+	result := execReg.ExecuteWithContext(ctx, job.Payload.ToolName, job.Payload.Args, "cron", "", "", sessionKey, nil)
 	if result == nil {
 		return nil, fmt.Errorf("tool %q returned nil result", job.Payload.ToolName)
 	}
@@ -197,6 +203,42 @@ func runCronToolCall(job *store.CronJob, cfg *config.Config, toolsReg *tools.Reg
 		return &store.CronJobResult{Content: content}, fmt.Errorf("tool %q failed: %s", job.Payload.ToolName, content)
 	}
 	return &store.CronJobResult{Content: content}, nil
+}
+
+func registryForCronToolCall(ctx context.Context, job *store.CronJob, base *tools.Registry, mcpStore store.MCPServerStore, mcpPool *mcpbridge.Pool, mcpGrantChecker mcpbridge.GrantChecker) (*tools.Registry, error) {
+	if base == nil || !strings.HasPrefix(job.Payload.ToolName, "mcp_") {
+		return base, nil
+	}
+	if _, ok := base.Get(job.Payload.ToolName); ok {
+		return base, nil
+	}
+	if mcpStore == nil {
+		return base, nil
+	}
+	agentID, err := uuid.Parse(job.AgentID)
+	if err != nil {
+		return nil, fmt.Errorf("cron MCP tool-call job %s cannot load MCP tools: invalid agent_id %q", job.ID, job.AgentID)
+	}
+
+	reg := base.Clone()
+	opts := []mcpbridge.ManagerOption{mcpbridge.WithStore(mcpStore)}
+	if mcpPool != nil {
+		opts = append(opts, mcpbridge.WithPool(mcpPool))
+	}
+	if mcpGrantChecker != nil {
+		opts = append(opts, mcpbridge.WithGrantChecker(mcpGrantChecker))
+	}
+	mcpMgr := mcpbridge.NewManager(reg, opts...)
+	if err := mcpMgr.LoadForAgent(ctx, agentID, ""); err != nil {
+		return nil, fmt.Errorf("cron MCP tool-call job %s failed to load MCP tools: %w", job.ID, err)
+	}
+	if mcpMgr.IsSearchMode() {
+		reg.SetDeferredActivator(mcpMgr.ActivateToolIfDeferred)
+		if _, ok := reg.Get(job.Payload.ToolName); !ok {
+			mcpMgr.ActivateToolIfDeferred(job.Payload.ToolName)
+		}
+	}
+	return reg, nil
 }
 
 // resolveCronPeerKind infers peer kind from the cron job's user ID.
