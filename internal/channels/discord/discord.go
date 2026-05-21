@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"mime"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +24,8 @@ import (
 )
 
 const pairingDebounceTime = 60 * time.Second
+
+var outboundImagePathMarkerRE = regexp.MustCompile(`<media:image\b[^>]*\bpath=["']([^"']+)["'][^>]*>`)
 
 // Channel connects to Discord via the Bot API using gateway events.
 type Channel struct {
@@ -203,6 +209,14 @@ func (c *Channel) Send(ctx context.Context, msg bus.OutboundMessage) (err error)
 		}
 	}
 
+	// Some agents emit local media markers in final text instead of calling
+	// send_file. Convert those markers into real Discord attachments here so
+	// users see the image instead of an internal container path.
+	if mediaContent, mediaAttachments := extractOutboundImageMarkers(content); len(mediaAttachments) > 0 {
+		content = mediaContent
+		msg.Media = append(mediaAttachments, msg.Media...)
+	}
+
 	// Handle outbound media attachments: send files via Discord's file upload API.
 	if len(msg.Media) > 0 {
 		// Delete placeholder if present
@@ -286,6 +300,54 @@ func lastIndexByte(s string, c byte) int {
 		}
 	}
 	return -1
+}
+
+func extractOutboundImageMarkers(content string) (string, []bus.MediaAttachment) {
+	if content == "" || !strings.Contains(content, "<media:image") {
+		return content, nil
+	}
+
+	var attachments []bus.MediaAttachment
+	seen := make(map[string]struct{})
+
+	replaced := outboundImagePathMarkerRE.ReplaceAllStringFunc(content, func(marker string) string {
+		matches := outboundImagePathMarkerRE.FindStringSubmatch(marker)
+		if len(matches) < 2 {
+			return marker
+		}
+
+		filePath := strings.TrimSpace(strings.TrimPrefix(matches[1], "MEDIA:"))
+		if filePath == "" {
+			return marker
+		}
+		info, err := os.Stat(filePath)
+		if err != nil || info.IsDir() {
+			return marker
+		}
+		if _, ok := seen[filePath]; ok {
+			return ""
+		}
+		seen[filePath] = struct{}{}
+
+		attachments = append(attachments, bus.MediaAttachment{
+			URL:         filePath,
+			ContentType: contentTypeFromPath(filePath),
+		})
+		return ""
+	})
+
+	if len(attachments) == 0 {
+		return content, nil
+	}
+	return strings.TrimSpace(replaced), attachments
+}
+
+func contentTypeFromPath(filePath string) string {
+	ext := strings.ToLower(filepath.Ext(filePath))
+	if ct := mime.TypeByExtension(ext); ct != "" {
+		return ct
+	}
+	return "application/octet-stream"
 }
 
 func (c *Channel) currentTypingCtrl(channelID string) *typing.Controller {

@@ -1,9 +1,14 @@
 package discord
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -103,6 +108,56 @@ func TestSendKeepsTypingActiveWhenDeliveryFails(t *testing.T) {
 	}
 	if stored, ok := ch.typingCtrls.Load("channel-1"); !ok || stored != ctrl {
 		t.Fatal("expected typing controller to remain active after delivery failure")
+	}
+}
+
+func TestSendConvertsOutboundImageMarkerToDiscordAttachment(t *testing.T) {
+	imagePath := filepath.Join(t.TempDir(), "final.png")
+	if err := os.WriteFile(imagePath, []byte("fake-png-bytes"), 0o644); err != nil {
+		t.Fatalf("write image fixture: %v", err)
+	}
+
+	var sawRequest atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawRequest.Store(true)
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		if r.URL.Path != "/channels/channel-1/messages" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if !strings.Contains(r.Header.Get("Content-Type"), "multipart/form-data") {
+			t.Fatalf("expected multipart media upload, got %q", r.Header.Get("Content-Type"))
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
+		}
+		if !bytes.Contains(body, []byte("fake-png-bytes")) {
+			t.Fatal("expected uploaded image bytes in Discord request")
+		}
+		if bytes.Contains(body, []byte("<media:image")) {
+			t.Fatal("expected media marker to be stripped from message content")
+		}
+		if !bytes.Contains(body, []byte("final image")) {
+			t.Fatal("expected surrounding text content to be preserved")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"msg-1","channel_id":"channel-1","content":"ok"}`))
+	}))
+	defer server.Close()
+
+	ch := newTestChannel(t, server)
+	err := ch.Send(context.Background(), bus.OutboundMessage{
+		Channel: "discord",
+		ChatID:  "channel-1",
+		Content: "final image:\n\n<media:image path=\"" + imagePath + "\">",
+	})
+	if err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	if !sawRequest.Load() {
+		t.Fatal("expected Discord request")
 	}
 }
 
