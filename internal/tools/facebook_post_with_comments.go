@@ -45,6 +45,8 @@ type fbScheduledComment struct {
 	Rationale string `json:"rationale,omitempty"`
 }
 
+type fbAutoCommentHookSkipKey struct{}
+
 func NewFacebookPostWithCommentsTool(registry *Registry, cron store.CronStore) *FacebookPostWithCommentsTool {
 	return &FacebookPostWithCommentsTool{registry: registry, cron: cron}
 }
@@ -130,7 +132,8 @@ func (t *FacebookPostWithCommentsTool) Execute(ctx context.Context, args map[str
 		return ErrorResult(err.Error())
 	}
 
-	postResult := t.registry.ExecuteWithContext(ctx, postTool, postArgs, ToolChannelFromCtx(ctx), ToolChatIDFromCtx(ctx), ToolPeerKindFromCtx(ctx), ToolSessionKeyFromCtx(ctx), nil)
+	internalCtx := context.WithValue(ctx, fbAutoCommentHookSkipKey{}, true)
+	postResult := t.registry.ExecuteWithContext(internalCtx, postTool, postArgs, ToolChannelFromCtx(ctx), ToolChatIDFromCtx(ctx), ToolPeerKindFromCtx(ctx), ToolSessionKeyFromCtx(ctx), nil)
 	if postResult == nil {
 		return ErrorResult(fmt.Sprintf("post tool %q returned nil result", postTool))
 	}
@@ -164,6 +167,72 @@ func (t *FacebookPostWithCommentsTool) Execute(ctx context.Context, args map[str
 	}
 	b, _ := json.MarshalIndent(out, "", "  ")
 	return NewResult(string(b))
+}
+
+func (t *FacebookPostWithCommentsTool) BeforeExecute(ctx context.Context, name string, args map[string]any) *Result {
+	if ctx.Value(fbAutoCommentHookSkipKey{}) == true || !isFacebookMCPPostTool(name) {
+		return nil
+	}
+	plan, _, err := t.resolveCommentPlan(ctx, t.autoHookArgs(name, args), stringArg(args, "page_id"))
+	if err != nil {
+		return ErrorResult(err.Error())
+	}
+	if plan.Enabled && len(plan.Comments) == 0 {
+		return ErrorResult(fmt.Sprintf("Facebook MCP comment schedule is enabled for this page; include %d final context-aware comments in this same %s call using post_comments.comments", fbMaxInt(plan.Count, 1), name))
+	}
+	return nil
+}
+
+func (t *FacebookPostWithCommentsTool) AfterExecute(ctx context.Context, name string, args map[string]any, result *Result) *Result {
+	if ctx.Value(fbAutoCommentHookSkipKey{}) == true || !isFacebookMCPPostTool(name) || result == nil || result.IsError {
+		return nil
+	}
+	plan, source, err := t.resolveCommentPlan(ctx, t.autoHookArgs(name, args), stringArg(args, "page_id"))
+	if err != nil || !plan.Enabled || len(plan.Comments) == 0 {
+		return nil
+	}
+	postID, _, err := extractFacebookPostID(result)
+	if err != nil {
+		return nil
+	}
+	commentTool := companionFacebookMCPTool(name, "__fb_create_post_comment")
+	if _, ok := t.registry.Get(commentTool); !ok {
+		return nil
+	}
+	scheduled, err := t.scheduleComments(ctx, postID, stringArg(args, "page_id"), commentTool, plan)
+	if err != nil {
+		return ErrorResult(fmt.Sprintf("Facebook post was created but scheduling comments failed: %v", err))
+	}
+	data := map[string]any{
+		"post_id":             postID,
+		"comment_plan_source": source,
+		"scheduled_comments":  scheduled,
+	}
+	b, _ := json.MarshalIndent(data, "", "  ")
+	suffix := "\n\nGoClaw scheduled Facebook comments:\n" + string(b)
+	next := *result
+	if next.ForLLM != "" {
+		next.ForLLM += suffix
+	} else {
+		next.ForLLM = suffix
+	}
+	if next.ForUser != "" {
+		next.ForUser += suffix
+	}
+	return &next
+}
+
+func (t *FacebookPostWithCommentsTool) autoHookArgs(postTool string, args map[string]any) map[string]any {
+	out := map[string]any{}
+	if v, ok := args["post_comments"]; ok {
+		out["post_comments"] = v
+	}
+	if configTool := companionFacebookMCPTool(postTool, "__fb_get_comment_schedule_config"); configTool != "" {
+		if _, ok := t.registry.Get(configTool); ok {
+			out["mcp_comment_schedule_tool_name"] = configTool
+		}
+	}
+	return out
 }
 
 func (t *FacebookPostWithCommentsTool) resolveCommentPlan(ctx context.Context, args map[string]any, pageID string) (fbCommentPlan, string, error) {
@@ -266,6 +335,21 @@ func facebookPostToolSuffix(kind string) (string, error) {
 	default:
 		return "", fmt.Errorf("invalid post_kind %q (must be text, photo, or media)", kind)
 	}
+}
+
+func isFacebookMCPPostTool(name string) bool {
+	return strings.HasPrefix(name, "mcp_") &&
+		(strings.HasSuffix(name, "__fb_create_post") ||
+			strings.HasSuffix(name, "__fb_create_photo_post") ||
+			strings.HasSuffix(name, "__fb_create_post_with_media"))
+}
+
+func companionFacebookMCPTool(name, suffix string) string {
+	idx := strings.LastIndex(name, "__")
+	if idx < 0 {
+		return ""
+	}
+	return name[:idx] + suffix
 }
 
 func (t *FacebookPostWithCommentsTool) resolveTool(explicit, suffix string) (string, error) {

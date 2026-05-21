@@ -32,7 +32,13 @@ type Registry struct {
 	// deferredActivator is called when a tool is not in the registry but may be
 	// a deferred MCP tool. Returns true if the tool was successfully activated.
 	deferredActivator func(name string) bool
+
+	beforeHooks []BeforeExecuteHook
+	afterHooks  []AfterExecuteHook
 }
+
+type BeforeExecuteHook func(ctx context.Context, name string, args map[string]any) *Result
+type AfterExecuteHook func(ctx context.Context, name string, args map[string]any, result *Result) *Result
 
 func NewRegistry() *Registry {
 	r := &Registry{
@@ -95,6 +101,24 @@ func (r *Registry) RegisterWithMetadata(tool Tool, meta ToolMetadata) {
 	r.tools[name] = tool
 	meta.Name = name
 	r.metadata[name] = meta
+}
+
+func (r *Registry) AddBeforeExecuteHook(h BeforeExecuteHook) {
+	if h == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.beforeHooks = append(r.beforeHooks, h)
+}
+
+func (r *Registry) AddAfterExecuteHook(h AfterExecuteHook) {
+	if h == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.afterHooks = append(r.afterHooks, h)
 }
 
 // GetMetadata returns capability metadata for a tool.
@@ -176,6 +200,8 @@ func (r *Registry) Execute(ctx context.Context, name string, args map[string]any
 func (r *Registry) ExecuteWithContext(ctx context.Context, name string, args map[string]any, channel, chatID, peerKind, sessionKey string, asyncCB AsyncCallback) *Result {
 	r.mu.RLock()
 	tool, ok := r.resolve(name)
+	beforeHooks := append([]BeforeExecuteHook(nil), r.beforeHooks...)
+	afterHooks := append([]AfterExecuteHook(nil), r.afterHooks...)
 	r.mu.RUnlock()
 
 	if !ok {
@@ -222,9 +248,21 @@ func (r *Registry) ExecuteWithContext(ctx context.Context, name string, args map
 		}
 	}
 
+	for _, hook := range beforeHooks {
+		if result := hook(ctx, name, args); result != nil {
+			return result
+		}
+	}
+
 	start := time.Now()
 	result := safeExecute(tool, ctx, args)
 	duration := time.Since(start)
+
+	for _, hook := range afterHooks {
+		if next := hook(ctx, name, args, result); next != nil {
+			result = next
+		}
+	}
 
 	// Scrub credentials from tool output before returning to LLM
 	if r.scrubbing {

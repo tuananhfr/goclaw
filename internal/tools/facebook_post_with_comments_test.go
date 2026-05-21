@@ -139,6 +139,57 @@ func TestFacebookPostWithComments_MCPPolicyRequiresFinalComments(t *testing.T) {
 	}
 }
 
+func TestFacebookPostWithComments_AutoHookBlocksMCPPostWithoutComments(t *testing.T) {
+	reg := NewRegistry()
+	postTool := &fakeFBMCPTool{name: "mcp_fb__fb_create_photo_post", out: `{"id":"123_456"}`}
+	reg.Register(postTool)
+	reg.Register(&fakeFBMCPTool{name: "mcp_fb__fb_get_comment_schedule_config", out: `{"enabled":true,"comment_schedule":{"enabled":true,"comment_count":2,"window_ms":1800000}}`})
+	tool := NewFacebookPostWithCommentsTool(reg, &fakeCronStore{})
+	reg.AddBeforeExecuteHook(tool.BeforeExecute)
+	reg.AddAfterExecuteHook(tool.AfterExecute)
+
+	result := reg.ExecuteWithContext(context.Background(), "mcp_fb__fb_create_photo_post", map[string]any{
+		"image_url": "MEDIA:/x.jpg",
+		"caption":   "caption",
+	}, "", "", "", "s1", nil)
+
+	if !result.IsError || !strings.Contains(result.ForLLM, "no final comments") {
+		t.Fatalf("expected pre-post final comment error, got: %#v", result)
+	}
+	if postTool.args != nil {
+		t.Fatalf("post tool should not be called")
+	}
+}
+
+func TestFacebookPostWithComments_AutoHookSchedulesAfterDirectMCPPost(t *testing.T) {
+	reg := NewRegistry()
+	reg.Register(&fakeFBMCPTool{name: "mcp_fb__fb_create_photo_post", out: `{"id":"123_456"}`})
+	reg.Register(&fakeFBMCPTool{name: "mcp_fb__fb_create_post_comment", out: `{"id":"c1"}`})
+	reg.Register(&fakeFBMCPTool{name: "mcp_fb__fb_get_comment_schedule_config", out: `{"enabled":true,"comment_schedule":{"enabled":true,"comment_count":2,"window_ms":1800000,"random_order":false}}`})
+	cron := &fakeCronStore{}
+	tool := NewFacebookPostWithCommentsTool(reg, cron)
+	reg.AddBeforeExecuteHook(tool.BeforeExecute)
+	reg.AddAfterExecuteHook(tool.AfterExecute)
+
+	result := reg.ExecuteWithContext(context.Background(), "mcp_fb__fb_create_photo_post", map[string]any{
+		"image_url": "MEDIA:/x.jpg",
+		"caption":   "caption",
+		"post_comments": map[string]any{
+			"comments": []any{"Context comment one", "Context comment two"},
+		},
+	}, "", "", "", "s1", nil)
+
+	if result.IsError {
+		t.Fatalf("Execute returned error: %s", result.ForLLM)
+	}
+	if len(cron.toolCallJobs) != 2 {
+		t.Fatalf("scheduled jobs = %d, want 2", len(cron.toolCallJobs))
+	}
+	if !strings.Contains(result.ForLLM, "GoClaw scheduled Facebook comments") {
+		t.Fatalf("result did not include scheduling summary: %s", result.ForLLM)
+	}
+}
+
 func TestFacebookPostWithComments_MissingPostIDDoesNotSchedule(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(&fakeFBMCPTool{name: "mcp_fb__fb_create_photo_post", out: `{"ok":true}`})
