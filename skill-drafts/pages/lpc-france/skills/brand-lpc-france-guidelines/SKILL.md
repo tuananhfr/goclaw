@@ -18,7 +18,7 @@ This brand skill controls LPC France positioning, bilingual format, page voice, 
 - Primary language: French.
 - Secondary language: English.
 - Default content format: French section first, English section below.
-- Watermark safe zone: top left. Keep this area visually clean.
+- Watermark safe zone: use the current page watermark config when available. Fallback: top left. Keep this area visually clean.
 - Audience: French and international construction teams, architecture studios, engineering offices, developers, contractors, and partners that may outsource BIM, design support, drafting, or technical drawing work.
 - Core trust signal: technical clarity, reliable workflow, bilingual communication, and practical construction expertise.
 
@@ -124,7 +124,7 @@ French footer:
 
 ```text
 LPC France - Lam Pham Construction Co., Ltd.
-Adresse : 226 Le Trong Tan, Thanh Xuan, Hanoi, Vietnam
+Adresse : 226 Le Trong Tan, quartier Phuong Liet, Hanoi, Vietnam
 Hotline / WhatsApp : +84 911 29 96 96
 Site web : https://lpc.vn
 Email : info@lpc.vn
@@ -134,7 +134,7 @@ English footer:
 
 ```text
 LPC France - Lam Pham Construction Co., Ltd.
-Address: 226 Le Trong Tan, Thanh Xuan, Hanoi, Vietnam
+Address: 226 Le Trong Tan, Phuong Liet Ward, Hanoi, Vietnam
 Hotline / WhatsApp: +84 911 29 96 96
 Website: https://lpc.vn
 Email: info@lpc.vn
@@ -146,7 +146,7 @@ Default bilingual footer:
 
 ```text
 LPC France - Lam Pham Construction Co., Ltd.
-Adresse / Address : 226 Le Trong Tan, Thanh Xuan, Hanoi, Vietnam
+Adresse / Address : 226 Le Trong Tan, Phuong Liet Ward, Hanoi, Vietnam
 Hotline / WhatsApp : +84 911 29 96 96
 Site web / Website : https://lpc.vn
 Email : info@lpc.vn
@@ -177,8 +177,11 @@ Selection guidance:
 
 For LPC France image prompts, briefs, or QA:
 
-- Watermark is placed at top left. Keep that area clean and free from important content.
-- Do not place headline text, CTA, fine technical notes, important drawing details, faces, logos, QR codes, or project identifiers in the top-left watermark zone.
+- Watermark is handled by the existing system/tooling. Do not instruct the agent to add, move, resize, or modify watermark assets.
+- Get the current page watermark config when an `fb_get_watermark_config` tool is available, and treat that configured overlay position as the source of truth.
+- In a two-step textless-background plus `render_creative` workflow, pass the current watermark config into `render_creative.watermark`.
+- If the watermark config cannot be fetched, use the fallback top-left safe zone and state that exact runtime watermark config was unavailable.
+- Do not place headline text, CTA, fine technical notes, important drawing details, faces, logos, QR codes, or project identifiers in the configured watermark zone.
 - Prefer realistic technical visuals: BIM model screenshots, clean architectural/engineering drawing style, construction site details, slab systems, technical overlays, coordinated plan/model comparisons, or professional team workflow scenes.
 - Use a restrained B2B visual tone: clean, technical, credible, not consumer-marketing-heavy.
 - Keep text readable on mobile. Avoid dense engineering notes inside feed images.
@@ -195,6 +198,6 @@ Before returning LPC France content, verify:
 - CTA exists and matches the lead-generation objective.
 - The fixed LPC France footer is used unless the user provides a replacement.
 - Hashtags fit the French-market/B2B construction route.
-- Watermark safe zone at top left is protected in image briefs.
+- Current watermark config is protected in image briefs, with top left used only as fallback.
 - Claims about engineering performance, cost, timing, ESG, compliance, or approvals are cautious and supported.
 - The output positions LPC France as a technical outsourcing partner, not a generic materials page.

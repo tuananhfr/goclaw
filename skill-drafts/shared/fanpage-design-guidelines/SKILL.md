@@ -8,7 +8,7 @@ description: Quy trình cho agent design fanpage: tạo ảnh trực tiếp khi 
 
 Use this skill for agents creating final images, image prompts, layout briefs, visual directions, asset QA, image-generation instructions, storyboard frames, or Facebook post design guidance.
 
-This skill is brand-neutral. The design agent must use the Lead's task packet for brand identity, visual style, logo/watermark safe zones, and campaign context.
+This skill is brand-neutral. The design agent must use the Lead's task packet for brand identity, visual style, current logo/watermark config, fallback safe zones, and campaign context.
 
 ## Core Rule
 
@@ -18,13 +18,13 @@ When the task asks to create, generate, design, make, or produce an image, defau
 
 Return only a prompt, layout brief, direction, or QA checklist when the user or Lead explicitly asks for that output type, or when the image-generation tool is unavailable.
 
-If the Lead provides watermark or logo safe zones, do not place important text, CTA, price, faces, product details, QR codes, or small legal text in those areas.
+If the Lead provides a current watermark config, treat its configured overlay position as the source of truth. If only fallback watermark/logo safe zones are provided, do not place important text, CTA, price, faces, product details, QR codes, or small legal text in those areas.
 
 Do not instruct tools to add, move, resize, or modify watermark assets unless the Lead explicitly asks. If watermark is handled by system tooling, only reserve clean space for it.
 
 Create and return one final image by default. Generate multiple variants only when the Lead explicitly asks for comparison variants.
 
-When using a two-step flow where `create_image` makes a textless background and another tool renders final typography, call `create_image` with `deliver=false` and attach only the final flattened image.
+When using a two-step flow where `create_image` makes a textless background and `render_creative` renders final typography, call `create_image` with `deliver=false`, pass the current watermark config into `render_creative.watermark` when available, and attach only the final flattened image.
 
 On-image text must never be clipped by canvas edges. Keep readable padding around text and rerender if any letter is cut off.
 
@@ -43,7 +43,7 @@ Expect:
 - Required on-image text.
 - Product/subject focus.
 - Visual style, colors, on-image fonts, mood.
-- Logo/watermark safe zones.
+- Current logo/watermark config when available, plus fallback safe zones.
 - Must include / must avoid.
 - Number of images/options.
 - Output type: final image, prompt, layout brief, QA checklist, or final image request.
@@ -81,7 +81,7 @@ When asked to create a final image, build the prompt internally and call the ava
 - Exact format, size, or aspect ratio.
 - Brand colors, mood, style, product, setting, and subject priority.
 - On-image typography/font direction for headline and supporting text, if provided.
-- Composition, text area, CTA area, and safe zones.
+- Composition, text area, CTA area, and safe zones based on the current watermark config when available.
 - Exact on-image text if required.
 - Negative instructions such as no unrelated logos, no distorted text, no cropped product, no text inside watermark zones.
 
@@ -107,8 +107,8 @@ COMPOSITION:
 TEXT ON IMAGE:
 [Exact text, if any.]
 
-SAFE ZONES:
-[Logo/watermark/overlay areas to keep clear.]
+WATERMARK / SAFE ZONES:
+[Current watermark config if available, otherwise logo/watermark/overlay areas to keep clear.]
 
 NEGATIVE INSTRUCTIONS:
 [No unrelated logos, no distorted text, no cropped product, etc.]

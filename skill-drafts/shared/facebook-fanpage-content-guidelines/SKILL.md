@@ -18,7 +18,7 @@ Before returning any Facebook fanpage content, verify:
 - Footer/footage is present when project information is available.
 - Hashtags are separated from footer by one blank line.
 - The first hashtag is the brand hashtag when a brand hashtag is known.
-- Image brief includes logo/watermark placement when images are requested.
+- Image brief includes current logo/watermark config or fallback placement when images are requested.
 - No unsupported claim, wrong technical term, or unrelated brand logo is introduced.
 
 ## Post Structure
@@ -102,10 +102,12 @@ Use these rules when creating image prompts, image briefs, or reviewing generate
 - Prefer real, product-specific, or brand-specific visuals over generic stock-like images.
 - Images must be clear, sharp, and not crop important text, product, logo, or CTA.
 - Images must include the brand logo or watermark when brand assets are available.
+- When a runtime watermark system is available, use the current watermark config as the source of truth for reserved overlay space. Do not rely on a hardcoded safe zone unless the config cannot be fetched.
 - Do not use images containing another brand's logo unless the source/permission is explicitly required and mentioned.
 - Keep layout readable on mobile.
 - For product posts, prioritize product realism and appetizing/usable detail.
 - Do not place text too close to image edges.
+- Do not place important text, CTA, QR codes, faces, product details, or small legal text inside configured watermark overlay zones.
 
 ## Visual Layout Heuristics
 
@@ -114,6 +116,7 @@ Use these rules when creating image prompts, image briefs, or reviewing generate
 - Use one coherent background/color direction per post or album. Do not mix unrelated background systems in the same post set.
 - Make sure text contrast is high and typography is readable at feed size.
 - Treat font family instructions as on-image typography instructions only.
+- For two-step images, generate a textless background first, then render final typography with `render_creative`; pass the current watermark config into `render_creative.watermark` when available.
 
 ## Facebook Image Sizes
 

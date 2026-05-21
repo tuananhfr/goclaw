@@ -15,6 +15,7 @@ import (
 	"github.com/nextlevelbuilder/goclaw/internal/scheduler"
 	"github.com/nextlevelbuilder/goclaw/internal/sessions"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
+	"github.com/nextlevelbuilder/goclaw/internal/tools"
 )
 
 // makeCronJobHandler creates a cron job handler that routes through the scheduler's cron lane.
@@ -24,8 +25,12 @@ import (
 // Safe because cron jobs only fire after Start(), well after this is set.
 var cronHeartbeatWakeFn func(agentID string)
 
-func makeCronJobHandler(sched *scheduler.Scheduler, msgBus *bus.MessageBus, cfg *config.Config, channelMgr *channels.Manager, sessionMgr store.SessionStore, agentStore store.AgentStore) func(job *store.CronJob) (*store.CronJobResult, error) {
+func makeCronJobHandler(sched *scheduler.Scheduler, msgBus *bus.MessageBus, cfg *config.Config, channelMgr *channels.Manager, sessionMgr store.SessionStore, agentStore store.AgentStore, toolsReg *tools.Registry) func(job *store.CronJob) (*store.CronJobResult, error) {
 	return func(job *store.CronJob) (*store.CronJobResult, error) {
+		if job.Payload.Kind == "tool_call" {
+			return runCronToolCall(job, cfg, toolsReg)
+		}
+
 		agentID := job.AgentID
 		if agentID == "" && agentStore != nil {
 			// Resolve real default agent from DB instead of using literal "default" string.
@@ -156,6 +161,42 @@ func makeCronJobHandler(sched *scheduler.Scheduler, msgBus *bus.MessageBus, cfg 
 
 		return cronResult, nil
 	}
+}
+
+func runCronToolCall(job *store.CronJob, cfg *config.Config, toolsReg *tools.Registry) (*store.CronJobResult, error) {
+	if toolsReg == nil {
+		return nil, fmt.Errorf("cron tool-call job %s cannot run: tool registry unavailable", job.ID)
+	}
+	if job.Payload.ToolName == "" {
+		return nil, fmt.Errorf("cron tool-call job %s missing toolName", job.ID)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Cron.JobTimeoutDuration())
+	defer cancel()
+	ctx = store.WithTenantID(ctx, job.TenantID)
+	if job.UserID != "" {
+		ctx = store.WithUserID(ctx, job.UserID)
+	}
+	if aid, err := uuid.Parse(job.AgentID); err == nil {
+		ctx = store.WithAgentID(ctx, aid)
+	}
+
+	sessionKey := sessions.BuildCronSessionKey("tool-call", job.ID)
+	result := toolsReg.ExecuteWithContext(ctx, job.Payload.ToolName, job.Payload.Args, "cron", "", "", sessionKey, nil)
+	if result == nil {
+		return nil, fmt.Errorf("tool %q returned nil result", job.Payload.ToolName)
+	}
+	content := result.ForLLM
+	if content == "" {
+		content = result.ForUser
+	}
+	if result.IsError {
+		if content == "" {
+			content = "tool returned error"
+		}
+		return &store.CronJobResult{Content: content}, fmt.Errorf("tool %q failed: %s", job.Payload.ToolName, content)
+	}
+	return &store.CronJobResult{Content: content}, nil
 }
 
 // resolveCronPeerKind infers peer kind from the cron job's user ID.

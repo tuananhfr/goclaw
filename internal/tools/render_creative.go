@@ -393,6 +393,23 @@ func moveLayerAwayFromZone(fnt *opentype.Font, layer renderTextLayer, bounds, zo
 	box, ok := measureLayerBounds(fnt, layer)
 	if ok {
 		layer = shiftLayerInsideBounds(layer, box, bounds, marginX, marginY)
+		box, ok = measureLayerBounds(fnt, layer)
+		if ok && rectIntersects(box, zone) {
+			layer = shiftLayerOutsideZone(layer, box, bounds, zone, marginY)
+			if box, ok = measureLayerBounds(fnt, layer); ok {
+				layer = shiftLayerInsideBounds(layer, box, bounds, marginX, marginY)
+			}
+		}
+	}
+	return layer
+}
+
+func shiftLayerOutsideZone(layer renderTextLayer, box, bounds, zone image.Rectangle, marginY int) renderTextLayer {
+	zoneCenterY := zone.Min.Y + zone.Dy()/2
+	if zoneCenterY <= bounds.Min.Y+bounds.Dy()/2 {
+		layer.Y += zone.Max.Y + marginY - box.Min.Y
+	} else {
+		layer.Y -= box.Max.Y - (zone.Min.Y - marginY)
 	}
 	return layer
 }

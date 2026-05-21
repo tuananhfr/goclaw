@@ -23,6 +23,7 @@ func (p *CodexProvider) buildRequestBody(req ChatRequest, stream bool) map[strin
 
 	var instructions string
 	var input []any
+	seenFunctionCalls := make(map[string]struct{})
 
 	for _, m := range req.Messages {
 		switch m.Role {
@@ -64,6 +65,7 @@ func (p *CodexProvider) buildRequestBody(req ChatRequest, stream bool) map[strin
 				for _, tc := range m.ToolCalls {
 					argsJSON, _ := json.Marshal(tc.Arguments)
 					callID := toFcID(tc.ID)
+					seenFunctionCalls[callID] = struct{}{}
 					input = append(input, map[string]any{
 						"type":      "function_call",
 						"id":        callID,
@@ -88,9 +90,18 @@ func (p *CodexProvider) buildRequestBody(req ChatRequest, stream bool) map[strin
 			}
 
 		case "tool":
+			callID := toFcID(m.ToolCallID)
+			if _, ok := seenFunctionCalls[callID]; !ok {
+				// Responses API rejects orphaned function_call_output items with:
+				// "No tool call found for function call output with call_id ...".
+				// Session repair usually removes these, but provider serialization
+				// is the last boundary before the HTTP request and must not emit
+				// structurally invalid input.
+				continue
+			}
 			input = append(input, map[string]any{
 				"type":    "function_call_output",
-				"call_id": toFcID(m.ToolCallID),
+				"call_id": callID,
 				"output":  m.Content,
 			})
 		}

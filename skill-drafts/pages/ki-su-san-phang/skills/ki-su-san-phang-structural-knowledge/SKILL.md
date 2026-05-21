@@ -170,7 +170,7 @@ For design tasks, request images that show:
 
 - Flat slab diagram, UBoot module concept, reinforcement detail, section cut, structural model, drawing checklist, standard comparison table, or construction site detail.
 - Clean technical layout with enough negative space for a short headline.
-- Top-left watermark safe zone reserved.
+- Current watermark config reserved when available; top-left watermark safe zone is only the fallback.
 - No confidential project information or unrelated logos.
 
 For highly technical diagrams, prioritize clarity over visual drama.

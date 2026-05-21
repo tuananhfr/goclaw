@@ -28,11 +28,14 @@
   },
   "layout_rules": {
     "preferred_zones": ["upper_left", "upper_right", "mid_left"],
-    "avoid_zones": ["top_center_logo", "bottom_right_contact"],
+    "avoid_zones": ["current_watermark_config"],
+    "fallback_avoid_zones": ["top_center_logo", "bottom_right_contact"],
+    "watermark_config_source": "fb_get_watermark_config",
+    "render_creative_watermark_param": true,
     "generate_variants": 1,
     "default_variants": 1,
     "max_variants": 1,
-    "background_prompt_hint": "no text, leave clean negative space outside top-center logo and bottom-right contact watermark zones",
+    "background_prompt_hint": "no text, leave clean negative space around the configured watermark overlay; if watermark config is unavailable, keep top-center logo and bottom-right contact zones clear",
     "reserved_areas": [
       {
         "name": "top_center_logo_watermark",

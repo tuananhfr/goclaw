@@ -92,6 +92,48 @@ func (s *SQLiteCronStore) AddJob(ctx context.Context, name string, schedule stor
 	return job, nil
 }
 
+func (s *SQLiteCronStore) AddToolCallJob(ctx context.Context, name string, atMS int64, toolName string, args map[string]any, agentID, userID string) (*store.CronJob, error) {
+	schedule := store.CronSchedule{Kind: "at", AtMS: &atMS}
+	if err := store.ValidateCronSchedule(&schedule); err != nil {
+		return nil, err
+	}
+	if toolName == "" {
+		return nil, fmt.Errorf("toolName is required")
+	}
+
+	payload := store.CronPayload{Kind: "tool_call", ToolName: toolName, Args: args}
+	payloadJSON, _ := json.Marshal(payload)
+
+	id := uuid.Must(uuid.NewV7())
+	now := time.Now()
+	runAt := time.UnixMilli(atMS)
+
+	var agentUUID *uuid.UUID
+	if agentID != "" {
+		if aid, err := uuid.Parse(agentID); err == nil {
+			agentUUID = &aid
+		}
+	}
+	var userIDPtr *string
+	if userID != "" {
+		userIDPtr = &userID
+	}
+
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO cron_jobs (id, tenant_id, agent_id, user_id, name, enabled, schedule_kind, cron_expression, run_at, timezone,
+		 interval_ms, window_ms, payload, delete_after_run, stateless, deliver, deliver_channel, deliver_to, wake_heartbeat, next_run_at, created_at, updated_at)
+		 VALUES (?,?,?,?,?,1,'at',NULL,?,NULL,NULL,NULL,?,1,0,0,'','',0,?,?,?)`,
+		id, tenantIDForInsert(ctx), agentUUID, userIDPtr, name, runAt, payloadJSON, runAt, now, now,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create tool-call cron job: %w", err)
+	}
+
+	s.InvalidateCache()
+	job, _ := s.GetJob(ctx, id.String())
+	return job, nil
+}
+
 func (s *SQLiteCronStore) GetJob(ctx context.Context, jobID string) (*store.CronJob, bool) {
 	id, err := uuid.Parse(jobID)
 	if err != nil {
@@ -407,7 +449,6 @@ func (s *SQLiteCronStore) lockCronJobForMutation(ctx context.Context, tx *sql.Tx
 	return &state, nil
 }
 
-
 func execCronJobUpdateTx(ctx context.Context, tx *sql.Tx, id uuid.UUID, updates map[string]any) error {
 	if len(updates) == 0 {
 		return nil
@@ -445,4 +486,3 @@ func execCronJobUpdateTx(ctx context.Context, tx *sql.Tx, id uuid.UUID, updates 
 	}
 	return nil
 }
-

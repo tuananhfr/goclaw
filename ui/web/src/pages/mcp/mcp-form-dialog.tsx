@@ -37,6 +37,7 @@ function restoreFacebookPages(
     ...page,
     watermarks: page.watermarks ?? (page.watermark ? [page.watermark] : undefined),
     access_token: headers[`x-fb-page-${idx + 1}-token`] ?? "",
+    comment_schedule: page.comment_schedule ?? parseHeaderJSON(headers[`x-fb-page-${idx + 1}-comment-schedule`]),
   }));
   if (restored.length > 0) return restored;
 
@@ -48,7 +49,17 @@ function restoreFacebookPages(
     access_token: headers.Authorization?.replace(/^Bearer\s+/i, "") ?? "",
     watermark: undefined,
     watermarks: undefined,
+    comment_schedule: parseHeaderJSON(headers["x-facebook-comment-schedule"]),
   }];
+}
+
+function parseHeaderJSON(raw?: string) {
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
 }
 
 function sanitizeWatermark(watermark: NonNullable<MCPFormData["facebookPages"][number]["watermark"]>) {
@@ -70,6 +81,7 @@ function stripFacebookPageForSettings(page: MCPFormData["facebookPages"][number]
     ...rest,
     watermark: watermark ? stripWatermarkPreview(watermark) : undefined,
     watermarks: watermarks?.map(stripWatermarkPreview),
+    comment_schedule: page.comment_schedule,
   };
 }
 
@@ -92,6 +104,9 @@ function buildFacebookHeaders(
       headers[`x-fb-page-${n}-watermark`] = JSON.stringify(watermarks[0]);
     } else if (watermarks.length > 1) {
       headers[`x-fb-page-${n}-watermark`] = JSON.stringify({ enabled: true, items: watermarks });
+    }
+    if (page.comment_schedule) {
+      headers[`x-fb-page-${n}-comment-schedule`] = JSON.stringify(page.comment_schedule);
     }
   });
   return headers;

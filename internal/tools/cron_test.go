@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -11,6 +12,16 @@ import (
 type fakeCronStore struct {
 	addedSchedule store.CronSchedule
 	addErr        error
+	toolCallJobs  []fakeToolCallJob
+}
+
+type fakeToolCallJob struct {
+	name     string
+	atMS     int64
+	toolName string
+	args     map[string]any
+	agentID  string
+	userID   string
 }
 
 func (f *fakeCronStore) AddJob(ctx context.Context, name string, schedule store.CronSchedule, message string, deliver bool, channel, to, agentID, userID string) (*store.CronJob, error) {
@@ -19,6 +30,10 @@ func (f *fakeCronStore) AddJob(ctx context.Context, name string, schedule store.
 		return nil, f.addErr
 	}
 	return &store.CronJob{ID: "job-1", Name: name, Schedule: schedule, Payload: store.CronPayload{Message: message}}, nil
+}
+func (f *fakeCronStore) AddToolCallJob(ctx context.Context, name string, atMS int64, toolName string, args map[string]any, agentID, userID string) (*store.CronJob, error) {
+	f.toolCallJobs = append(f.toolCallJobs, fakeToolCallJob{name: name, atMS: atMS, toolName: toolName, args: args, agentID: agentID, userID: userID})
+	return &store.CronJob{ID: fmt.Sprintf("job-tool-%d", len(f.toolCallJobs)), Name: name}, nil
 }
 func (f *fakeCronStore) GetJob(ctx context.Context, jobID string) (*store.CronJob, bool) {
 	return nil, false
@@ -43,7 +58,7 @@ func (f *fakeCronStore) SetOnEvent(handler func(event store.CronEvent)) {}
 func (f *fakeCronStore) RunJob(ctx context.Context, jobID string, force bool) (bool, string, error) {
 	return false, "", nil
 }
-func (f *fakeCronStore) SetDefaultTimezone(tz string)      {}
+func (f *fakeCronStore) SetDefaultTimezone(tz string)             {}
 func (f *fakeCronStore) GetDueJobs(now time.Time) []store.CronJob { return nil }
 
 func TestCronToolAddRandomWindow(t *testing.T) {

@@ -35,6 +35,9 @@ func wireExtraTools(
 	toolsReg.Register(tools.NewCronTool(pgStores.Cron))
 	slog.Info("cron tool registered")
 
+	toolsReg.Register(tools.NewFacebookPostWithCommentsTool(toolsReg, pgStores.Cron))
+	slog.Info("facebook_post_with_comments tool registered")
+
 	// Heartbeat tool (agent-facing)
 	heartbeatTool = tools.NewHeartbeatTool(pgStores.Heartbeats, pgStores.ConfigPermissions)
 	heartbeatTool.SetAgentStore(pgStores.Agents)

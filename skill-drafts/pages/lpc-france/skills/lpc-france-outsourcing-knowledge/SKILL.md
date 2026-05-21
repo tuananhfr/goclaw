@@ -212,7 +212,7 @@ For design tasks, request images that show:
 
 - BIM model, technical drawing, section/detail, plan overlay, construction coordination, slab system concept, or professional project workflow.
 - Clean B2B layout with enough negative space for bilingual headline or a short technical statement.
-- Top-left watermark safe zone reserved for LPC France.
+- Current watermark config reserved for LPC France when available; top-left safe zone is only the fallback.
 - No confidential project data or unrelated logos.
 
 For UBoot/flat slab posts, prioritize technical clarity over dramatic construction imagery.
@@ -227,4 +227,4 @@ Before returning outsourcing content, verify:
 - Technical claims are cautious and source-backed where needed.
 - French appears first when combined with the brand skill.
 - CTA asks for a clear next step: brief, consultation, sample workflow, or message.
-- Watermark and visual constraints are passed to design work when images are involved.
+- Current watermark config and visual constraints are passed to design work when images are involved; fallback safe zones are used only when runtime config is unavailable.

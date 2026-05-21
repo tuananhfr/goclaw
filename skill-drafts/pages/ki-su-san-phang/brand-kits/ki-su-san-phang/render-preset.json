@@ -58,11 +58,14 @@
   },
   "layout_rules": {
     "preferred_zones": ["upper_right", "mid_left", "mid_right", "lower_left"],
-    "avoid_zones": ["top_left_watermark"],
+    "avoid_zones": ["current_watermark_config"],
+    "fallback_avoid_zones": ["top_left_watermark"],
+    "watermark_config_source": "fb_get_watermark_config",
+    "render_creative_watermark_param": true,
     "generate_variants": 1,
     "default_variants": 1,
     "max_variants": 1,
-    "background_prompt_hint": "no text, leave clean negative space outside the top-left watermark zone, technical engineering visual, clear slab or drawing detail",
+    "background_prompt_hint": "no text, leave clean negative space around the configured watermark overlay; if watermark config is unavailable, keep the top-left zone clear; technical engineering visual, clear slab or drawing detail",
     "reserved_areas": [
       {
         "name": "top_left_watermark",

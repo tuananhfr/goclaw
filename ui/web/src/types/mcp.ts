@@ -16,6 +16,13 @@ export interface MCPFacebookPageConfig {
   name?: string;
   watermark?: MCPWatermarkConfig;
   watermarks?: MCPWatermarkConfig[];
+  comment_schedule?: {
+    enabled: boolean;
+    comment_count: number;
+    window_ms: number;
+    min_gap_ms: number;
+    random_order: boolean;
+  };
 }
 
 export interface MCPSettings {

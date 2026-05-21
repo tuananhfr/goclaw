@@ -44,6 +44,8 @@ If a final creative must be confirmed as brand-font accurate, do not rely on AI 
 Exact font workflow:
 
 - When the user asks for exact SVN - Bango on-image text, use `render_creative` or an equivalent deterministic font-render tool with the real `SVN-Bango.otf` file path.
+- Before rendering final on-image text, get the current page watermark config when an `fb_get_watermark_config` tool is available.
+- Pass the current watermark config into `render_creative.watermark` so text avoids the real configured watermark position. If the config cannot be fetched, use the fallback Pizza Hip'S safe zones below and state that exact runtime watermark config was unavailable.
 - Do not claim exact SVN - Bango if the image was produced only by `create_image` or an AI image prompt.
 - If the render tool cannot read the font path, report the tool/path access error clearly. Do not silently switch to "near SVN - Bango" or "similar display rounded font".
 - After rendering, keep the returned `font_path` and `font_sha256` metadata so the user can verify the exact font file used.
@@ -228,13 +230,14 @@ For Pizza Hip'S image prompts, briefs, or QA:
 - Use orange, blue, and black as the brand color system.
 - For text rendered inside the image, use SVN - Bango direction for headline/title text and SVN - Avo direction for supporting/body text when typography is requested.
 - Watermark is handled by the existing system/tooling. Do not instruct the agent to add, move, resize, or modify watermark assets.
-- Reserve safe zones for existing watermark overlays:
+- Use the current watermark config as the source of truth when available. In a two-step `create_image` then `render_creative` workflow, pass that config into `render_creative.watermark`.
+- If current watermark config is unavailable, use these fallback safe zones for existing watermark overlays:
   - Top center is reserved for the Pizza Hip'S logo/brand watermark; keep it visually clean.
   - Bottom right is reserved for hotline/contact/CTA watermark; keep it visually clean.
 - Do not place important content in those reserved zones: headline text, prices, CTA, product hero details, faces, QR codes, legal notes, or small readable text.
-- When creating image prompts, explicitly leave clean negative space at top center and bottom right so the existing watermark can overlay without covering content.
+- When creating image prompts, explicitly leave clean negative space around the configured watermark area; if config is unavailable, leave top center and bottom right clear.
 - On-image text must never be clipped by the canvas edge. Keep at least 5% padding and rerender if any letter is cut off.
-- On-image text must not touch or overlap watermark overlays. Treat the top-center logo zone and bottom-right hotline zone as hard no-text areas.
+- On-image text must not touch or overlap watermark overlays. Treat configured watermark zones as hard no-text areas.
 - Create and return one final image by default. Do not generate multiple visual variants unless the Lead explicitly asks for comparison variants.
 - If using `create_image` only to generate a textless background before `render_creative`, call `create_image` with `deliver=false` and attach only the final flattened image.
 - Minimum 1 image, maximum 10 images for a Facebook post set.
@@ -279,5 +282,5 @@ Before returning Pizza Hip'S content, verify:
 - Hashtag block starts with `#pizzahips`.
 - Hashtags fit the content route: food/product or franchise/business.
 - Footer is not invented.
-- Image brief uses orange/blue/black and reserves empty/safe space at top center and bottom right for existing watermark overlays.
+- Image brief uses orange/blue/black and reserves empty/safe space based on the current watermark config, with top center and bottom right only as fallback zones.
 - No claim is exaggerated beyond the user's brief.

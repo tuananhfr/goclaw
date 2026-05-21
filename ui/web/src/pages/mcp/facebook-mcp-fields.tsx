@@ -12,6 +12,7 @@ import type { MCPFormData } from "@/schemas/mcp.schema";
 
 type FacebookPageFormValue = MCPFormData["facebookPages"][number];
 type WatermarkFormValue = NonNullable<FacebookPageFormValue["watermark"]>;
+type CommentScheduleFormValue = NonNullable<FacebookPageFormValue["comment_schedule"]>;
 
 const defaultWatermark: WatermarkFormValue = {
   enabled: true,
@@ -24,6 +25,14 @@ const defaultWatermark: WatermarkFormValue = {
   y_pct: 0.12,
   scale_pct: 0.18,
   opacity: 0.45,
+};
+
+const defaultCommentSchedule: CommentScheduleFormValue = {
+  enabled: false,
+  comment_count: 5,
+  window_ms: 30 * 60 * 1000,
+  min_gap_ms: 60 * 1000,
+  random_order: true,
 };
 
 interface FacebookMcpFieldsProps {
@@ -65,6 +74,12 @@ export function FacebookMcpFields({ form, serverId }: FacebookMcpFieldsProps) {
     updatePage(pageIdx, { watermarks: updateWatermarkList(getWatermarks(page), wmIdx, patch), watermark: undefined });
   };
 
+  const updateCommentSchedule = (pageIdx: number, patch: Partial<CommentScheduleFormValue>) => {
+    const page = pages[pageIdx];
+    if (!page) return;
+    updatePage(pageIdx, { comment_schedule: { ...defaultCommentSchedule, ...page.comment_schedule, ...patch } });
+  };
+
   const addWatermark = (pageIdx: number) => {
     const page = pages[pageIdx];
     if (!page) return;
@@ -80,7 +95,7 @@ export function FacebookMcpFields({ form, serverId }: FacebookMcpFieldsProps) {
   const addPage = () => {
     setValue("facebookPages", [
       ...pages,
-      { page_id: "", name: "", access_token: "", watermarks: [{ ...defaultWatermark }] },
+      { page_id: "", name: "", access_token: "", watermarks: [{ ...defaultWatermark }], comment_schedule: { ...defaultCommentSchedule } },
     ], { shouldDirty: true });
   };
 
@@ -105,7 +120,7 @@ export function FacebookMcpFields({ form, serverId }: FacebookMcpFieldsProps) {
       <div className="flex items-center justify-between gap-3">
         <div>
           <Label>Facebook pages</Label>
-          <p className="text-xs text-muted-foreground">Configure page credentials and watermark placement.</p>
+          <p className="text-xs text-muted-foreground">Configure page credentials, scheduled comments, and watermark placement.</p>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={addPage} className="gap-1.5">
           <Plus className="h-3.5 w-3.5" /> Add page
@@ -145,6 +160,11 @@ export function FacebookMcpFields({ form, serverId }: FacebookMcpFieldsProps) {
               onChange={(e) => updatePage(pageIdx, { access_token: e.target.value })}
               placeholder="Page access token"
               className="font-mono"
+            />
+
+            <CommentScheduleFields
+              value={{ ...defaultCommentSchedule, ...page.comment_schedule }}
+              onChange={(patch) => updateCommentSchedule(pageIdx, patch)}
             />
 
             <div className="flex items-center justify-between gap-3">
@@ -212,6 +232,63 @@ export function FacebookMcpFields({ form, serverId }: FacebookMcpFieldsProps) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function CommentScheduleFields({
+  value,
+  onChange,
+}: {
+  value: CommentScheduleFormValue;
+  onChange: (patch: Partial<CommentScheduleFormValue>) => void;
+}) {
+  return (
+    <div className="grid gap-3 rounded-md border border-border p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <Label>Scheduled comments</Label>
+          <p className="text-xs text-muted-foreground">Store the page policy in Facebook MCP; GoClaw schedules final comments after posting.</p>
+        </div>
+        <Switch checked={value.enabled} onCheckedChange={(enabled) => onChange({ enabled })} />
+      </div>
+
+      {value.enabled && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <Label>Comment count</Label>
+            <Input
+              type="number"
+              min={1}
+              max={50}
+              value={value.comment_count}
+              onChange={(e) => onChange({ comment_count: Number(e.target.value) })}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Window minutes</Label>
+            <Input
+              type="number"
+              min={1}
+              value={Math.round(value.window_ms / 60000)}
+              onChange={(e) => onChange({ window_ms: Number(e.target.value) * 60000 })}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Min gap seconds</Label>
+            <Input
+              type="number"
+              min={0}
+              value={Math.round(value.min_gap_ms / 1000)}
+              onChange={(e) => onChange({ min_gap_ms: Number(e.target.value) * 1000 })}
+            />
+          </div>
+          <div className="flex items-center gap-2 pt-6">
+            <Switch checked={value.random_order} onCheckedChange={(random_order) => onChange({ random_order })} />
+            <Label>Random order</Label>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

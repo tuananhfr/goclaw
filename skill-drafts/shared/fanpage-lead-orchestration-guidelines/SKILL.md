@@ -14,7 +14,7 @@ This skill is brand-neutral. The Lead must combine it with the page/brand profil
 
 The Lead is responsible for context transfer.
 
-Sub-agents may not know the brand, page, market, offer, footer, legal limits, watermark safe zones, or current campaign unless the Lead explicitly passes that information in the task.
+Sub-agents may not know the brand, page, market, offer, footer, legal limits, current watermark config, fallback watermark safe zones, or current campaign unless the Lead explicitly passes that information in the task.
 
 Before delegating any work, the Lead must create a clear task packet that includes enough context for the sub-agent to complete the task without guessing.
 
@@ -41,7 +41,7 @@ For each page, keep or retrieve these fields when available:
 - Customer insight or pain point.
 - Tone of voice.
 - Visual identity: colors, on-image fonts, image style.
-- Logo/watermark safe zones.
+- Current watermark config when available, plus fallback logo/watermark safe zones.
 - CTA defaults.
 - Footer/footage.
 - Fixed hashtag pool.
@@ -79,7 +79,8 @@ CONSTRAINTS:
 - Must avoid:
 - Claims allowed/not allowed:
 - Legal/compliance cautions:
-- Visual/watermark safe zones:
+- Current watermark config:
+- Visual/watermark fallback safe zones:
 - Platform/format requirements:
 
 OUTPUT FORMAT:
@@ -129,7 +130,8 @@ Pass:
 - Asset type and size.
 - Visual direction: colors, on-image fonts, mood, product focus.
 - Required on-image text.
-- Logo/watermark safe zones.
+- Current watermark config from `fb_get_watermark_config` when available.
+- Fallback logo/watermark safe zones.
 - Areas to keep clear.
 - Subject priority.
 - Number of images/options.
@@ -139,7 +141,9 @@ If the user asks to create or generate an actual image, set the expected output 
 
 When passing font rules, state clearly that they apply to text rendered inside the image/creative asset, not to Facebook caption text.
 
-Do not ask design agents to place important text or product details in reserved watermark zones.
+Before delegating image/design work, call `fb_get_watermark_config` when that tool is available and include the returned config in the task packet. Tell design agents to pass that object into `render_creative.watermark` when final typography is rendered. If the config cannot be fetched, pass the brand's fallback safe zones and note that the exact runtime watermark config is unavailable.
+
+Do not ask design agents to place important text or product details in configured or fallback watermark zones.
 
 ### For Any Other Specialist Agent
 

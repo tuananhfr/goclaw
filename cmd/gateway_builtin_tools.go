@@ -99,6 +99,8 @@ func builtinToolSeedData() []store.BuiltinToolDef {
 			Metadata: json.RawMessage(`{"config_hint":"Config → Cron"}`),
 		},
 
+		{Name: "facebook_post_with_comments", DisplayName: "Facebook Post With Comments", Description: "Create a Facebook post through MCP and schedule prepared comments with GoClaw cron", Category: "scheduling", Enabled: true},
+
 		// subagents
 		{Name: "spawn", DisplayName: "Spawn", Description: "Spawn a subagent to handle a task in the background", Category: "subagents", Enabled: true,
 			Metadata: json.RawMessage(`{"config_hint":"Config → Agents Defaults"}`),

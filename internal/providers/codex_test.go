@@ -210,6 +210,30 @@ func TestCodexProviderBuildRequestBodyToolCallMessages(t *testing.T) {
 	}
 }
 
+func TestCodexProviderBuildRequestBodySkipsOrphanToolOutput(t *testing.T) {
+	p := NewCodexProvider("test", &staticTokenSource{token: "test"}, "", "gpt-4o")
+
+	req := ChatRequest{
+		Messages: []Message{
+			{Role: "user", Content: "Continue"},
+			{Role: "tool", ToolCallID: "fc_orphan", Content: `{"ok":true}`},
+		},
+	}
+
+	body := p.buildRequestBody(req, false)
+
+	input, ok := body["input"].([]any)
+	if !ok {
+		t.Fatalf("input is not []interface{}: %T", body["input"])
+	}
+	if len(input) != 1 {
+		t.Fatalf("input length = %d, want 1", len(input))
+	}
+	if item, ok := input[0].(map[string]any); !ok || item["type"] == "function_call_output" {
+		t.Fatalf("orphan function_call_output should be skipped, got %#v", input[0])
+	}
+}
+
 func TestCodexProviderBuildRequestBodyThinking(t *testing.T) {
 	p := NewCodexProvider("test", &staticTokenSource{token: "test"}, "", "gpt-4o")
 

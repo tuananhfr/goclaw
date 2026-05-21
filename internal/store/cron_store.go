@@ -51,9 +51,11 @@ type CronSchedule struct {
 
 // CronPayload describes what a job does when triggered.
 type CronPayload struct {
-	Kind    string `json:"kind" db:"-"`
-	Message string `json:"message" db:"-"`
-	Command string `json:"command,omitempty" db:"-"`
+	Kind     string         `json:"kind" db:"-"`
+	Message  string         `json:"message,omitempty" db:"-"`
+	Command  string         `json:"command,omitempty" db:"-"`
+	ToolName string         `json:"toolName,omitempty" db:"-"`
+	Args     map[string]any `json:"args,omitempty" db:"-"`
 }
 
 // CronJobState tracks runtime state for a job.
@@ -112,6 +114,7 @@ type CronEvent struct {
 // CronStore manages scheduled jobs.
 type CronStore interface {
 	AddJob(ctx context.Context, name string, schedule CronSchedule, message string, deliver bool, channel, to, agentID, userID string) (*CronJob, error)
+	AddToolCallJob(ctx context.Context, name string, atMS int64, toolName string, args map[string]any, agentID, userID string) (*CronJob, error)
 	GetJob(ctx context.Context, jobID string) (*CronJob, bool)
 	ListJobs(ctx context.Context, includeDisabled bool, agentID, userID string) []CronJob
 	RemoveJob(ctx context.Context, jobID string) error

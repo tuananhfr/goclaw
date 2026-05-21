@@ -42,6 +42,13 @@ export const mcpFormSchema = z.object({
       scale_pct: z.number(),
       opacity: z.number(),
     })).optional(),
+    comment_schedule: z.object({
+      enabled: z.boolean(),
+      comment_count: z.number(),
+      window_ms: z.number(),
+      min_gap_ms: z.number(),
+      random_order: z.boolean(),
+    }).optional(),
   })),
 });
 

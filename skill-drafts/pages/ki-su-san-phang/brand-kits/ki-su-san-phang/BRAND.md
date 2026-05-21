@@ -22,11 +22,12 @@ Use this folder as the shared team material source for Kĩ sư sàn phẳng crea
 1. Generate or choose a background image with no baked-in text.
    - If using `create_image` only as the background before text rendering, call it with `"deliver": false` so the raw background is not attached.
    - The background prompt must explicitly say: no text, no letters, no numbers, no readable labels, no UI text, no typography.
-2. Leave clean space for technical headline/body text and system watermark overlays.
-3. Render final Vietnamese text with `render_creative` or an equivalent deterministic font-render tool using the real Be Vietnam Pro font files above.
-4. Output a flattened PNG/JPG so previews show the final design.
-5. Keep `font_path` and `font_sha256` in result metadata when reporting final output.
-6. Create one final image by default. Generate variants only when the Lead asks for comparison options.
+2. Get the current watermark config when `fb_get_watermark_config` is available.
+3. Leave clean space for technical headline/body text and system watermark overlays. Use the current watermark config as the source of truth; use top left only as fallback.
+4. Render final Vietnamese text with `render_creative` or an equivalent deterministic font-render tool using the real Be Vietnam Pro font files above, and pass the current watermark config into `render_creative.watermark` when available.
+5. Output a flattened PNG/JPG so previews show the final design.
+6. Keep `font_path` and `font_sha256` in result metadata when reporting final output.
+7. Create one final image by default. Generate variants only when the Lead asks for comparison options.
 
 ## Typography Rules
 
@@ -44,9 +45,10 @@ Use this folder as the shared team material source for Kĩ sư sàn phẳng crea
 
 - Main color system: technical blue, concrete gray, white, black, with green accents for material-efficiency or ESG topics.
 - Keep technical diagrams, drawings, slab details, reinforcement, and UBoot module visuals clear.
-- Top left is reserved for the page watermark. Keep this zone visually clean; do not place headline text, CTA, drawing labels, QR codes, or small readable text there.
+- Use the current watermark config as the source of truth for reserved overlay zones. If watermark config is unavailable, use the fallback top-left safe zone.
+- Keep configured/fallback watermark zones visually clean; do not place headline text, CTA, drawing labels, QR codes, or small readable text there.
 - Treat the watermark zone as an overlay zone that may be applied after the image is generated.
-- Put headline text in a clean non-watermark area, usually upper-right, mid-left, mid-right, or lower-left when the top-left watermark zone remains clear.
+- Put headline text in a clean non-watermark area, usually upper-right, mid-left, mid-right, or lower-left when the configured/fallback watermark zone remains clear.
 - On-image text must never be clipped by the canvas edge. Vietnamese accents must remain fully visible.
 - On-image text must not touch or overlap watermark overlays.
 - Avoid cluttered technical drawings behind small text. Add a solid or translucent text panel only when needed for readability.
@@ -56,7 +58,7 @@ Use this folder as the shared team material source for Kĩ sư sàn phẳng crea
 ```json
 {
   "tool": "create_image",
-  "prompt": "technical flat slab construction background, BIM model and slab detail, no text, leave clean negative space outside top-left watermark zone...",
+  "prompt": "technical flat slab construction background, BIM model and slab detail, no text, leave clean negative space around the configured watermark overlay; if watermark config is unavailable, keep the top-left zone clear...",
   "aspect_ratio": "1:1",
   "filename_hint": "ki-su-san-phang-bg",
   "deliver": false
@@ -70,6 +72,7 @@ Then render the final attached image:
   "base_image_path": "page1-bg.png",
   "output_path": "page1-final.png",
   "font_path": "brand-kits/ki-su-san-phang/assets/fonts/BeVietnamPro-ExtraBold.ttf",
+  "watermark": "<current fb_get_watermark_config result when available>",
   "texts": [
     {
       "text": "SÀN PHẲNG KHÔNG DẦM",

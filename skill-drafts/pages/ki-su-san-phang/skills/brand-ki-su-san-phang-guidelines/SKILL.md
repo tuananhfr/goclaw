@@ -18,7 +18,7 @@ This brand skill controls page positioning, Vietnamese voice, footer, watermark 
 - Page type: technical knowledge channel, not a hard-selling company page.
 - Main content focus: flat slab systems, UBoot Beton, structural engineering, construction standards, global standard comparison, complex structural design, and practical engineering experience.
 - Company relationship: LPC may be introduced as the organization behind the channel, but the content should mainly educate and discuss technical knowledge.
-- Watermark safe zone: top left. Keep this area visually clean.
+- Watermark safe zone: use the current page watermark config when available. Fallback: top left. Keep this area visually clean.
 - Audience: engineers, architects, construction professionals, contractors, developers, students, and technically curious homeowners.
 
 ## Brand Font Assets
@@ -121,7 +121,7 @@ Use this fixed footer by default:
 
 ```text
 CÔNG TY TNHH XÂY DỰNG LÂM PHẠM - LPC
-◼️ Địa chỉ: 226 Lê Trọng Tấn - Thanh Xuân - Hà Nội - Việt Nam
+◼️ Địa chỉ: 226 Lê Trọng Tấn, phường Phương Liệt, Hà Nội
 ◼️ Hotline: +84911.29.96.96
 ◼️ Website: https://lpc.vn
 ◼️ Email: info@lpc.vn
@@ -151,8 +151,10 @@ For image prompts, briefs, or QA:
 
 - Do not ask `create_image` to render readable Vietnamese text, headlines, captions, labels, tables, standards, or CTA copy. AI image generation must create background/visual material only.
 - Any final feed image with Vietnamese text must be a two-step output: textless background from `create_image` plus final typography from `render_creative`.
-- Watermark is placed at top left. Keep that zone clean and free from important content.
-- Do not place headline text, CTA, small technical notes, project details, drawings, faces, QR codes, or key structural diagrams in the top-left watermark zone.
+- Watermark is handled by the existing system/tooling. Do not instruct the agent to add, move, resize, or modify watermark assets.
+- Use the current page watermark config as the source of truth when available, and pass it into `render_creative.watermark` during final text rendering.
+- If current watermark config is unavailable, use the fallback top-left safe zone.
+- Do not place headline text, CTA, small technical notes, project details, drawings, faces, QR codes, or key structural diagrams in the configured watermark zone.
 - Prefer realistic technical visuals: structural drawings, flat slab diagrams, BIM/model views, site details, slab reinforcement, UBoot module illustrations, standard-comparison layouts, or clean engineering infographics.
 - Keep visual tone technical and educational, not consumer-advertising-heavy.
 - Keep text readable on mobile.
@@ -181,5 +183,5 @@ Before returning Kĩ sư sàn phẳng content, verify:
 - CTA exists when suitable, but is not overly sales-focused.
 - Fixed footer is present unless the user asks to omit it.
 - Hashtags fit the topic.
-- Watermark safe zone at top left is protected in image briefs.
+- Current watermark config is protected in image briefs, with top left used only as fallback.
 - Technical, legal, code, ESG, cost, safety, or performance claims are cautious and supported when needed.

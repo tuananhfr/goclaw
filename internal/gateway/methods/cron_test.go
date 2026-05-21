@@ -14,12 +14,12 @@ import (
 // ---- stub CronStore ----
 
 type stubCronStore struct {
-	jobs       map[string]*store.CronJob
-	addErr     error
-	removeErr  error
-	updateErr  error
-	enableErr  error
-	addedJob   *store.CronJob
+	jobs      map[string]*store.CronJob
+	addErr    error
+	removeErr error
+	updateErr error
+	enableErr error
+	addedJob  *store.CronJob
 }
 
 func newStubCronStore() *stubCronStore {
@@ -36,13 +36,19 @@ func (s *stubCronStore) AddJob(_ context.Context, name string, schedule store.Cr
 		return nil, s.addErr
 	}
 	job := &store.CronJob{
-		ID:      "new-job-id",
-		Name:    name,
-		UserID:  userID,
-		Enabled: true,
+		ID:       "new-job-id",
+		Name:     name,
+		UserID:   userID,
+		Enabled:  true,
 		Schedule: schedule,
 	}
 	s.addedJob = job
+	s.jobs[job.ID] = job
+	return job, nil
+}
+
+func (s *stubCronStore) AddToolCallJob(_ context.Context, name string, atMS int64, toolName string, args map[string]any, agentID, userID string) (*store.CronJob, error) {
+	job := &store.CronJob{ID: "new-tool-job-id", Name: name, UserID: userID, Enabled: true}
 	s.jobs[job.ID] = job
 	return job, nil
 }
@@ -98,15 +104,15 @@ func (s *stubCronStore) GetRunLog(_ context.Context, _ string, _, _ int) ([]stor
 func (s *stubCronStore) Status() map[string]any { return map[string]any{"running": true} }
 
 // Lifecycle stubs (not called in unit tests)
-func (s *stubCronStore) Start() error                                            { return nil }
-func (s *stubCronStore) Stop()                                                   {}
+func (s *stubCronStore) Start() error                                                  { return nil }
+func (s *stubCronStore) Stop()                                                         {}
 func (s *stubCronStore) SetOnJob(_ func(*store.CronJob) (*store.CronJobResult, error)) {}
-func (s *stubCronStore) SetOnEvent(_ func(store.CronEvent))                      {}
+func (s *stubCronStore) SetOnEvent(_ func(store.CronEvent))                            {}
 func (s *stubCronStore) RunJob(_ context.Context, _ string, _ bool) (bool, string, error) {
 	return true, "", nil
 }
-func (s *stubCronStore) SetDefaultTimezone(_ string)                             {}
-func (s *stubCronStore) GetDueJobs(_ time.Time) []store.CronJob                 { return nil }
+func (s *stubCronStore) SetDefaultTimezone(_ string)            {}
+func (s *stubCronStore) GetDueJobs(_ time.Time) []store.CronJob { return nil }
 
 // ---- helpers ----
 
@@ -160,7 +166,7 @@ func TestCronCreate_MissingName_ReturnsInvalidRequest(t *testing.T) {
 	m := buildCronMethods(t, svc)
 	client := nullClient()
 	req := cronReqFrame(t, protocol.MethodCronCreate, map[string]any{
-		"message": "hello",
+		"message":  "hello",
 		"schedule": map[string]any{"kind": "every", "everyMs": 60000},
 	})
 	m.handleCreate(context.Background(), client, req)
@@ -199,8 +205,8 @@ func TestCronCreate_ValidParams_CreatesJob(t *testing.T) {
 	m := buildCronMethods(t, svc)
 	client := nullClient()
 	req := cronReqFrame(t, protocol.MethodCronCreate, map[string]any{
-		"name":    "my-daily-job",
-		"message": "do the thing",
+		"name":     "my-daily-job",
+		"message":  "do the thing",
 		"schedule": map[string]any{"kind": "every", "everyMs": 3600000},
 	})
 	m.handleCreate(context.Background(), client, req)
