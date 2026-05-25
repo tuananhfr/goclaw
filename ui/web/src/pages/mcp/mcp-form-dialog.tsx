@@ -17,6 +17,7 @@ import { mcpFormSchema, type MCPFormData } from "@/schemas/mcp.schema";
 import { McpConnectionFields } from "./mcp-connection-fields";
 import { McpSettingsFields } from "./mcp-settings-fields";
 import { FacebookMcpFields } from "./facebook-mcp-fields";
+import { GoogleDriveMcpFields } from "./google-drive-mcp-fields";
 
 /** Split a string into shell-like tokens, treating commas and spaces outside quotes as delimiters. */
 function splitShellTokens(input: string): string[] {
@@ -62,6 +63,17 @@ function parseHeaderJSON(raw?: string) {
   }
 }
 
+const defaultGoogleDrive: MCPFormData["googleDrive"] = {
+  client_id: "",
+  client_secret: "",
+  refresh_token: "",
+  root_folder_id: "",
+  root_folder_name: "",
+  cache_dir: "/app/workspace/drive-cache",
+  cache_ttl_seconds: 300,
+  max_assets: 50,
+};
+
 function sanitizeWatermark(watermark: NonNullable<MCPFormData["facebookPages"][number]["watermark"]>) {
   const cleaned = { ...watermark };
   delete cleaned.logo_preview_url;
@@ -75,6 +87,23 @@ function stripWatermarkPreview(watermark: NonNullable<MCPFormData["facebookPages
   return cleaned;
 }
 
+function restoreGoogleDrive(
+  settings: NonNullable<MCPServerData["settings"]>["google_drive"] | undefined,
+  headers: Record<string, string>,
+): MCPFormData["googleDrive"] {
+  return {
+    ...defaultGoogleDrive,
+    client_id: headers["x-gdrive-client-id"] ?? settings?.client_id ?? "",
+    client_secret: headers["x-gdrive-client-secret"] ?? "",
+    refresh_token: headers["x-gdrive-refresh-token"] ?? "",
+    root_folder_id: headers["x-gdrive-root-folder-id"] ?? settings?.root_folder_id ?? "",
+    root_folder_name: headers["x-gdrive-root-folder-name"] ?? settings?.root_folder_name ?? "",
+    cache_dir: headers["x-gdrive-cache-dir"] ?? settings?.cache_dir ?? defaultGoogleDrive.cache_dir,
+    cache_ttl_seconds: Number(headers["x-gdrive-cache-ttl-seconds"] ?? settings?.cache_ttl_seconds ?? defaultGoogleDrive.cache_ttl_seconds),
+    max_assets: Number(headers["x-gdrive-max-assets"] ?? settings?.max_assets ?? defaultGoogleDrive.max_assets),
+  };
+}
+
 function stripFacebookPageForSettings(page: MCPFormData["facebookPages"][number]) {
   const { access_token: _token, watermark, watermarks, ...rest } = page;
   return {
@@ -82,6 +111,17 @@ function stripFacebookPageForSettings(page: MCPFormData["facebookPages"][number]
     watermark: watermark ? stripWatermarkPreview(watermark) : undefined,
     watermarks: watermarks?.map(stripWatermarkPreview),
     comment_schedule: page.comment_schedule,
+  };
+}
+
+function stripGoogleDriveForSettings(drive: MCPFormData["googleDrive"]) {
+  return {
+    client_id: drive.client_id,
+    root_folder_id: drive.root_folder_id,
+    root_folder_name: drive.root_folder_name || undefined,
+    cache_dir: drive.cache_dir || undefined,
+    cache_ttl_seconds: drive.cache_ttl_seconds,
+    max_assets: drive.max_assets,
   };
 }
 
@@ -109,6 +149,24 @@ function buildFacebookHeaders(
       headers[`x-fb-page-${n}-comment-schedule`] = JSON.stringify(page.comment_schedule);
     }
   });
+  return headers;
+}
+
+function buildGoogleDriveHeaders(
+  drive: MCPFormData["googleDrive"],
+  existing: Record<string, string>,
+): Record<string, string> {
+  const headers = Object.fromEntries(
+    Object.entries(existing).filter(([key]) => !/^x-gdrive-/i.test(key)),
+  );
+  if (drive.client_id) headers["x-gdrive-client-id"] = drive.client_id;
+  if (drive.client_secret) headers["x-gdrive-client-secret"] = drive.client_secret;
+  if (drive.refresh_token) headers["x-gdrive-refresh-token"] = drive.refresh_token;
+  if (drive.root_folder_id) headers["x-gdrive-root-folder-id"] = drive.root_folder_id;
+  if (drive.root_folder_name) headers["x-gdrive-root-folder-name"] = drive.root_folder_name;
+  if (drive.cache_dir) headers["x-gdrive-cache-dir"] = drive.cache_dir;
+  if (drive.cache_ttl_seconds) headers["x-gdrive-cache-ttl-seconds"] = String(drive.cache_ttl_seconds);
+  if (drive.max_assets) headers["x-gdrive-max-assets"] = String(drive.max_assets);
   return headers;
 }
 
@@ -152,6 +210,7 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
       requireUserCreds: false,
       preset: "generic",
       facebookPages: [],
+      googleDrive: { ...defaultGoogleDrive },
     },
   });
 
@@ -181,6 +240,7 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
         requireUserCreds: server?.settings?.require_user_credentials ?? false,
         preset: server?.settings?.preset ?? "generic",
         facebookPages: restoreFacebookPages(server?.settings?.facebook?.pages ?? [], server?.headers ?? {}),
+        googleDrive: restoreGoogleDrive(server?.settings?.google_drive, server?.headers ?? {}),
       });
       setError("");
       setTestResult(null);
@@ -206,7 +266,9 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
     const data = form.getValues();
     const nextHeaders = data.preset === "facebook"
       ? buildFacebookHeaders(data.facebookPages, headers)
-      : headers;
+      : data.preset === "google_drive"
+        ? buildGoogleDriveHeaders(data.googleDrive, headers)
+        : headers;
 
     return {
       transport,
@@ -254,6 +316,7 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
           facebook: data.preset === "facebook" ? {
             pages: data.facebookPages.map(stripFacebookPageForSettings),
           } : undefined,
+          google_drive: data.preset === "google_drive" ? stripGoogleDriveForSettings(data.googleDrive) : undefined,
         },
         enabled: data.enabled,
       });
@@ -275,6 +338,7 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
         <div className="grid gap-4 py-2 -mx-4 px-4 sm:-mx-6 sm:px-6 overflow-y-auto min-h-0">
           <McpConnectionFields form={form} />
           {watch("preset") === "facebook" && <FacebookMcpFields form={form} serverId={server?.id} />}
+          {watch("preset") === "google_drive" && <GoogleDriveMcpFields form={form} />}
           <McpSettingsFields form={form} />
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>

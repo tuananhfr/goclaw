@@ -118,6 +118,30 @@ func TestValidateURL_SSRF_Rejected(t *testing.T) {
 	}
 }
 
+func TestValidateURL_AllowsBundledMCPSidecars(t *testing.T) {
+	security.SetAllowLoopbackForTest(false)
+	defer security.SetAllowLoopbackForTest(true)
+
+	for _, rawURL := range []string{
+		"http://facebook-mcp:3100/sse",
+		"http://google-drive-mcp:3200/sse",
+	} {
+		if err := ValidateURL(rawURL); err != nil {
+			t.Fatalf("ValidateURL(%q) = %v, want nil", rawURL, err)
+		}
+	}
+}
+
+func TestValidateURL_AllowsConfiguredPrivateMCPHost(t *testing.T) {
+	security.SetAllowLoopbackForTest(false)
+	defer security.SetAllowLoopbackForTest(true)
+	t.Setenv("GOCLAW_MCP_ALLOW_PRIVATE_HOSTS", "custom-drive-mcp")
+
+	if err := ValidateURL("http://custom-drive-mcp:3200/sse"); err != nil {
+		t.Fatalf("ValidateURL(custom host) = %v, want nil", err)
+	}
+}
+
 func TestValidateAndResolveEnvVar_Allowlist(t *testing.T) {
 	// Set test env vars
 	t.Setenv("HOME", "/home/test")

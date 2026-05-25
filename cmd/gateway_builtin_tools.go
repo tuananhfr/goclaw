@@ -40,6 +40,7 @@ func builtinToolSeedData() []store.BuiltinToolDef {
 		{Name: "memory_get", DisplayName: "Memory Get", Description: "Retrieve a specific memory document by its file path", Category: "memory", Enabled: true,
 			Requires: []string{"memory"},
 		},
+		{Name: "product_visual_profile", DisplayName: "Product Visual Profile", Description: "Store and retrieve durable product visual profiles for Google Drive product folders", Category: "memory", Enabled: true},
 		{Name: "knowledge_graph_search", DisplayName: "Knowledge Graph Search", Description: "Search entities, relationships, and observations in the agent's knowledge graph", Category: "memory", Enabled: true,
 			Settings: json.RawMessage(`{"extract_on_memory_write":false,"extraction_provider":"","extraction_model":"","min_confidence":0.75}`),
 			Requires: []string{"knowledge_graph"},

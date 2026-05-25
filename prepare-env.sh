@@ -20,6 +20,17 @@ get_env_val() {
   fi
 }
 
+strip_env_quotes() {
+  local val="${1:-}"
+  val="${val%$'\r'}"
+  if [[ "$val" == \"*\" && "$val" == *\" ]]; then
+    val="${val:1:${#val}-2}"
+  elif [[ "$val" == \'*\' && "$val" == *\' ]]; then
+    val="${val:1:${#val}-2}"
+  fi
+  printf '%s' "$val"
+}
+
 # Set a key in .env. Appends if missing, replaces if empty.
 set_env_val() {
   local key="$1" val="$2"
@@ -38,6 +49,82 @@ set_env_val() {
     fi
   else
     echo "${key}=${val}" >> "$ENV_FILE"
+  fi
+}
+
+upsert_env_val() {
+  local key="$1" val="$2"
+  if [ ! -f "$ENV_FILE" ]; then
+    echo "${key}=${val}" >> "$ENV_FILE"
+  elif grep -qE "^${key}=" "$ENV_FILE" 2>/dev/null; then
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+      sed -i '' "s|^${key}=.*|${key}=${val}|" "$ENV_FILE"
+    else
+      sed -i "s|^${key}=.*|${key}=${val}|" "$ENV_FILE"
+    fi
+  else
+    echo "${key}=${val}" >> "$ENV_FILE"
+  fi
+}
+
+compose_path_separator() {
+  case "$(uname -s 2>/dev/null || echo "")" in
+    MINGW*|MSYS*|CYGWIN*) printf ';' ;;
+    *) printf ':' ;;
+  esac
+}
+
+compose_has_item() {
+  local needle="$1"
+  shift
+  local item
+  for item in "$@"; do
+    [ "$item" = "$needle" ] && return 0
+  done
+  return 1
+}
+
+ensure_compose_file() {
+  local sep existing normalized part f
+  sep="$(compose_path_separator)"
+  existing="$(strip_env_quotes "$(get_env_val COMPOSE_FILE)")"
+
+  # Existing values may come from Linux, Windows, or old prepare-compose.sh runs.
+  normalized="${existing//;/$sep}"
+  if [ "$sep" = ";" ]; then
+    normalized="${normalized//:/$sep}"
+  fi
+
+  local compose_files=()
+  if [ -n "$normalized" ]; then
+    local old_ifs="$IFS"
+    IFS="$sep"
+    for part in $normalized; do
+      [ -n "$part" ] && compose_files+=("$part")
+    done
+    IFS="$old_ifs"
+  fi
+
+  local required=()
+  [ -f "docker-compose.yml" ] && required+=("docker-compose.yml")
+  [ -f "docker-compose.postgres.yml" ] && required+=("docker-compose.postgres.yml")
+  for f in docker-compose.*-mcp.yml; do
+    [ -f "$f" ] && required+=("$f")
+  done
+
+  for f in "${required[@]}"; do
+    if ! compose_has_item "$f" "${compose_files[@]}"; then
+      compose_files+=("$f")
+    fi
+  done
+
+  if [ "${#compose_files[@]}" -gt 0 ]; then
+    local joined=""
+    for f in "${compose_files[@]}"; do
+      joined="${joined}${joined:+$sep}${f}"
+    done
+    upsert_env_val "COMPOSE_FILE" "$joined"
+    echo "  [updated]   COMPOSE_FILE=$joined"
   fi
 }
 
@@ -82,6 +169,9 @@ if [ -z "$current_tok" ]; then
 else
   echo "  [exists]    GOCLAW_GATEWAY_TOKEN"
 fi
+
+# 4. Ensure Docker Compose includes core files and bundled local MCP overlays.
+ensure_compose_file
 
 echo ""
 echo "=== Done ==="

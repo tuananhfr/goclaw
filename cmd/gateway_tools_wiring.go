@@ -91,6 +91,13 @@ func wireExtraTools(
 	if pgStores.Skills != nil {
 		skillsAllowPaths = append(skillsAllowPaths, pgStores.Skills.Dirs()...)
 	}
+	var mcpAssetAllowPaths []string
+	if workspace != "" {
+		// Bundled asset MCPs write read-only media caches under the shared
+		// workspace root so agents can inspect synced assets without granting
+		// broader filesystem access.
+		mcpAssetAllowPaths = append(mcpAssetAllowPaths, filepath.Join(workspace, "drive-cache"))
+	}
 	// Expand user-configured allowed paths (for cross-drive access on Windows).
 	// These paths are validated per-request in resolvePath for tenant isolation.
 	var userAllowPaths []string
@@ -117,18 +124,21 @@ func wireExtraTools(
 	if readImageTool, ok := toolsReg.Get("read_image"); ok {
 		if pa, ok := readImageTool.(tools.PathAllowable); ok {
 			pa.AllowPaths(skillsAllowPaths...)
+			pa.AllowPaths(mcpAssetAllowPaths...)
 			pa.AllowPaths(userAllowPaths...)
 		}
 	}
 	if renderTool, ok := toolsReg.Get("render_creative"); ok {
 		if pa, ok := renderTool.(tools.PathAllowable); ok {
 			pa.AllowPaths(skillsAllowPaths...)
+			pa.AllowPaths(mcpAssetAllowPaths...)
 			pa.AllowPaths(userAllowPaths...)
 		}
 	}
 	if watermarkTool, ok := toolsReg.Get("apply_watermark"); ok {
 		if pa, ok := watermarkTool.(tools.PathAllowable); ok {
 			pa.AllowPaths(skillsAllowPaths...)
+			pa.AllowPaths(mcpAssetAllowPaths...)
 			pa.AllowPaths(userAllowPaths...)
 		}
 	}
@@ -146,6 +156,7 @@ func wireExtraTools(
 	if sendFileTool, ok := toolsReg.Get("send_file"); ok {
 		if pa, ok := sendFileTool.(tools.PathAllowable); ok {
 			pa.AllowPaths(skillsAllowPaths...)
+			pa.AllowPaths(mcpAssetAllowPaths...)
 			pa.AllowPaths(userAllowPaths...)
 		}
 	}

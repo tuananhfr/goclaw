@@ -29,6 +29,7 @@ export function McpConnectionFields({ form }: McpConnectionFieldsProps) {
   const name = watch("name");
   const headers = watch("headers") as Record<string, string>;
   const preset = watch("preset");
+  const url = watch("url");
   const isStdio = transport === "stdio";
 
   return (
@@ -88,9 +89,22 @@ export function McpConnectionFields({ form }: McpConnectionFieldsProps) {
             onClick={() => {
               setValue("preset", "facebook");
               if (transport === "stdio") setValue("transport", "sse");
+              if (!url.trim()) setValue("url", "http://facebook-mcp:3100/sse");
             }}
           >
             Facebook
+          </Button>
+          <Button
+            type="button"
+            variant={preset === "google_drive" ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setValue("preset", "google_drive");
+              if (transport === "stdio") setValue("transport", "sse");
+              if (!url.trim()) setValue("url", "http://google-drive-mcp:3200/sse");
+            }}
+          >
+            Google Drive
           </Button>
         </div>
       </div>
@@ -112,9 +126,10 @@ export function McpConnectionFields({ form }: McpConnectionFieldsProps) {
             <Label htmlFor="mcp-url">{t("form.url")}</Label>
             <Input id="mcp-url" placeholder="http://localhost:3001/sse" className="font-mono" {...register("url")} />
           </div>
-          <div className={preset === "facebook" ? "grid gap-1.5 rounded-md border border-border p-3" : "grid gap-1.5"}>
+          <div className={preset === "facebook" || preset === "google_drive" ? "grid gap-1.5 rounded-md border border-border p-3" : "grid gap-1.5"}>
             <Label>{t("form.headers")}</Label>
             {preset === "facebook" && <p className="text-xs text-muted-foreground">Advanced headers are generated from the Facebook page form.</p>}
+            {preset === "google_drive" && <p className="text-xs text-muted-foreground">Advanced headers are generated from the Google Drive form.</p>}
             <KeyValueEditor
               value={headers}
               onChange={(v) => setValue("headers", v)}

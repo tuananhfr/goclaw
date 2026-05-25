@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -25,13 +27,13 @@ var shellMetaChars = regexp.MustCompile(`[;|&$` + "`" + `(){}[\]<>]`)
 
 // Dangerous arg flags that enable code execution.
 var dangerousArgPatterns = []string{
-	"--eval", "-e", "-c",      // Code execution flags
-	"--require", "-r",         // Module injection
-	"--import",                // ES module injection
-	"exec(", "eval(",          // Inline code
-	"__import__",              // Python import injection
-	"child_process",           // Node.js process spawning
-	"subprocess",              // Python subprocess
+	"--eval", "-e", "-c", // Code execution flags
+	"--require", "-r", // Module injection
+	"--import",       // ES module injection
+	"exec(", "eval(", // Inline code
+	"__import__",    // Python import injection
+	"child_process", // Node.js process spawning
+	"subprocess",    // Python subprocess
 }
 
 // Fail-closed env var allowlist — only these are permitted for env: resolution.
@@ -41,6 +43,14 @@ var allowedEnvVars = map[string]bool{
 	"TZ": true, "TERM": true,
 	"NODE_ENV": true, "ENVIRONMENT": true,
 	"LOG_LEVEL": true, "DEBUG": true,
+}
+
+// defaultPrivateURLHosts are bundled Docker sidecars that GoClaw intentionally
+// reaches on the internal compose network. All other MCP URLs still go through
+// the SSRF validator and private CIDRs remain blocked by default.
+var defaultPrivateURLHosts = map[string]bool{
+	"facebook-mcp":     true,
+	"google-drive-mcp": true,
 }
 
 // ValidateCommand checks stdio command for injection vulnerabilities.
@@ -116,12 +126,39 @@ func ValidateURL(rawURL string) error {
 		return nil
 	}
 
+	if isAllowedMCPPrivateHost(rawURL) {
+		return nil
+	}
+
 	// Reuse existing SSRF validation with DNS rebinding protection
 	_, _, err := security.Validate(rawURL)
 	if err != nil {
 		return fmt.Errorf("URL validation failed: %w", err)
 	}
 	return nil
+}
+
+func isAllowedMCPPrivateHost(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return false
+	}
+	host := strings.ToLower(strings.TrimSpace(u.Hostname()))
+	if host == "" || net.ParseIP(host) != nil {
+		return false
+	}
+	if defaultPrivateURLHosts[host] {
+		return true
+	}
+	for _, item := range strings.Split(os.Getenv("GOCLAW_MCP_ALLOW_PRIVATE_HOSTS"), ",") {
+		if strings.EqualFold(strings.TrimSpace(item), host) {
+			return true
+		}
+	}
+	return false
 }
 
 // ValidateAndResolveEnvVar checks and resolves env: prefix values.

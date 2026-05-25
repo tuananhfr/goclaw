@@ -1,0 +1,36 @@
+# Optional bundled Google Drive MCP sidecar.
+#
+# Usage after ./prepare-env.sh:
+#   docker compose up -d --build
+#
+# Add an MCP server in GoClaw UI:
+#   Transport: SSE
+#   URL: http://google-drive-mcp:3200/sse
+
+services:
+  google-drive-mcp:
+    build:
+      context: ./mcps/google-drive
+      dockerfile: Dockerfile
+    image: goclaw/google-drive-mcp:local
+    environment:
+      - PORT=3200
+      - GOOGLE_DRIVE_CLIENT_ID=${GOOGLE_DRIVE_CLIENT_ID:-}
+      - GOOGLE_DRIVE_CLIENT_SECRET=${GOOGLE_DRIVE_CLIENT_SECRET:-}
+      - GOOGLE_DRIVE_REFRESH_TOKEN=${GOOGLE_DRIVE_REFRESH_TOKEN:-}
+      - GOOGLE_DRIVE_ROOT_FOLDER_ID=${GOOGLE_DRIVE_ROOT_FOLDER_ID:-}
+      - GOOGLE_DRIVE_ROOT_FOLDER_NAME=${GOOGLE_DRIVE_ROOT_FOLDER_NAME:-}
+      - GOOGLE_DRIVE_CACHE_DIR=${GOOGLE_DRIVE_CACHE_DIR:-/app/workspace/drive-cache}
+      - GOOGLE_DRIVE_CACHE_TTL_SECONDS=${GOOGLE_DRIVE_CACHE_TTL_SECONDS:-300}
+      - GOOGLE_DRIVE_MAX_ASSETS=${GOOGLE_DRIVE_MAX_ASSETS:-50}
+    expose:
+      - "3200"
+    ports:
+      - "${GOOGLE_DRIVE_MCP_PORT:-3200}:3200"
+    volumes:
+      - goclaw-workspace:/app/workspace
+      - goclaw-data:/app/data
+    networks:
+      - default
+      - goclaw-net
+    restart: unless-stopped

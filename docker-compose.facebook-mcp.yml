@@ -1,0 +1,30 @@
+# Optional bundled Facebook MCP sidecar.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.postgres.yml -f docker-compose.facebook-mcp.yml up -d --build
+#
+# Then add an MCP server in GoClaw UI:
+#   Transport: SSE
+#   URL: http://facebook-mcp:3100/sse
+#
+# Page credentials, watermark, and comment schedule are still configured in the
+# GoClaw MCP UI and sent to this MCP through headers.
+
+services:
+  facebook-mcp:
+    build:
+      context: ./mcps/facebook
+      dockerfile: Dockerfile
+    image: goclaw/facebook-mcp:local
+    environment:
+      - PORT=3100
+      - GOCLAW_BASE_URL=http://goclaw:18790
+      - GOCLAW_GATEWAY_TOKEN=${GOCLAW_GATEWAY_TOKEN:-}
+    expose:
+      - "3100"
+    ports:
+      - "${FACEBOOK_MCP_PORT:-3100}:3100"
+    networks:
+      - default
+      - goclaw-net
+    restart: unless-stopped

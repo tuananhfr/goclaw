@@ -27,9 +27,17 @@ export interface MCPFacebookPageConfig {
 
 export interface MCPSettings {
   require_user_credentials?: boolean;
-  preset?: "generic" | "facebook";
+  preset?: "generic" | "facebook" | "google_drive";
   facebook?: {
     pages?: MCPFacebookPageConfig[];
+  };
+  google_drive?: {
+    client_id?: string;
+    root_folder_id?: string;
+    root_folder_name?: string;
+    cache_dir?: string;
+    cache_ttl_seconds?: number;
+    max_assets?: number;
   };
 }
 

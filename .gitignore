@@ -31,6 +31,9 @@ ui/web/dist/
 ui/web/.vite/
 *.tsbuildinfo
 
+# Bundled local MCP build artifacts
+mcps/**/dist/
+
 # UI Desktop (Wails + React)
 ui/desktop/frontend/node_modules/
 ui/desktop/frontend/dist/*.js

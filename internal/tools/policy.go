@@ -13,7 +13,7 @@ import (
 // builtinToolGroups is const-like seed data for per-Registry tool groups.
 // Do NOT modify at runtime — each Registry gets a deep copy in NewRegistry().
 var builtinToolGroups = map[string][]string{
-	"memory":     {"memory_search", "memory_get"},
+	"memory":     {"memory_search", "memory_get", "product_visual_profile"},
 	"web":        {"web_search", "web_fetch"},
 	"fs":         {"read_file", "write_file", "list_files", "edit"},
 	"runtime":    {"exec"},
@@ -23,19 +23,19 @@ var builtinToolGroups = map[string][]string{
 	"messaging":  {"message", "create_forum_topic", "list_group_members"},
 	"team":       {"team_tasks"},
 	"vault":      {"vault_search", "vault_read"},
-	"media":      {"read_image", "read_document", "read_audio", "read_video", "create_image", "create_video", "create_audio", "render_creative", "apply_watermark", "facebook_post_with_comments"},
+	"media":      {"read_image", "read_document", "read_audio", "read_video", "create_image", "create_video", "create_audio", "render_creative", "apply_watermark", "facebook_post_with_comments", "product_visual_profile"},
 	// Composite group: all goclaw native tools (excludes MCP/custom plugins).
 	"goclaw": {
 		"read_file", "write_file", "list_files", "edit", "exec",
 		"web_search", "web_fetch", "browser",
-		"memory_search", "memory_get", "memory_expand",
+		"memory_search", "memory_get", "memory_expand", "product_visual_profile",
 		"knowledge_graph_search", "vault_search", "vault_read",
 		"sessions_list", "sessions_history", "sessions_send", "spawn", "session_status",
 		"delegate",
 		"cron", "facebook_post_with_comments", "datetime", "heartbeat",
 		"message", "create_forum_topic", "list_group_members",
 		"read_image", "read_document", "read_audio", "read_video",
-		"create_image", "create_video", "create_audio", "render_creative", "apply_watermark",
+		"create_image", "create_video", "create_audio", "render_creative", "apply_watermark", "product_visual_profile",
 		"skill_search", "skill_manage", "publish_skill", "use_skill",
 		"mcp_tool_search", "tts",
 		"team_tasks",

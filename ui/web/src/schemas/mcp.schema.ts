@@ -13,7 +13,7 @@ export const mcpFormSchema = z.object({
   timeout: z.number().min(1),
   enabled: z.boolean(),
   requireUserCreds: z.boolean(),
-  preset: z.enum(["generic", "facebook"]),
+  preset: z.enum(["generic", "facebook", "google_drive"]),
   facebookPages: z.array(z.object({
     page_id: z.string(),
     name: z.string().optional(),
@@ -50,6 +50,16 @@ export const mcpFormSchema = z.object({
       random_order: z.boolean(),
     }).optional(),
   })),
+  googleDrive: z.object({
+    client_id: z.string(),
+    client_secret: z.string(),
+    refresh_token: z.string(),
+    root_folder_id: z.string(),
+    root_folder_name: z.string().optional(),
+    cache_dir: z.string().optional(),
+    cache_ttl_seconds: z.number().min(1),
+    max_assets: z.number().min(1),
+  }),
 });
 
 export type MCPFormData = z.infer<typeof mcpFormSchema>;
