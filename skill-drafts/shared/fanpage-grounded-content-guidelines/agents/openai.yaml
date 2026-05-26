@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fanpage Grounded Content Guidelines"
+  short_description: "Real-world content grounding rules"
+  default_prompt: "Use this skill to make fanpage content grounded in real examples, sourced facts, specific situations, people, places, weather, timing, and verifiable context instead of generic copy."

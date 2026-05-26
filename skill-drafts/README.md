@@ -13,6 +13,8 @@ skill-drafts/
       SKILL.md
     fanpage-design-guidelines/
       SKILL.md
+    fanpage-grounded-content-guidelines/
+      SKILL.md
     fanpage-internet-research-guidelines/
       SKILL.md
     fanpage-lead-orchestration-guidelines/
@@ -81,6 +83,7 @@ Use these across fanpage teams:
 shared/facebook-fanpage-content-guidelines/
 shared/fanpage-content-creator-guidelines/
 shared/fanpage-design-guidelines/
+shared/fanpage-grounded-content-guidelines/
 shared/fanpage-internet-research-guidelines/
 shared/fanpage-lead-orchestration-guidelines/
 ```
@@ -91,6 +94,7 @@ Upload packages:
 shared/packages/facebook-fanpage-content-guidelines.zip
 shared/packages/fanpage-content-creator-guidelines.zip
 shared/packages/fanpage-design-guidelines.zip
+shared/packages/fanpage-grounded-content-guidelines.zip
 shared/packages/fanpage-internet-research-guidelines.zip
 shared/packages/fanpage-lead-orchestration-guidelines.zip
 ```
@@ -187,6 +191,7 @@ Content agent:
 ```text
 shared/packages/facebook-fanpage-content-guidelines.zip
 shared/packages/fanpage-content-creator-guidelines.zip
+shared/packages/fanpage-grounded-content-guidelines.zip
 ```
 
 Design agent:
@@ -203,6 +208,7 @@ Pizza Hip'S Lead:
 ```text
 shared/packages/fanpage-lead-orchestration-guidelines.zip
 shared/packages/facebook-fanpage-content-guidelines.zip
+shared/packages/fanpage-grounded-content-guidelines.zip
 pages/pizza-hips/packages/brand-pizza-hips-guidelines.zip
 pages/pizza-hips/packages/pizza-hips-franchise-knowledge.zip
 ```
@@ -212,6 +218,7 @@ LPC France Lead:
 ```text
 shared/packages/fanpage-lead-orchestration-guidelines.zip
 shared/packages/facebook-fanpage-content-guidelines.zip
+shared/packages/fanpage-grounded-content-guidelines.zip
 pages/lpc-france/packages/brand-lpc-france-guidelines.zip
 pages/lpc-france/packages/lpc-france-outsourcing-knowledge.zip
 ```
@@ -221,6 +228,7 @@ Kĩ Sư Sàn Phẳng Lead:
 ```text
 shared/packages/fanpage-lead-orchestration-guidelines.zip
 shared/packages/facebook-fanpage-content-guidelines.zip
+shared/packages/fanpage-grounded-content-guidelines.zip
 pages/ki-su-san-phang/packages/brand-ki-su-san-phang-guidelines.zip
 pages/ki-su-san-phang/packages/ki-su-san-phang-structural-knowledge.zip
 ```

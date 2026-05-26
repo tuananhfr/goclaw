@@ -186,13 +186,13 @@ func (t *ReadImageTool) loadImageFromPath(ctx context.Context, path string) ([]p
 	// Infer MIME type from extension
 	ext := strings.ToLower(filepath.Ext(path))
 	mimeTypes := map[string]string{
-		".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+		".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".jfif": "image/jpeg",
 		".png": "image/png", ".gif": "image/gif",
 		".webp": "image/webp", ".bmp": "image/bmp",
 	}
 	mime, ok := mimeTypes[ext]
 	if !ok {
-		return nil, fmt.Errorf("unsupported image format: %s (supported: jpg, png, gif, webp, bmp)", ext)
+		return nil, fmt.Errorf("unsupported image format: %s (supported: jpg, jpeg, jfif, png, gif, webp, bmp)", ext)
 	}
 
 	// Resolve path within workspace (respect workspace restriction).

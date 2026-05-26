@@ -135,7 +135,15 @@ Recommended CTA patterns:
 - "Comment \"ib\" để được gửi báo giá."
 - "Muốn tìm giải pháp kinh doanh F&B tinh gọn, liên hệ hotline để được tư vấn chi tiết về mô hình."
 
-If hotline or contact details are missing, use a placeholder or ask for them instead of inventing.
+Use this fixed Pizza Hip'S Kiosk footer by default unless the user provides a campaign-specific replacement:
+
+```text
+📍 Nhượng quyền Pizza Hip'S Kiosk
+☎ Hotline: 0888.766.656
+🌐 Website: https://pizzahips.com/
+```
+
+Do not invent alternate phone numbers, websites, addresses, or page names. If the user provides updated footer details, use the latest user-provided version exactly.
 
 ## Copywriting Formulas
 
@@ -194,10 +202,10 @@ Every Pizza Hip'S Facebook post should include:
 - Icon scan points when the body uses a list.
 - CTA.
 - One final provocative or open-ended question when suitable.
-- Fixed footer/footage when project details are provided.
+- Fixed Pizza Hip'S Kiosk footer unless the user provides a replacement.
 - 3-5 accurate hashtags, separated from footer by one blank line.
 
-Do not invent footer details. If address, hotline, or website is missing, ask for it or leave a clear placeholder.
+Do not invent footer details. Use the fixed footer above unless the user asks to omit or replace it.
 
 ## Hashtags
 
@@ -281,6 +289,6 @@ Before returning Pizza Hip'S content, verify:
 - CTA exists.
 - Hashtag block starts with `#pizzahips`.
 - Hashtags fit the content route: food/product or franchise/business.
-- Footer is not invented.
+- Fixed Pizza Hip'S Kiosk footer is used unless the user asks to omit or replace it.
 - Image brief uses orange/blue/black and reserves empty/safe space based on the current watermark config, with top center and bottom right only as fallback zones.
 - No claim is exaggerated beyond the user's brief.
