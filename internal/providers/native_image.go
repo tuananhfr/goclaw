@@ -54,6 +54,12 @@ type NativeImageRequest struct {
 	// Prompt is the text description of the image.
 	Prompt string
 
+	// ReferenceImages are optional input images used to guide generation/editing.
+	// Providers that support multimodal Responses input should pass these as
+	// input_image blocks alongside Prompt. Providers that do not support image
+	// references may ignore them.
+	ReferenceImages []ImageContent
+
 	// AspectRatio is the desired aspect ratio, e.g. "16:9", "1:1", "9:16".
 	// Converted to a concrete pixel size by the provider implementation.
 	// Defaults to "1:1" if empty.
@@ -85,9 +91,9 @@ func SizeFromAspect(aspectRatio string) string {
 	case "9:16":
 		return "1024x1792"
 	case "3:4":
-		return "1024x1365"
+		return "1024x1360"
 	case "4:3":
-		return "1365x1024"
+		return "1360x1024"
 	default:
 		return "1024x1024"
 	}

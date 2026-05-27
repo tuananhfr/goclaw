@@ -57,17 +57,31 @@ func (p *CodexProvider) GenerateImage(ctx context.Context, req NativeImageReques
 // so stream is always true. Final assembly happens in parseNativeImageSSE which scans the
 // event stream for response.output_item.done (image item) or response.completed output walk.
 func (p *CodexProvider) buildNativeImageRequestBody(model string, req NativeImageRequest) map[string]any {
+	content := []map[string]any{
+		{"type": "input_text", "text": req.Prompt},
+	}
+	for _, img := range req.ReferenceImages {
+		if img.Data == "" {
+			continue
+		}
+		mime := img.MimeType
+		if mime == "" {
+			mime = "image/png"
+		}
+		content = append(content, map[string]any{
+			"type":      "input_image",
+			"image_url": fmt.Sprintf("data:%s;base64,%s", mime, img.Data),
+		})
+	}
 	return map[string]any{
 		"model":        model,
 		"stream":       true,
 		"store":        false,
-		"instructions": "Generate an image matching the user's description using the image_generation tool. Return only the image; do not describe it in text.",
+		"instructions": "Generate an image matching the user's description using the image_generation tool. If reference images are provided, preserve their relevant composition, subject, style, and visual constraints. Return only the image; do not describe it in text.",
 		"input": []any{
 			map[string]any{
-				"role": "user",
-				"content": []map[string]any{
-					{"type": "input_text", "text": req.Prompt},
-				},
+				"role":    "user",
+				"content": content,
 			},
 		},
 		"tools": []map[string]any{

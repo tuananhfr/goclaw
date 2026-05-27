@@ -162,6 +162,45 @@ func TestCodexGenerateImage_BuildsNativeRequest(t *testing.T) {
 	}
 }
 
+func TestCodexGenerateImage_BuildsNativeRequestWithReferenceImage(t *testing.T) {
+	var captured []byte
+	server := mockImageServer(t, &captured)
+	defer server.Close()
+
+	p := NewCodexProvider("codex-test", &staticTokenSource{token: "tok"}, server.URL, "gpt-image-2")
+	p.retryConfig.Attempts = 1
+
+	req := NativeImageRequest{
+		Model:  "gpt-image-2",
+		Prompt: "Create a variation from this reference",
+		ReferenceImages: []ImageContent{
+			{MimeType: "image/png", Data: minimalPNGForProviders},
+		},
+	}
+	if _, err := p.GenerateImage(context.Background(), req); err != nil {
+		t.Fatalf("GenerateImage returned error: %v", err)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(captured, &body); err != nil {
+		t.Fatalf("unmarshal captured body: %v", err)
+	}
+	inputs := body["input"].([]any)
+	userMsg := inputs[0].(map[string]any)
+	contents := userMsg["content"].([]any)
+	if len(contents) != 2 {
+		t.Fatalf("content len = %d, want 2 (text + reference image)", len(contents))
+	}
+	imagePart := contents[1].(map[string]any)
+	if typ, _ := imagePart["type"].(string); typ != "input_image" {
+		t.Fatalf("content[1].type = %q, want input_image", typ)
+	}
+	imageURL, _ := imagePart["image_url"].(string)
+	if !strings.HasPrefix(imageURL, "data:image/png;base64,") {
+		t.Fatalf("content[1].image_url should be data URL, got %q", imageURL)
+	}
+}
+
 // TestCodexGenerateImage_ImageModelDefault verifies that an empty ImageModel results
 // in the default gpt-image-2 model in the outbound tools[0].model field.
 func TestCodexGenerateImage_ImageModelDefault(t *testing.T) {
@@ -332,8 +371,8 @@ func TestSizeFromAspect(t *testing.T) {
 		{"1:1", "1024x1024"},
 		{"16:9", "1792x1024"},
 		{"9:16", "1024x1792"},
-		{"4:3", "1365x1024"},
-		{"3:4", "1024x1365"},
+		{"4:3", "1360x1024"},
+		{"3:4", "1024x1360"},
 		{"", "1024x1024"},
 		{"custom", "1024x1024"},
 	}

@@ -2,6 +2,8 @@ package tools
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -172,6 +174,141 @@ func TestCreateImageTool_RoutesNativePath_WithPrompt(t *testing.T) {
 	// Media must have one entry.
 	if len(result.Media) != 1 {
 		t.Errorf("result.Media length = %d, want 1", len(result.Media))
+	}
+}
+
+func TestCreateImageTool_ForwardsReferenceImageToNativeProvider(t *testing.T) {
+	pngMagic := []byte{
+		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+		0x00, 0x00, 0x00, 0x00,
+		0x49, 0x45, 0x4e, 0x44,
+		0xae, 0x42, 0x60, 0x82,
+	}
+	workspace := t.TempDir()
+	refPath := filepath.Join(workspace, "refs", "sample.png")
+	if err := os.MkdirAll(filepath.Dir(refPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(refPath, pngMagic, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	fakeProvider := &nativeImageProvider{
+		name:       "openai-codex",
+		model:      "gpt-image-2",
+		returnData: pngMagic,
+	}
+	reg := providers.NewRegistry(nil)
+	reg.Register(fakeProvider)
+
+	chainJSON := []byte(`{"providers":[{"provider":"openai-codex","model":"gpt-image-2","enabled":true,"timeout":30,"max_retries":1}]}`)
+	settings := BuiltinToolSettings{"create_image": chainJSON}
+	ctx := WithBuiltinToolSettings(context.Background(), settings)
+	ctx = WithToolWorkspace(ctx, workspace)
+
+	tool := NewCreateImageTool(reg)
+	result := tool.Execute(ctx, map[string]any{
+		"prompt":               "make a polished variation",
+		"reference_image_path": "refs/sample.png",
+	})
+	if result.IsError {
+		t.Fatalf("Execute returned error: %q", result.ForLLM)
+	}
+	if fakeProvider.calledWith == nil {
+		t.Fatal("GenerateImage was not called on the native provider")
+	}
+	if len(fakeProvider.calledWith.ReferenceImages) != 1 {
+		t.Fatalf("ReferenceImages len = %d, want 1", len(fakeProvider.calledWith.ReferenceImages))
+	}
+	ref := fakeProvider.calledWith.ReferenceImages[0]
+	if ref.MimeType != "image/png" {
+		t.Fatalf("ReferenceImages[0].MimeType = %q, want image/png", ref.MimeType)
+	}
+	if ref.Data == "" {
+		t.Fatal("ReferenceImages[0].Data is empty")
+	}
+}
+
+func TestCreateImageTool_AllowsReferenceImageFromAllowedPrefix(t *testing.T) {
+	pngMagic := []byte{
+		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+		0x00, 0x00, 0x00, 0x00,
+		0x49, 0x45, 0x4e, 0x44,
+		0xae, 0x42, 0x60, 0x82,
+	}
+	workspace := t.TempDir()
+	driveCache := t.TempDir()
+	refPath := filepath.Join(driveCache, "drive", "sample.png")
+	if err := os.MkdirAll(filepath.Dir(refPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(refPath, pngMagic, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	fakeProvider := &nativeImageProvider{
+		name:       "openai-codex",
+		model:      "gpt-image-2",
+		returnData: pngMagic,
+	}
+	reg := providers.NewRegistry(nil)
+	reg.Register(fakeProvider)
+
+	chainJSON := []byte(`{"providers":[{"provider":"openai-codex","model":"gpt-image-2","enabled":true,"timeout":30,"max_retries":1}]}`)
+	settings := BuiltinToolSettings{"create_image": chainJSON}
+	ctx := WithBuiltinToolSettings(context.Background(), settings)
+	ctx = WithToolWorkspace(ctx, workspace)
+
+	tool := NewCreateImageTool(reg)
+	tool.AllowPaths(driveCache)
+	result := tool.Execute(ctx, map[string]any{
+		"prompt":               "make a polished variation",
+		"reference_image_path": refPath,
+	})
+	if result.IsError {
+		t.Fatalf("Execute returned error: %q", result.ForLLM)
+	}
+	if fakeProvider.calledWith == nil || len(fakeProvider.calledWith.ReferenceImages) != 1 {
+		t.Fatalf("expected reference image to be forwarded, got %+v", fakeProvider.calledWith)
+	}
+}
+
+func TestCreateImageTool_UsesContextImageAsReferenceWhenPathOmitted(t *testing.T) {
+	pngMagic := []byte{
+		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+		0x00, 0x00, 0x00, 0x00,
+		0x49, 0x45, 0x4e, 0x44,
+		0xae, 0x42, 0x60, 0x82,
+	}
+	fakeProvider := &nativeImageProvider{
+		name:       "openai-codex",
+		model:      "gpt-image-2",
+		returnData: pngMagic,
+	}
+	reg := providers.NewRegistry(nil)
+	reg.Register(fakeProvider)
+
+	chainJSON := []byte(`{"providers":[{"provider":"openai-codex","model":"gpt-image-2","enabled":true,"timeout":30,"max_retries":1}]}`)
+	settings := BuiltinToolSettings{"create_image": chainJSON}
+	ctx := WithBuiltinToolSettings(context.Background(), settings)
+	ctx = WithToolWorkspace(ctx, t.TempDir())
+	ctx = WithMediaImages(ctx, []providers.ImageContent{{MimeType: "image/png", Data: "cmVm"}})
+
+	tool := NewCreateImageTool(reg)
+	result := tool.Execute(ctx, map[string]any{
+		"prompt": "make a polished variation from the attached image",
+	})
+	if result.IsError {
+		t.Fatalf("Execute returned error: %q", result.ForLLM)
+	}
+	if fakeProvider.calledWith == nil {
+		t.Fatal("GenerateImage was not called on the native provider")
+	}
+	if len(fakeProvider.calledWith.ReferenceImages) != 1 {
+		t.Fatalf("ReferenceImages len = %d, want 1", len(fakeProvider.calledWith.ReferenceImages))
+	}
+	if fakeProvider.calledWith.ReferenceImages[0].Data != "cmVm" {
+		t.Fatalf("ReferenceImages[0].Data = %q, want context image", fakeProvider.calledWith.ReferenceImages[0].Data)
 	}
 }
 

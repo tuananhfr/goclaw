@@ -128,6 +128,13 @@ func wireExtraTools(
 			pa.AllowPaths(userAllowPaths...)
 		}
 	}
+	if createImageTool, ok := toolsReg.Get("create_image"); ok {
+		if pa, ok := createImageTool.(tools.PathAllowable); ok {
+			pa.AllowPaths(skillsAllowPaths...)
+			pa.AllowPaths(mcpAssetAllowPaths...)
+			pa.AllowPaths(userAllowPaths...)
+		}
+	}
 	if renderTool, ok := toolsReg.Get("render_creative"); ok {
 		if pa, ok := renderTool.(tools.PathAllowable); ok {
 			pa.AllowPaths(skillsAllowPaths...)

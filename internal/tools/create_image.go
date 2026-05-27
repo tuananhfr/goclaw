@@ -39,8 +39,9 @@ var imageGenModelDefaults = map[string]string{
 
 // CreateImageTool generates images using an image generation API.
 type CreateImageTool struct {
-	registry  *providers.Registry
-	vaultIntc *VaultInterceptor
+	registry        *providers.Registry
+	vaultIntc       *VaultInterceptor
+	allowedPrefixes []string
 }
 
 func (t *CreateImageTool) SetVaultInterceptor(v *VaultInterceptor) { t.vaultIntc = v }
@@ -53,6 +54,14 @@ func (t *CreateImageTool) Name() string { return "create_image" }
 
 func (t *CreateImageTool) Description() string {
 	return "Generate an image from a text description using an image generation model. Returns a MEDIA: path to the generated image file."
+}
+
+func (t *CreateImageTool) AllowPaths(prefixes ...string) {
+	t.allowedPrefixes = append(t.allowedPrefixes, prefixes...)
+}
+
+func (t *CreateImageTool) AllowedPaths() []string {
+	return append([]string(nil), t.allowedPrefixes...)
 }
 
 func (t *CreateImageTool) Parameters() map[string]any {
@@ -70,6 +79,10 @@ func (t *CreateImageTool) Parameters() map[string]any {
 			"filename_hint": map[string]any{
 				"type":        "string",
 				"description": "Short descriptive filename (no extension). Example: 'sunset-beach', 'company-logo'.",
+			},
+			"reference_image_path": map[string]any{
+				"type":        "string",
+				"description": "Optional workspace/team workspace image path to use as visual reference for image-to-image generation. Supports absolute paths, relative paths, MEDIA: paths, and /v1/files/... paths when readable.",
 			},
 			"deliver": map[string]any{
 				"type":        "boolean",
@@ -91,6 +104,10 @@ func (t *CreateImageTool) Execute(ctx context.Context, args map[string]any) *Res
 	}
 	filenameHint, _ := args["filename_hint"].(string)
 	deliver := boolParam(args, "deliver", true)
+	referenceImages, err := t.loadReferenceImages(ctx, args)
+	if err != nil {
+		return ErrorResult(err.Error())
+	}
 
 	chain := ResolveMediaProviderChain(ctx, "create_image", "", "",
 		imageGenProviderPriority, imageGenModelDefaults, t.registry)
@@ -102,6 +119,9 @@ func (t *CreateImageTool) Execute(ctx context.Context, args map[string]any) *Res
 		}
 		chain[i].Params["prompt"] = prompt
 		chain[i].Params["aspect_ratio"] = aspectRatio
+		if len(referenceImages) > 0 {
+			chain[i].Params["reference_images"] = referenceImages
+		}
 	}
 
 	chainResult, err := ExecuteWithChain(ctx, chain, t.registry, t.callProvider)
@@ -155,6 +175,64 @@ func (t *CreateImageTool) Execute(ctx context.Context, args map[string]any) *Res
 	return result
 }
 
+func (t *CreateImageTool) loadReferenceImages(ctx context.Context, args map[string]any) ([]providers.ImageContent, error) {
+	refPath, _ := args["reference_image_path"].(string)
+	refPath = strings.TrimSpace(refPath)
+	if refPath == "" {
+		return MediaImagesFromCtx(ctx), nil
+	}
+
+	workspace := ToolWorkspaceFromCtx(ctx)
+	if workspace == "" {
+		workspace = os.TempDir()
+	}
+	resolved, err := resolveReadPathWithGlobalOverlay(ctx, normalizeMediaPath(refPath), workspace, true, allowedWithTeamWorkspace(ctx, t.allowedPrefixes))
+	if err != nil {
+		return nil, fmt.Errorf("invalid reference_image_path: %v", err)
+	}
+	if _, statErr := os.Stat(resolved); statErr != nil && !filepath.IsAbs(normalizeMediaPath(refPath)) {
+		if fallback, ok := resolveTeamRelativeFile(ctx, normalizeMediaPath(refPath)); ok {
+			resolved = fallback
+		}
+	}
+
+	ext := strings.ToLower(filepath.Ext(resolved))
+	mimeByExt := map[string]string{
+		".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".jfif": "image/jpeg",
+		".png": "image/png", ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+	}
+	mime, ok := mimeByExt[ext]
+	if !ok {
+		return nil, fmt.Errorf("unsupported reference_image_path format %q (supported: jpg, jpeg, jfif, png, gif, webp, bmp)", ext)
+	}
+	fi, err := os.Stat(resolved)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat reference_image_path: %v", err)
+	}
+	if fi.IsDir() {
+		return nil, fmt.Errorf("reference_image_path is a directory")
+	}
+	if fi.Size() > maxImageFileBytes {
+		return nil, fmt.Errorf("reference_image_path too large (%d bytes, max %d)", fi.Size(), maxImageFileBytes)
+	}
+	data, err := os.ReadFile(resolved)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read reference_image_path: %v", err)
+	}
+	return []providers.ImageContent{{
+		MimeType: mime,
+		Data:     base64.StdEncoding.EncodeToString(data),
+	}}, nil
+}
+
+func getReferenceImages(params map[string]any) []providers.ImageContent {
+	if params == nil {
+		return nil
+	}
+	images, _ := params["reference_images"].([]providers.ImageContent)
+	return images
+}
+
 // embedPromptIntoPNG wraps agent.EmbedPNGPrompt for the tools package.
 // Logs a warning on error but always returns usable bytes.
 func embedPromptIntoPNG(data []byte, prompt string) []byte {
@@ -184,11 +262,12 @@ func (t *CreateImageTool) callProvider(ctx context.Context, cp credentialProvide
 			aspectRatio := GetParamString(params, "aspect_ratio", "1:1")
 			imageModel := GetParamString(params, "image_model", "")
 			result, err := np.GenerateImage(ctx, providers.NativeImageRequest{
-				Model:        model,
-				ImageModel:   imageModel,
-				Prompt:       prompt,
-				AspectRatio:  aspectRatio,
-				OutputFormat: "png",
+				Model:           model,
+				ImageModel:      imageModel,
+				Prompt:          prompt,
+				ReferenceImages: getReferenceImages(params),
+				AspectRatio:     aspectRatio,
+				OutputFormat:    "png",
 			})
 			if err != nil {
 				return nil, nil, fmt.Errorf("native image generation: %w", err)
