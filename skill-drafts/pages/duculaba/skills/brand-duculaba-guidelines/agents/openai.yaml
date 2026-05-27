@@ -1,0 +1,4 @@
+interface:
+  display_name: "Brand Duculaba Guidelines"
+  short_description: "Duculaba page and sales rules"
+  default_prompt: "Use this skill for Duculaba Facebook content, baking ingredient sales posts, image briefs, footer, hashtags, watermark, and page voice."

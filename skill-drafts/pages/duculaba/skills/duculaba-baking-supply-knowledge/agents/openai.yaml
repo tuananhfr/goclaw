@@ -1,0 +1,4 @@
+interface:
+  display_name: "Duculaba Baking Supply Knowledge"
+  short_description: "Baking ingredient content rules"
+  default_prompt: "Use this skill for Duculaba content about flour, baking ingredients, additives, premixes, ingredient applications, simple recipes, baking tips, and wholesale/retail sales."

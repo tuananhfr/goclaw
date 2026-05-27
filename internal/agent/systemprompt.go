@@ -207,7 +207,6 @@ var coreToolSummaries = map[string]string{
 	"create_video":                "Generate videos from text descriptions using AI",
 	"read_document":               "Analyze documents (PDF, DOCX) from <media:document> tags. If fails, use a skill instead. Path is directly accessible",
 	"create_image":                "Generate images from text descriptions using AI",
-	"render_creative":             "Render brand text into a flattened PNG using real .otf/.ttf font files; pass current watermark config when available so text avoids the actual overlay zone",
 	"apply_watermark":             "Apply Facebook MCP watermark config to an image before previewing or posting",
 	"facebook_post_with_comments": "Create a Facebook post via MCP and schedule prepared top-level comments using the page policy from Facebook MCP",
 	"create_audio":                "Generate music or sound effects from text descriptions using AI",

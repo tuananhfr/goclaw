@@ -140,7 +140,6 @@ func setupToolRegistry(
 	// Vision fallback tool (for non-vision providers like MiniMax)
 	toolsReg.Register(tools.NewReadImageTool(providerRegistry))
 	toolsReg.Register(tools.NewCreateImageTool(providerRegistry))
-	toolsReg.Register(tools.NewRenderCreativeTool(workspace, agentCfg.RestrictToWorkspace))
 	toolsReg.Register(tools.NewApplyWatermarkTool(workspace, agentCfg.RestrictToWorkspace))
 	toolsReg.Register(tools.NewProductVisualProfileTool(dataDir))
 

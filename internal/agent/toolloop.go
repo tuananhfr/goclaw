@@ -39,7 +39,7 @@ const (
 var mutatingTools = map[string]bool{
 	"write_file": true, "edit": true, "edit_file": true,
 	"spawn": true, "message": true,
-	"create_image": true, "render_creative": true, "apply_watermark": true, "facebook_post_with_comments": true, "create_video": true, "create_audio": true,
+	"create_image": true, "apply_watermark": true, "facebook_post_with_comments": true, "create_video": true, "create_audio": true,
 	"tts": true, "cron": true, "publish_skill": true,
 	"sessions_send": true,
 }

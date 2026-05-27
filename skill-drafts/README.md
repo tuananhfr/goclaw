@@ -8,61 +8,39 @@ This folder keeps editable skill source folders, page-specific brand kits, and u
 skill-drafts/
   shared/
     facebook-fanpage-content-guidelines/
-      SKILL.md
     fanpage-content-creator-guidelines/
-      SKILL.md
     fanpage-design-guidelines/
-      SKILL.md
     fanpage-grounded-content-guidelines/
-      SKILL.md
     fanpage-internet-research-guidelines/
-      SKILL.md
     fanpage-lead-orchestration-guidelines/
-      SKILL.md
     packages/
 
   pages/
     pizza-hips/
       skills/
         brand-pizza-hips-guidelines/
-          SKILL.md
-          assets/fonts/SVN-Bango.otf
         pizza-hips-franchise-knowledge/
-          SKILL.md
-      brand-kits/
-        pizza-hips/
-          BRAND.md
-          render-preset.json
-          assets/fonts/SVN-Bango.otf
+      brand-kits/pizza-hips/
       packages/
 
     lpc-france/
       skills/
         brand-lpc-france-guidelines/
-          SKILL.md
-          agents/openai.yaml
         lpc-france-outsourcing-knowledge/
-          SKILL.md
-          agents/openai.yaml
+      packages/
+
+    duculaba/
+      skills/
+        brand-duculaba-guidelines/
+        duculaba-baking-supply-knowledge/
       packages/
 
     ki-su-san-phang/
       skills/
         brand-ki-su-san-phang-guidelines/
-          SKILL.md
-          agents/openai.yaml
         ki-su-san-phang-structural-knowledge/
-          SKILL.md
-          agents/openai.yaml
         Be_Vietnam_Pro.zip
-      brand-kits/
-        ki-su-san-phang/
-          BRAND.md
-          render-preset.json
-          assets/fonts/BeVietnamPro-Regular.ttf
-          assets/fonts/BeVietnamPro-Medium.ttf
-          assets/fonts/BeVietnamPro-Bold.ttf
-          assets/fonts/BeVietnamPro-ExtraBold.ttf
+      brand-kits/ki-su-san-phang/
       packages/
 ```
 
@@ -71,9 +49,9 @@ skill-drafts/
 - `shared/*`: reusable skills for many fanpage teams.
 - `shared/packages/*`: ZIP packages for shared skills.
 - `pages/{page_slug}/skills/*`: page-specific skills.
-- `pages/{page_slug}/brand-kits/*`: team/global workspace materials such as fonts, brand rules, render presets, image references, and deterministic typography assets.
+- `pages/{page_slug}/brand-kits/*`: global workspace materials such as fonts, brand rules, render presets, and deterministic typography assets.
 - `pages/{page_slug}/packages/*`: upload-ready page-specific ZIP packages.
-- Do not treat `packages/` as source. Edit source folders first, then rebuild ZIPs.
+- Edit source folders first, then rebuild ZIPs. Do not edit packages as source.
 
 ## Shared Skills
 
@@ -105,7 +83,7 @@ shared/packages/fanpage-lead-orchestration-guidelines.zip
 
 Purpose:
 
-- `brand-pizza-hips-guidelines`: Pizza Hip'S identity, tone, hashtags, footer handling, watermark zones, image rules, and brand typography instructions.
+- `brand-pizza-hips-guidelines`: Pizza Hip'S identity, tone, fixed Kiosk footer, hashtags, watermark zones, image rules, and brand typography instructions.
 - `pizza-hips-franchise-knowledge`: franchise/F&B business model content, legal-risk wording, and Pizza Hip'S franchise education.
 
 Skill uploads:
@@ -145,7 +123,23 @@ pages/lpc-france/packages/lpc-france-outsourcing-knowledge.zip
 
 No LPC France brand kit exists yet.
 
-### Kĩ Sư Sàn Phẳng
+### Duculaba
+
+Purpose:
+
+- `brand-duculaba-guidelines`: Duculaba page rules, Vietnamese sales tone, fixed footer, hashtag selection, top-left watermark safe zone, visual guidance, and baking ingredient sales positioning.
+- `duculaba-baking-supply-knowledge`: baking flour, flour lines, premixes, additives, cacao, matcha, starches, ingredient applications, recipe-support limits, storage, wholesale/retail buyer advice, and safe food-content claims.
+
+Skill uploads:
+
+```text
+pages/duculaba/packages/brand-duculaba-guidelines.zip
+pages/duculaba/packages/duculaba-baking-supply-knowledge.zip
+```
+
+No Duculaba brand kit exists yet.
+
+### Ki Su San Phang
 
 Purpose:
 
@@ -223,7 +217,17 @@ pages/lpc-france/packages/brand-lpc-france-guidelines.zip
 pages/lpc-france/packages/lpc-france-outsourcing-knowledge.zip
 ```
 
-Kĩ Sư Sàn Phẳng Lead:
+Duculaba Lead:
+
+```text
+shared/packages/fanpage-lead-orchestration-guidelines.zip
+shared/packages/facebook-fanpage-content-guidelines.zip
+shared/packages/fanpage-grounded-content-guidelines.zip
+pages/duculaba/packages/brand-duculaba-guidelines.zip
+pages/duculaba/packages/duculaba-baking-supply-knowledge.zip
+```
+
+Ki Su San Phang Lead:
 
 ```text
 shared/packages/fanpage-lead-orchestration-guidelines.zip
@@ -249,8 +253,8 @@ Page skill example:
 
 ```powershell
 tar -a -cf `
-  skill-drafts\pages\ki-su-san-phang\packages\brand-ki-su-san-phang-guidelines.zip `
-  -C skill-drafts\pages\ki-su-san-phang\skills\brand-ki-su-san-phang-guidelines .
+  skill-drafts\pages\duculaba\packages\brand-duculaba-guidelines.zip `
+  -C skill-drafts\pages\duculaba\skills\brand-duculaba-guidelines .
 ```
 
 Brand kit example:
@@ -265,8 +269,8 @@ If running from inside `skill-drafts`, omit the leading `skill-drafts\`:
 
 ```powershell
 tar -a -cf `
-  pages\ki-su-san-phang\packages\brand-kits.zip `
-  -C pages\ki-su-san-phang brand-kits
+  pages\duculaba\packages\brand-duculaba-guidelines.zip `
+  -C pages\duculaba\skills\brand-duculaba-guidelines .
 ```
 
 If `tar` fails to open an existing ZIP, remove or rename the old generated package and run the same command again.
@@ -314,13 +318,13 @@ brand-kits/ki-su-san-phang/assets/fonts/BeVietnamPro-ExtraBold.ttf
 Quick list:
 
 ```powershell
-tar -tf skill-drafts\pages\ki-su-san-phang\packages\brand-kits.zip
+tar -tf skill-drafts\pages\duculaba\packages\brand-duculaba-guidelines.zip
 ```
 
 Backslash check:
 
 ```powershell
-$zipPath = "skill-drafts\pages\ki-su-san-phang\packages\brand-kits.zip"
+$zipPath = "skill-drafts\pages\duculaba\packages\brand-duculaba-guidelines.zip"
 
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem

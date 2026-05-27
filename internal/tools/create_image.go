@@ -86,7 +86,7 @@ func (t *CreateImageTool) Parameters() map[string]any {
 			},
 			"deliver": map[string]any{
 				"type":        "boolean",
-				"description": "Whether to attach the generated image to the user. Default true. Set false when this image is only an intermediate background for render_creative.",
+				"description": "Whether to attach the generated image to the user. Default true. Set false when this image is only an intermediate asset for another tool or workflow.",
 			},
 		},
 		"required": []string{"prompt"},
