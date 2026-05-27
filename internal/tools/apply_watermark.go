@@ -247,7 +247,45 @@ func (t *ApplyWatermarkTool) loadLogo(ctx context.Context, ref, workspace string
 
 func (t *ApplyWatermarkTool) resolveImagePath(ctx context.Context, p, workspace string, allowed []string) (string, error) {
 	p = normalizeMediaPath(p)
-	return resolveReadPathWithGlobalOverlay(ctx, p, workspace, effectiveRestrict(ctx, t.restrict), allowed)
+	resolved, err := resolveReadPathWithGlobalOverlay(ctx, p, workspace, effectiveRestrict(ctx, t.restrict), allowed)
+	if err != nil {
+		return "", err
+	}
+	if _, statErr := os.Stat(resolved); statErr == nil || filepath.IsAbs(p) {
+		return resolved, nil
+	}
+	if fallback, ok := resolveTeamRelativeFile(ctx, p); ok {
+		return fallback, nil
+	}
+	return resolved, nil
+}
+
+func resolveTeamRelativeFile(ctx context.Context, p string) (string, bool) {
+	if p == "" || filepath.IsAbs(p) {
+		return "", false
+	}
+	rel := filepath.Clean(p)
+	roots := []string{
+		ToolTeamWorkspaceFromCtx(ctx),
+		ToolTeamGlobalWorkspaceFromCtx(ctx),
+		ToolTeamRootFromCtx(ctx),
+	}
+	seen := make(map[string]bool, len(roots))
+	for _, root := range roots {
+		if root == "" {
+			continue
+		}
+		root = filepath.Clean(root)
+		if seen[root] {
+			continue
+		}
+		seen[root] = true
+		candidate := filepath.Join(root, rel)
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate, true
+		}
+	}
+	return "", false
 }
 
 func (t *ApplyWatermarkTool) resolveOutputPath(ctx context.Context, args map[string]any, workspace, resolvedBase string) (string, error) {

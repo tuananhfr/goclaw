@@ -96,6 +96,38 @@ func TestApplyWatermarkTool_TextWatermark(t *testing.T) {
 	}
 }
 
+func TestApplyWatermarkTool_LoadsRelativeBaseFromTeamWorkspaceFallback(t *testing.T) {
+	workspace := t.TempDir()
+	teamWorkspace := t.TempDir()
+	baseRel := filepath.Join("generated", "final.png")
+	base := filepath.Join(teamWorkspace, baseRel)
+	out := filepath.Join(workspace, "watermarked.png")
+	writeSolidPNG(t, base, 120, 80, color.RGBA{255, 255, 255, 255})
+
+	tool := NewApplyWatermarkTool(workspace, true)
+	ctx := WithToolWorkspace(context.Background(), workspace)
+	ctx = WithToolTeamWorkspace(ctx, teamWorkspace)
+	result := tool.Execute(ctx, map[string]any{
+		"base_image_path": baseRel,
+		"output_path":     out,
+		"watermark": map[string]any{
+			"enabled":   true,
+			"mode":      "text",
+			"text":      "WM",
+			"x_pct":     0.5,
+			"y_pct":     0.5,
+			"scale_pct": 0.4,
+			"opacity":   1,
+		},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", result.ForLLM)
+	}
+	if _, err := os.Stat(out); err != nil {
+		t.Fatalf("expected watermarked output: %v", err)
+	}
+}
+
 func TestApplyWatermarkTool_ItemsApplySequentially(t *testing.T) {
 	workspace := t.TempDir()
 	base := filepath.Join(workspace, "base.png")
