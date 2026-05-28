@@ -199,7 +199,13 @@ func (t *ReadImageTool) loadImageFromPath(ctx context.Context, path string) ([]p
 	workspace := ToolWorkspaceFromCtx(ctx)
 	resolved, err := resolveReadPathWithGlobalOverlay(ctx, path, workspace, effectiveRestrict(ctx, true), allowedWithTeamWorkspace(ctx, t.allowedPrefixes))
 	if err != nil {
-		return nil, fmt.Errorf("invalid image path: %w", err)
+		if fallback, ok, fallbackErr := resolveUploadedFileByBasename(ctx, workspace, path); fallbackErr != nil {
+			return nil, fallbackErr
+		} else if ok {
+			resolved = fallback
+		} else {
+			return nil, fmt.Errorf("invalid image path: %w", err)
+		}
 	}
 	if err := checkDeniedPath(resolved, workspace, nil); err != nil {
 		return nil, err
@@ -208,7 +214,15 @@ func (t *ReadImageTool) loadImageFromPath(ctx context.Context, path string) ([]p
 	// Pre-check file size before loading into memory.
 	fi, err := os.Stat(resolved)
 	if err != nil {
-		return nil, fmt.Errorf("failed to stat image file: %w", err)
+		if fallback, ok, fallbackErr := resolveUploadedFileByBasename(ctx, workspace, path); fallbackErr != nil {
+			return nil, fallbackErr
+		} else if ok {
+			resolved = fallback
+			fi, err = os.Stat(resolved)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to stat image file: %w", err)
+		}
 	}
 	if fi.Size() > maxImageFileBytes {
 		return nil, fmt.Errorf("image file too large (%d bytes, max %d)", fi.Size(), maxImageFileBytes)

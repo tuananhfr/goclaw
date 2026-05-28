@@ -1,0 +1,4 @@
+interface:
+  display_name: "BakeTek Recipe Culture Knowledge"
+  short_description: "Baking recipe and culture rules"
+  default_prompt: "Use this skill for BakeTek content about detailed baking recipes, new cake trends, baking culture, unusual cakes, flour, baking ingredients, additives, storage, and safe food claims."

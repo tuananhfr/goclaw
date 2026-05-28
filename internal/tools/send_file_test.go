@@ -462,3 +462,34 @@ func TestSendFile_T13_BinaryFileLargeNoContentRead(t *testing.T) {
 		t.Errorf("Media[0].Path = %q, want %q", result.Media[0].Path, bigFile)
 	}
 }
+
+func TestSendFile_LoadsUploadByBasenameFromSiblingScope(t *testing.T) {
+	agentRoot := t.TempDir()
+	workspace := filepath.Join(agentRoot, "1509083589399150602")
+	uploadDir := filepath.Join(agentRoot, "guild_1501847620132405321_user_474714223667052546", ".uploads")
+	name := "fb-apply-watermark-fdc52c0f1b70-8bed70c3.jpg"
+	uploaded := filepath.Join(uploadDir, name)
+	if err := os.MkdirAll(workspace, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(uploaded, []byte("image"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	tool := NewSendFileTool(workspace, true)
+	result := tool.Execute(WithToolWorkspace(context.Background(), workspace), map[string]any{
+		"path": name,
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", result.ForLLM)
+	}
+	if len(result.Media) != 1 {
+		t.Fatalf("expected one media file, got %d", len(result.Media))
+	}
+	if result.Media[0].Path != uploaded {
+		t.Fatalf("expected uploaded path %q, got %q", uploaded, result.Media[0].Path)
+	}
+}

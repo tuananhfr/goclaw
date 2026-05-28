@@ -128,6 +128,69 @@ func TestApplyWatermarkTool_LoadsRelativeBaseFromTeamWorkspaceFallback(t *testin
 	}
 }
 
+func TestApplyWatermarkTool_LoadsGeneratedBaseByBasenameFallback(t *testing.T) {
+	workspace := t.TempDir()
+	teamWorkspace := t.TempDir()
+	name := "ubot-preview-traditional-vs-ubot-brief-task_20260528-030339_415165.png"
+	base := filepath.Join(teamWorkspace, "generated", "2026-05-28", name)
+	out := filepath.Join(workspace, "watermarked.png")
+	writeSolidPNG(t, base, 120, 80, color.RGBA{255, 255, 255, 255})
+
+	tool := NewApplyWatermarkTool(workspace, true)
+	ctx := WithToolWorkspace(context.Background(), workspace)
+	ctx = WithToolTeamWorkspace(ctx, teamWorkspace)
+	result := tool.Execute(ctx, map[string]any{
+		"base_image_path": filepath.Join(teamWorkspace, name),
+		"output_path":     out,
+		"watermark": map[string]any{
+			"enabled":   true,
+			"mode":      "text",
+			"text":      "WM",
+			"x_pct":     0.5,
+			"y_pct":     0.5,
+			"scale_pct": 0.4,
+			"opacity":   1,
+		},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", result.ForLLM)
+	}
+	if _, err := os.Stat(out); err != nil {
+		t.Fatalf("expected watermarked output: %v", err)
+	}
+}
+
+func TestApplyWatermarkTool_LoadsUploadByBasenameFromSiblingScope(t *testing.T) {
+	agentRoot := t.TempDir()
+	workspace := filepath.Join(agentRoot, "1509083589399150602")
+	uploadDir := filepath.Join(agentRoot, "guild_1501847620132405321_user_474714223667052546", ".uploads")
+	name := "fb-apply-watermark-fdc52c0f1b70-8bed70c3.jpg"
+	base := filepath.Join(uploadDir, name)
+	out := filepath.Join(workspace, "watermarked.png")
+	writeSolidPNG(t, base, 120, 80, color.RGBA{255, 255, 255, 255})
+
+	tool := NewApplyWatermarkTool(workspace, true)
+	result := tool.Execute(WithToolWorkspace(context.Background(), workspace), map[string]any{
+		"base_image_path": name,
+		"output_path":     out,
+		"watermark": map[string]any{
+			"enabled":   true,
+			"mode":      "text",
+			"text":      "WM",
+			"x_pct":     0.5,
+			"y_pct":     0.5,
+			"scale_pct": 0.4,
+			"opacity":   1,
+		},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", result.ForLLM)
+	}
+	if _, err := os.Stat(out); err != nil {
+		t.Fatalf("expected watermarked output: %v", err)
+	}
+}
+
 func TestApplyWatermarkTool_ItemsApplySequentially(t *testing.T) {
 	workspace := t.TempDir()
 	base := filepath.Join(workspace, "base.png")
@@ -169,7 +232,7 @@ func TestApplyWatermarkTool_MissingAssetsError(t *testing.T) {
 
 	logoResult := tool.Execute(WithToolWorkspace(context.Background(), workspace), map[string]any{
 		"base_image_path": "base.png",
-		"watermark":      map[string]any{"enabled": true, "mode": "logo"},
+		"watermark":       map[string]any{"enabled": true, "mode": "logo"},
 	})
 	if !logoResult.IsError || !strings.Contains(logoResult.ForLLM, "logo_path or logo_url") {
 		t.Fatalf("expected missing logo error, got %+v", logoResult)
@@ -177,7 +240,7 @@ func TestApplyWatermarkTool_MissingAssetsError(t *testing.T) {
 
 	textResult := tool.Execute(WithToolWorkspace(context.Background(), workspace), map[string]any{
 		"base_image_path": "base.png",
-		"watermark":      map[string]any{"enabled": true, "mode": "text"},
+		"watermark":       map[string]any{"enabled": true, "mode": "text"},
 	})
 	if !textResult.IsError || !strings.Contains(textResult.ForLLM, "non-empty text") {
 		t.Fatalf("expected missing text error, got %+v", textResult)

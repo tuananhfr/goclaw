@@ -19,9 +19,9 @@ import (
 	"time"
 
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
+	xdraw "golang.org/x/image/draw"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
-	xdraw "golang.org/x/image/draw"
 	"golang.org/x/image/math/fixed"
 )
 
@@ -249,12 +249,25 @@ func (t *ApplyWatermarkTool) resolveImagePath(ctx context.Context, p, workspace 
 	p = normalizeMediaPath(p)
 	resolved, err := resolveReadPathWithGlobalOverlay(ctx, p, workspace, effectiveRestrict(ctx, t.restrict), allowed)
 	if err != nil {
+		if fallback, ok, fallbackErr := resolveUploadedFileByBasename(ctx, workspace, p); fallbackErr != nil {
+			return "", fallbackErr
+		} else if ok {
+			return fallback, nil
+		}
 		return "", err
 	}
-	if _, statErr := os.Stat(resolved); statErr == nil || filepath.IsAbs(p) {
+	if _, statErr := os.Stat(resolved); statErr == nil {
 		return resolved, nil
 	}
 	if fallback, ok := resolveTeamRelativeFile(ctx, p); ok {
+		return fallback, nil
+	}
+	if fallback, ok, fallbackErr := resolveUploadedFileByBasename(ctx, workspace, p); fallbackErr != nil {
+		return "", fallbackErr
+	} else if ok {
+		return fallback, nil
+	}
+	if fallback, ok := resolveGeneratedImageByBasename(ctx, workspace, filepath.Base(p)); ok {
 		return fallback, nil
 	}
 	return resolved, nil
@@ -283,6 +296,53 @@ func resolveTeamRelativeFile(ctx context.Context, p string) (string, bool) {
 		candidate := filepath.Join(root, rel)
 		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
 			return candidate, true
+		}
+	}
+	return "", false
+}
+
+func resolveGeneratedImageByBasename(ctx context.Context, workspace, name string) (string, bool) {
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		return "", false
+	}
+	roots := []string{
+		workspace,
+		ToolTeamWorkspaceFromCtx(ctx),
+		ToolTeamGlobalWorkspaceFromCtx(ctx),
+		ToolTeamRootFromCtx(ctx),
+	}
+	seen := make(map[string]bool, len(roots))
+	for _, root := range roots {
+		if root == "" {
+			continue
+		}
+		root = filepath.Clean(root)
+		if seen[root] {
+			continue
+		}
+		seen[root] = true
+
+		if candidate, ok := newestGeneratedFile(root, name); ok {
+			return candidate, true
+		}
+	}
+	return "", false
+}
+
+func newestGeneratedFile(root, name string) (string, bool) {
+	patterns := []string{
+		filepath.Join(root, "generated", "*", name),
+		filepath.Join(root, "generated", name),
+	}
+	for _, pattern := range patterns {
+		matches, err := filepath.Glob(pattern)
+		if err != nil || len(matches) == 0 {
+			continue
+		}
+		for i := len(matches) - 1; i >= 0; i-- {
+			if info, statErr := os.Stat(matches[i]); statErr == nil && !info.IsDir() {
+				return matches[i], true
+			}
 		}
 	}
 	return "", false

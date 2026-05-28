@@ -41,6 +41,12 @@ skill-drafts/
         duculaba-baking-supply-knowledge/
       packages/
 
+    baketek/
+      skills/
+        brand-baketek-guidelines/
+        baketek-recipe-culture-knowledge/
+      packages/
+
     ki-su-san-phang/
       skills/
         brand-ki-su-san-phang-guidelines/
@@ -161,6 +167,22 @@ pages/duculaba/packages/duculaba-baking-supply-knowledge.zip
 
 No Duculaba brand kit exists yet.
 
+### BakeTek
+
+Purpose:
+
+- `brand-baketek-guidelines`: BakeTek page rules, Vietnamese friendly/expert recipe tone, fixed footer, hashtag selection, top-right watermark safe zone, visual guidance, detailed recipe format, and ingredient-linked sales positioning.
+- `baketek-recipe-culture-knowledge`: detailed baking recipes, new cake trends, baking culture/habits, unusual cake ideas, flour, Bakers Choice, mooncake baking, additives, ingredient applications, storage, troubleshooting, and safe healthy/food claims.
+
+Skill uploads:
+
+```text
+pages/baketek/packages/brand-baketek-guidelines.zip
+pages/baketek/packages/baketek-recipe-culture-knowledge.zip
+```
+
+No BakeTek brand kit exists yet.
+
 ### Ki Su San Phang
 
 Purpose:
@@ -257,6 +279,16 @@ shared/packages/facebook-fanpage-content-guidelines.zip
 shared/packages/fanpage-grounded-content-guidelines.zip
 pages/duculaba/packages/brand-duculaba-guidelines.zip
 pages/duculaba/packages/duculaba-baking-supply-knowledge.zip
+```
+
+BakeTek Lead:
+
+```text
+shared/packages/fanpage-lead-orchestration-guidelines.zip
+shared/packages/facebook-fanpage-content-guidelines.zip
+shared/packages/fanpage-grounded-content-guidelines.zip
+pages/baketek/packages/brand-baketek-guidelines.zip
+pages/baketek/packages/baketek-recipe-culture-knowledge.zip
 ```
 
 Ki Su San Phang Lead:

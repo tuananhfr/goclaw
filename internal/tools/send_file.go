@@ -78,7 +78,13 @@ func (t *SendFileTool) Execute(ctx context.Context, args map[string]any) *Result
 	allowed := allowedWithTeamWorkspace(ctx, t.allowedPrefixes)
 	resolved, err := resolvePathWithAllowed(path, workspace, effectiveRestrict(ctx, t.restrict), allowed)
 	if err != nil {
-		return ErrorResult("cannot access path: " + err.Error())
+		if fallback, ok, fallbackErr := resolveUploadedFileByBasename(ctx, workspace, path); fallbackErr != nil {
+			return ErrorResult(fallbackErr.Error())
+		} else if ok {
+			resolved = fallback
+		} else {
+			return ErrorResult("cannot access path: " + err.Error())
+		}
 	}
 
 	// Deny-paths guard: reject access to internal files (memory.db, config.json, etc.).
@@ -89,7 +95,15 @@ func (t *SendFileTool) Execute(ctx context.Context, args map[string]any) *Result
 	// Stat: file must exist and be a regular file (not a directory or device).
 	fi, err := os.Stat(resolved)
 	if err != nil {
-		return ErrorResult(fmt.Sprintf("file not found: %s", path))
+		if fallback, ok, fallbackErr := resolveUploadedFileByBasename(ctx, workspace, path); fallbackErr != nil {
+			return ErrorResult(fallbackErr.Error())
+		} else if ok {
+			resolved = fallback
+			fi, err = os.Stat(resolved)
+		}
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("file not found: %s", path))
+		}
 	}
 	if !fi.Mode().IsRegular() {
 		return ErrorResult(fmt.Sprintf("path is not a regular file: %s", path))

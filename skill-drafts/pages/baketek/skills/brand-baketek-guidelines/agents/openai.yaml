@@ -1,0 +1,4 @@
+interface:
+  display_name: "Brand BakeTek Guidelines"
+  short_description: "BakeTek page and recipe rules"
+  default_prompt: "Use this skill for BakeTek Facebook content, baking recipe posts, ingredient sales posts, image briefs, footer, hashtags, watermark, CTA, and page voice."
