@@ -16,7 +16,7 @@ export const CODE_EXTENSIONS = new Set([
 ]);
 
 export const IMAGE_EXTENSIONS = new Set([
-  "jpg", "jpeg", "png", "gif", "webp", "svg", "ico", "bmp",
+  "jpg", "jpeg", "jfif", "png", "gif", "webp", "svg", "ico", "bmp",
 ]);
 
 const TEXT_EXTENSIONS = new Set([

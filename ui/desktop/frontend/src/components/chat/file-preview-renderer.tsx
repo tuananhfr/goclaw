@@ -18,7 +18,7 @@ export function getLanguage(filename: string): string {
 
 export function isImage(filename: string, mimeType?: string): boolean {
   if (mimeType?.startsWith('image/')) return true
-  return /\.(jpe?g|png|gif|webp|svg|bmp|ico)$/i.test(filename)
+  return /\.(jpe?g|jfif|png|gif|webp|svg|bmp|ico)$/i.test(filename)
 }
 
 export function isVideo(filename: string, mimeType?: string): boolean {

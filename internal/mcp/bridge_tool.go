@@ -396,7 +396,7 @@ func imageContentData(content mcpgo.Content) (data string, mimeType string, ok b
 func extFromMime(mimeType string) string {
 	if exts, err := mime.ExtensionsByType(mimeType); err == nil && len(exts) > 0 {
 		ext := strings.TrimPrefix(exts[0], ".")
-		if ext == "jpeg" {
+		if ext == "jpeg" || ext == "jpe" || ext == "jfif" {
 			return "jpg"
 		}
 		return ext

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"path/filepath"
+	"strings"
 
 	"github.com/nextlevelbuilder/goclaw/internal/providers"
 	"github.com/nextlevelbuilder/goclaw/internal/tools"
@@ -86,6 +87,9 @@ func (l *Loop) processToolResult(
 	// Collect MEDIA: paths from tool results.
 	// Prefer result.Media (explicit) over ForLLM MEDIA: prefix (legacy) to avoid duplicates.
 	if len(result.Media) > 0 {
+		if registryName == "apply_watermark" && !result.IsError {
+			rs.mediaResults = removeSupersededWatermarkBaseMedia(ctx, rs.mediaResults, tc.Arguments)
+		}
 		for i, mf := range result.Media {
 			ct := mf.MimeType
 			if ct == "" {
@@ -148,6 +152,54 @@ func (l *Loop) processToolResult(
 	}
 
 	return toolMsg, warningMsgs, action
+}
+
+func removeSupersededWatermarkBaseMedia(ctx context.Context, media []MediaResult, args map[string]any) []MediaResult {
+	if len(media) == 0 || args == nil {
+		return media
+	}
+	raw, _ := args["base_image_path"].(string)
+	candidates := watermarkBasePathCandidates(ctx, raw)
+	if len(candidates) == 0 {
+		return media
+	}
+	out := media[:0]
+	for _, mr := range media {
+		if !candidates[filepath.Clean(mr.Path)] {
+			out = append(out, mr)
+		}
+	}
+	return out
+}
+
+func watermarkBasePathCandidates(ctx context.Context, raw string) map[string]bool {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	raw = strings.TrimPrefix(raw, "MEDIA:")
+	if strings.HasPrefix(raw, "/v1/files/") {
+		raw = strings.TrimPrefix(raw, "/v1/files/")
+		if idx := strings.IndexAny(raw, "?#"); idx >= 0 {
+			raw = raw[:idx]
+		}
+		raw = "/" + strings.TrimPrefix(raw, "/")
+	}
+	raw = filepath.FromSlash(raw)
+	paths := map[string]bool{filepath.Clean(raw): true}
+	if !filepath.IsAbs(raw) {
+		for _, root := range []string{
+			tools.ToolWorkspaceFromCtx(ctx),
+			tools.ToolTeamWorkspaceFromCtx(ctx),
+			tools.ToolTeamGlobalWorkspaceFromCtx(ctx),
+			tools.ToolTeamRootFromCtx(ctx),
+		} {
+			if root != "" {
+				paths[filepath.Clean(filepath.Join(root, raw))] = true
+			}
+		}
+	}
+	return paths
 }
 
 // checkReadOnlyStreak detects when the agent is stuck in a read-only loop.
