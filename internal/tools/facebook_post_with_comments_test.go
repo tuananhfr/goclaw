@@ -2,6 +2,8 @@ package tools
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -120,6 +122,67 @@ func TestFacebookPostWithComments_DisabledCommentsOnlyPosts(t *testing.T) {
 	}
 	if len(cron.toolCallJobs) != 0 {
 		t.Fatalf("scheduled jobs = %d, want 0", len(cron.toolCallJobs))
+	}
+}
+
+func TestFacebookPostWithComments_NormalizesRelativeImageURL(t *testing.T) {
+	workspace := t.TempDir()
+	imagePath := filepath.Join(workspace, "generated", "post.png")
+	if err := os.MkdirAll(filepath.Dir(imagePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(imagePath, []byte("png"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	reg := NewRegistry()
+	postTool := &fakeFBMCPTool{name: "mcp_fb__fb_create_photo_post", out: `{"id":"123_456"}`}
+	reg.Register(postTool)
+	tool := NewFacebookPostWithCommentsTool(reg, &fakeCronStore{})
+
+	ctx := WithToolWorkspace(context.Background(), workspace)
+	result := tool.Execute(ctx, map[string]any{
+		"post_kind":     "photo",
+		"post_args":     map[string]any{"image_url": "MEDIA:generated/post.png", "caption": "caption"},
+		"post_comments": map[string]any{"enabled": false},
+	})
+
+	if result.IsError {
+		t.Fatalf("Execute returned error: %s", result.ForLLM)
+	}
+	if got := postTool.args["image_url"]; got != imagePath {
+		t.Fatalf("image_url = %q, want %q", got, imagePath)
+	}
+}
+
+func TestFacebookPostWithComments_AutoHookNormalizesRelativeImageURL(t *testing.T) {
+	workspace := t.TempDir()
+	imagePath := filepath.Join(workspace, "generated", "post.png")
+	if err := os.MkdirAll(filepath.Dir(imagePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(imagePath, []byte("png"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	reg := NewRegistry()
+	postTool := &fakeFBMCPTool{name: "mcp_fb__fb_create_photo_post", out: `{"id":"123_456"}`}
+	reg.Register(postTool)
+	tool := NewFacebookPostWithCommentsTool(reg, &fakeCronStore{})
+	reg.AddBeforeExecuteHook(tool.BeforeExecute)
+	reg.AddAfterExecuteHook(tool.AfterExecute)
+
+	ctx := WithToolWorkspace(context.Background(), workspace)
+	result := reg.ExecuteWithContext(ctx, "mcp_fb__fb_create_photo_post", map[string]any{
+		"image_url": "generated/post.png",
+		"caption":   "caption",
+	}, "", "", "", "s1", nil)
+
+	if result.IsError {
+		t.Fatalf("Execute returned error: %s", result.ForLLM)
+	}
+	if got := postTool.args["image_url"]; got != imagePath {
+		t.Fatalf("image_url = %q, want %q", got, imagePath)
 	}
 }
 

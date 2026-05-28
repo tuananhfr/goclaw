@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"net/url"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -126,6 +128,7 @@ func (t *FacebookPostWithCommentsTool) Execute(ctx context.Context, args map[str
 			postArgs["page_id"] = pageID
 		}
 	}
+	normalizeFacebookPostMediaArgs(ctx, postArgs)
 
 	postTool, err := activeTool.resolveTool(stringArg(args, "mcp_post_tool_name"), postSuffix)
 	if err != nil {
@@ -178,6 +181,7 @@ func (t *FacebookPostWithCommentsTool) BeforeExecute(ctx context.Context, reg *R
 	if ctx.Value(fbAutoCommentHookSkipKey{}) == true || !isFacebookMCPPostTool(name) {
 		return nil
 	}
+	normalizeFacebookPostMediaArgs(ctx, args)
 	if reg == nil {
 		reg = t.registry
 	}
@@ -364,6 +368,55 @@ func isFacebookMCPPostTool(name string) bool {
 		(strings.HasSuffix(name, "__fb_create_post") ||
 			strings.HasSuffix(name, "__fb_create_photo_post") ||
 			strings.HasSuffix(name, "__fb_create_post_with_media"))
+}
+
+func normalizeFacebookPostMediaArgs(ctx context.Context, args map[string]any) {
+	if args == nil {
+		return
+	}
+	for _, key := range []string{"image_url", "image"} {
+		raw, ok := args[key].(string)
+		if !ok || strings.TrimSpace(raw) == "" || isExternalMediaURL(raw) {
+			continue
+		}
+		if resolved, ok := resolveFacebookLocalMediaArg(ctx, raw); ok {
+			args[key] = resolved
+		}
+	}
+}
+
+func isExternalMediaURL(raw string) bool {
+	s := strings.TrimSpace(raw)
+	if strings.HasPrefix(s, "MEDIA:") {
+		s = strings.TrimSpace(strings.TrimPrefix(s, "MEDIA:"))
+	}
+	u, err := url.Parse(s)
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https", "data":
+		return true
+	default:
+		return false
+	}
+}
+
+func resolveFacebookLocalMediaArg(ctx context.Context, raw string) (string, bool) {
+	workspace := ToolWorkspaceFromCtx(ctx)
+	if workspace == "" {
+		return "", false
+	}
+	path := normalizeMediaPath(raw)
+	if path == "" || path == "." {
+		return "", false
+	}
+	allowed := allowedWithTeamWorkspace(ctx, nil)
+	resolved, err := resolveReadPathWithGlobalOverlay(ctx, path, workspace, effectiveRestrict(ctx, true), allowed)
+	if err != nil {
+		return "", false
+	}
+	return filepath.Clean(resolved), true
 }
 
 func companionFacebookMCPTool(name, suffix string) string {
