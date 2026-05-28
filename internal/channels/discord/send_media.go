@@ -10,8 +10,9 @@ import (
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
 )
 
-// sendMediaMessage sends media attachments to a Discord channel using file uploads.
-// Text content (if any) is included as the message body alongside the first attachment.
+// sendMediaMessage sends media attachments first, then sends text as follow-up
+// messages. Keeping text out of the upload caption prevents Discord's 2000-char
+// caption limit from dropping the tail of long responses.
 func (c *Channel) sendMediaMessage(channelID string, content string, mediaList []bus.MediaAttachment) error {
 	var files []*discordgo.File
 
@@ -57,17 +58,14 @@ func (c *Channel) sendMediaMessage(channelID string, content string, mediaList [
 		Files: files,
 	}
 
-	// Attach text content if provided (Discord limit: 2000 chars for message with files).
-	if content != "" {
-		if len(content) > 2000 {
-			content = content[:2000]
-		}
-		msg.Content = content
-	}
-
 	_, err := c.session.ChannelMessageSendComplex(channelID, msg)
 	if err != nil {
 		return fmt.Errorf("send discord media message: %w", err)
+	}
+	if content != "" {
+		if err := c.sendChunked(channelID, content); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -520,7 +520,10 @@ func BuildSystemPrompt(cfg SystemPromptConfig) string {
 		if len(personaFiles) > 0 {
 			lines = append(lines, buildPersonaReminder(personaFiles, cfg.AgentType, cfg.ProviderType)...)
 		}
-		lines = append(lines, "Reminder: Follow AGENTS.md rules — NO_REPLY when silent, match the user's language.", "")
+		lines = append(lines,
+			"Reminder: Match the user's language. Use NO_REPLY only for non-addressed group-chat messages or duplicate task announcements that were already delivered. Never use NO_REPLY for a direct user request, cron/team/subagent task, or any actionable work.",
+			"",
+		)
 	}
 
 	result := strings.Join(lines, "\n")

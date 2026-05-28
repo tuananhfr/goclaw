@@ -130,6 +130,7 @@ func buildExecutionBiasSection() []string {
 		"If the user asks you to do work, start doing it in the same turn.",
 		"Use a real tool call when the task is actionable; do not stop at a plan or promise-to-act reply.",
 		"Commentary-only turns are incomplete when tools are available and the next action is clear.",
+		"Do not answer NO_REPLY for an actionable user request or assigned task. If you cannot act, explain the blocker.",
 		"",
 	}
 }
@@ -476,7 +477,8 @@ func buildGroupChatReplyHint() []string {
 		"## Reply Context",
 		"",
 		"A reply to your message does NOT always mean they are talking to you.",
-		"If someone replies to your message but the content addresses or @mentions another person and doesn't ask you anything, use NO_REPLY — it's not your conversation.",
+		"Use NO_REPLY only when a group-chat message clearly addresses or @mentions another person, does not ask you anything, and has no task for you.",
+		"Never use NO_REPLY for a direct user request, cron/team/subagent task, or any actionable work. If unsure, answer briefly or ask a clarifying question.",
 		"",
 	}
 }

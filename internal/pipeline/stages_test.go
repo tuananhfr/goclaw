@@ -46,7 +46,7 @@ func (m *mockTokenCounter) CountMessages(_ string, msgs []providers.Message) int
 	return len(msgs) * m.countPerMessage
 }
 func (m *mockTokenCounter) CountToolSchemas(_ string, _ []providers.ToolDefinition) int { return 0 }
-func (m *mockTokenCounter) ModelContextWindow(_ string) int                              { return 200_000 }
+func (m *mockTokenCounter) ModelContextWindow(_ string) int                             { return 200_000 }
 
 // --- ThinkStage tests ---
 
@@ -75,6 +75,81 @@ func TestThinkStage_NoToolCalls_ReturnsBreakLoop(t *testing.T) {
 	pending := state.Messages.Pending()
 	if len(pending) != 0 {
 		t.Errorf("pending = %v, want empty (FinalizeStage builds the definitive message)", pending)
+	}
+}
+
+func TestThinkStage_AddressedSilentReply_RetriesOnce(t *testing.T) {
+	t.Parallel()
+	deps := &PipelineDeps{
+		Config:        PipelineConfig{MaxIterations: 10, MaxTokens: 1000},
+		IsSilentReply: func(content string) bool { return strings.TrimSpace(content) == "NO_REPLY" },
+		CallLLM: func(_ context.Context, _ *RunState, _ providers.ChatRequest) (*providers.ChatResponse, error) {
+			return &providers.ChatResponse{
+				Content:      "NO_REPLY",
+				FinishReason: "stop",
+			}, nil
+		},
+	}
+	stage := NewThinkStage(deps)
+	state := stateWithInput(&RunInput{
+		SessionKey: "sess-1",
+		RunID:      "run-1",
+		UserID:     "user-1",
+		PeerKind:   "group",
+		Addressed:  true,
+	})
+
+	err := stage.Execute(context.Background(), state)
+	if err != nil {
+		t.Fatalf("Execute() error: %v", err)
+	}
+	if stage.Result() != Continue {
+		t.Errorf("Result() = %v, want Continue", stage.Result())
+	}
+	if state.Think.SilentRetries != 1 {
+		t.Errorf("SilentRetries = %d, want 1", state.Think.SilentRetries)
+	}
+	if state.Think.LastResponse != nil {
+		t.Errorf("LastResponse = %#v, want nil for retry", state.Think.LastResponse)
+	}
+	pending := state.Messages.Pending()
+	if len(pending) != 1 || pending[0].Role != "user" || !strings.Contains(pending[0].Content, "Do not answer NO_REPLY") {
+		t.Fatalf("pending retry hint = %#v, want one user hint", pending)
+	}
+}
+
+func TestThinkStage_UnaddressedGroupSilentReply_BreaksLoop(t *testing.T) {
+	t.Parallel()
+	deps := &PipelineDeps{
+		Config:        PipelineConfig{MaxIterations: 10, MaxTokens: 1000},
+		IsSilentReply: func(content string) bool { return strings.TrimSpace(content) == "NO_REPLY" },
+		CallLLM: func(_ context.Context, _ *RunState, _ providers.ChatRequest) (*providers.ChatResponse, error) {
+			return &providers.ChatResponse{
+				Content:      "NO_REPLY",
+				FinishReason: "stop",
+			}, nil
+		},
+	}
+	stage := NewThinkStage(deps)
+	state := stateWithInput(&RunInput{
+		SessionKey: "sess-1",
+		RunID:      "run-1",
+		UserID:     "user-1",
+		PeerKind:   "group",
+	})
+
+	err := stage.Execute(context.Background(), state)
+	if err != nil {
+		t.Fatalf("Execute() error: %v", err)
+	}
+	if stage.Result() != BreakLoop {
+		t.Errorf("Result() = %v, want BreakLoop", stage.Result())
+	}
+	if state.Think.SilentRetries != 0 {
+		t.Errorf("SilentRetries = %d, want 0", state.Think.SilentRetries)
+	}
+	if len(state.Messages.Pending()) != 0 {
+		t.Errorf("pending = %#v, want empty", state.Messages.Pending())
 	}
 }
 
@@ -2114,8 +2189,8 @@ func TestParseTTL_ValidInputs(t *testing.T) {
 		{"5m", 5 * time.Minute},
 		{"30s", 30 * time.Second},
 		{"1h30m", 90 * time.Minute},
-		{"bogus", 5 * time.Minute},  // invalid → fallback
-		{"-1m", 5 * time.Minute},    // negative → fallback
+		{"bogus", 5 * time.Minute}, // invalid → fallback
+		{"-1m", 5 * time.Minute},   // negative → fallback
 	}
 	for _, tc := range cases {
 		got := parseTTL(tc.in)

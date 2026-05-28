@@ -81,6 +81,7 @@ type RunInput struct {
 	ChatTitle         string
 	ChatID            string
 	PeerKind          string
+	Addressed         bool
 	RunID             string
 	UserID            string
 	SenderID          string

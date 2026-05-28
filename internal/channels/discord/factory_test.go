@@ -19,7 +19,7 @@ func (s routeAgentStore) GetByID(_ context.Context, id uuid.UUID) (*store.AgentD
 	if id != s.agentID {
 		return nil, nil
 	}
-	return &store.AgentData{ID: id, AgentKey: s.key}, nil
+	return &store.AgentData{BaseModel: store.BaseModel{ID: id}, AgentKey: s.key}, nil
 }
 
 func TestResolveDiscordChannelAgentRoutes(t *testing.T) {

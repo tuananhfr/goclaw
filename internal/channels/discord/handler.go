@@ -291,6 +291,8 @@ func (c *Channel) handleMessage(_ *discordgo.Session, m *discordgo.MessageCreate
 		"guild_id":        m.GuildID,
 		"channel_id":      channelID,
 		"is_dm":           fmt.Sprintf("%t", isDM),
+		"mentioned":       fmt.Sprintf("%t", mentioned),
+		"addressed":       fmt.Sprintf("%t", isDM || mentioned),
 		"placeholder_key": m.ID, // keyed by inbound message ID for placeholder lookup
 	}
 

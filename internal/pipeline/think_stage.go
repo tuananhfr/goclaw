@@ -23,7 +23,7 @@ func NewThinkStage(deps *PipelineDeps) *ThinkStage {
 	return &ThinkStage{deps: deps, result: Continue}
 }
 
-func (s *ThinkStage) Name() string       { return "think" }
+func (s *ThinkStage) Name() string        { return "think" }
 func (s *ThinkStage) Result() StageResult { return s.result }
 
 // Execute builds tools, calls LLM, handles truncation, sets flow control.
@@ -119,6 +119,21 @@ func (s *ThinkStage) Execute(ctx context.Context, state *RunState) error {
 	state.Think.TruncRetries = 0    // reset on success
 	state.Think.OverflowRetries = 0 // reset on success
 
+	if s.shouldRetrySilentReply(state, resp) {
+		state.Think.SilentRetries++
+		state.Think.LastResponse = nil
+		state.Messages.AppendPending(providers.Message{
+			Role:    "user",
+			Content: "[System] The current message is explicitly addressed to you and requires action. Do not answer NO_REPLY. Use tools if needed, answer normally, or explain the blocker.",
+		})
+		slog.Info("pipeline: retrying silent NO_REPLY for addressed turn",
+			"run_id", state.RunID,
+			"session", state.Input.SessionKey,
+			"iteration", state.Iteration,
+		)
+		return nil
+	}
+
 	// 7. Uniquify tool call IDs (OpenAI returns 400 on duplicates across iterations).
 	// Skip if raw content present (Anthropic thinking passback) to avoid desync.
 	if len(resp.ToolCalls) > 0 && resp.RawAssistantContent == nil && s.deps.UniqueToolCallIDs != nil {
@@ -152,6 +167,19 @@ func (s *ThinkStage) Execute(ctx context.Context, state *RunState) error {
 	}
 
 	return nil
+}
+
+func (s *ThinkStage) shouldRetrySilentReply(state *RunState, resp *providers.ChatResponse) bool {
+	if s == nil || s.deps == nil || s.deps.IsSilentReply == nil || state == nil || state.Input == nil || resp == nil {
+		return false
+	}
+	if len(resp.ToolCalls) > 0 || !s.deps.IsSilentReply(resp.Content) {
+		return false
+	}
+	if state.Think.SilentRetries > 0 || state.Iteration > 0 || state.Tool.TotalToolCalls > 0 {
+		return false
+	}
+	return state.Input.Addressed || state.Input.PeerKind == "direct" || state.Input.RunKind != ""
 }
 
 // maybeInjectNudge injects iteration budget warnings at 70% and 90%.

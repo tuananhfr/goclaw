@@ -209,6 +209,7 @@ func convertRunInput(req *RunRequest) *pipeline.RunInput {
 		ChatTitle:         req.ChatTitle,
 		ChatID:            req.ChatID,
 		PeerKind:          req.PeerKind,
+		Addressed:         req.Addressed,
 		RunID:             req.RunID,
 		UserID:            req.UserID,
 		SenderID:          req.SenderID,

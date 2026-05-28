@@ -391,6 +391,7 @@ func processNormalMessage(
 		ChatID:            msg.ChatID,
 		WorkspaceChatID:   msg.ChatID,
 		PeerKind:          peerKind,
+		Addressed:         peerKind == "direct" || strings.EqualFold(msg.Metadata["addressed"], "true") || strings.EqualFold(msg.Metadata["mentioned"], "true"),
 		LocalKey:          msg.Metadata["local_key"],
 		UserID:            userID,
 		SenderID:          effectiveSenderID,

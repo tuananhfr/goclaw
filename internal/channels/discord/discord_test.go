@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -117,30 +118,38 @@ func TestSendConvertsOutboundImageMarkerToDiscordAttachment(t *testing.T) {
 		t.Fatalf("write image fixture: %v", err)
 	}
 
-	var sawRequest atomic.Bool
+	var mu sync.Mutex
+	var sawMediaRequest bool
+	var sawTextRequest bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		sawRequest.Store(true)
 		if r.Method != http.MethodPost {
 			t.Fatalf("unexpected method: %s", r.Method)
 		}
 		if r.URL.Path != "/channels/channel-1/messages" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		if !strings.Contains(r.Header.Get("Content-Type"), "multipart/form-data") {
-			t.Fatalf("expected multipart media upload, got %q", r.Header.Get("Content-Type"))
-		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Fatalf("read request body: %v", err)
 		}
-		if !bytes.Contains(body, []byte("fake-png-bytes")) {
-			t.Fatal("expected uploaded image bytes in Discord request")
-		}
-		if bytes.Contains(body, []byte("<media:image")) {
-			t.Fatal("expected media marker to be stripped from message content")
-		}
-		if !bytes.Contains(body, []byte("final image")) {
-			t.Fatal("expected surrounding text content to be preserved")
+		mu.Lock()
+		defer mu.Unlock()
+		if strings.Contains(r.Header.Get("Content-Type"), "multipart/form-data") {
+			sawMediaRequest = true
+			if !bytes.Contains(body, []byte("fake-png-bytes")) {
+				t.Fatal("expected uploaded image bytes in Discord request")
+			}
+			if bytes.Contains(body, []byte("<media:image")) {
+				t.Fatal("expected media marker to be stripped from message content")
+			}
+			if bytes.Contains(body, []byte("final image")) {
+				t.Fatal("expected text to be sent after media, not as upload caption")
+			}
+		} else {
+			sawTextRequest = true
+			if !bytes.Contains(body, []byte("final image")) {
+				t.Fatal("expected surrounding text content to be sent after media")
+			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"id":"msg-1","channel_id":"channel-1","content":"ok"}`))
@@ -156,8 +165,79 @@ func TestSendConvertsOutboundImageMarkerToDiscordAttachment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Send() error = %v", err)
 	}
-	if !sawRequest.Load() {
-		t.Fatal("expected Discord request")
+	mu.Lock()
+	defer mu.Unlock()
+	if !sawMediaRequest {
+		t.Fatal("expected Discord media upload request")
+	}
+	if !sawTextRequest {
+		t.Fatal("expected Discord text follow-up request")
+	}
+}
+
+func TestSendMediaLongTextSendsTailAfterMedia(t *testing.T) {
+	imagePath := filepath.Join(t.TempDir(), "final.png")
+	if err := os.WriteFile(imagePath, []byte("fake-png-bytes"), 0o644); err != nil {
+		t.Fatalf("write image fixture: %v", err)
+	}
+
+	longText := strings.Repeat("intro ", 450) + "tail-marker"
+	var mu sync.Mutex
+	var requestKinds []string
+	var sawTail bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		if r.URL.Path != "/channels/channel-1/messages" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if strings.Contains(r.Header.Get("Content-Type"), "multipart/form-data") {
+			requestKinds = append(requestKinds, "media")
+			if bytes.Contains(body, []byte("tail-marker")) {
+				t.Fatal("tail text should not be included in media upload caption")
+			}
+		} else {
+			requestKinds = append(requestKinds, "text")
+			if bytes.Contains(body, []byte("tail-marker")) {
+				sawTail = true
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"msg-1","channel_id":"channel-1","content":"ok"}`))
+	}))
+	defer server.Close()
+
+	ch := newTestChannel(t, server)
+	err := ch.Send(context.Background(), bus.OutboundMessage{
+		Channel: "discord",
+		ChatID:  "channel-1",
+		Content: longText,
+		Media: []bus.MediaAttachment{{
+			URL:         imagePath,
+			ContentType: "image/png",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(requestKinds) < 3 {
+		t.Fatalf("expected media plus multiple text chunk requests, got %v", requestKinds)
+	}
+	if requestKinds[0] != "media" {
+		t.Fatalf("expected media request first, got %v", requestKinds)
+	}
+	if !sawTail {
+		t.Fatal("expected long text tail to be sent after media")
 	}
 }
 

@@ -38,6 +38,39 @@ func TestFullModeAllSections(t *testing.T) {
 	}
 }
 
+func TestFullModeNoReplyGuardIsNarrow(t *testing.T) {
+	prompt := BuildSystemPrompt(fullTestConfig())
+	for _, want := range []string{
+		"Use NO_REPLY only for non-addressed group-chat messages",
+		"Never use NO_REPLY for a direct user request",
+		"Do not answer NO_REPLY for an actionable user request or assigned task",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("full mode missing narrowed NO_REPLY guard: %s", want)
+		}
+	}
+	if strings.Contains(prompt, "NO_REPLY when silent") {
+		t.Error("full mode should not contain the broad NO_REPLY when silent reminder")
+	}
+}
+
+func TestGroupReplyHintNoReplyGuardIsNarrow(t *testing.T) {
+	cfg := fullTestConfig()
+	cfg.ChannelType = "discord"
+	cfg.ChatID = "channel-1"
+	cfg.PeerKind = "group"
+	prompt := BuildSystemPrompt(cfg)
+	for _, want := range []string{
+		"Use NO_REPLY only when a group-chat message clearly addresses or @mentions another person",
+		"and has no task for you",
+		"Never use NO_REPLY for a direct user request",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("group reply hint missing narrowed NO_REPLY guard: %s", want)
+		}
+	}
+}
+
 // --- Minimal mode tests ---
 
 func TestMinimalModeExclusions(t *testing.T) {
