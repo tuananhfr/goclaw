@@ -92,6 +92,9 @@ func wireExtraTools(
 		skillsAllowPaths = append(skillsAllowPaths, pgStores.Skills.Dirs()...)
 	}
 	var mcpAssetAllowPaths []string
+	if dataDir != "" {
+		mcpAssetAllowPaths = append(mcpAssetAllowPaths, filepath.Join(dataDir, "mcp-assets"))
+	}
 	if workspace != "" {
 		// Bundled asset MCPs write read-only media caches under the shared
 		// workspace root so agents can inspect synced assets without granting

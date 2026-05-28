@@ -87,7 +87,7 @@ func (l *Loop) processToolResult(
 	// Collect MEDIA: paths from tool results.
 	// Prefer result.Media (explicit) over ForLLM MEDIA: prefix (legacy) to avoid duplicates.
 	if len(result.Media) > 0 {
-		if registryName == "apply_watermark" && !result.IsError {
+		if isWatermarkResultTool(registryName) && !result.IsError {
 			rs.mediaResults = removeSupersededWatermarkBaseMedia(ctx, rs.mediaResults, tc.Arguments)
 		}
 		for i, mf := range result.Media {
@@ -159,6 +159,9 @@ func removeSupersededWatermarkBaseMedia(ctx context.Context, media []MediaResult
 		return media
 	}
 	raw, _ := args["base_image_path"].(string)
+	if strings.TrimSpace(raw) == "" {
+		raw, _ = args["image_url"].(string)
+	}
 	candidates := watermarkBasePathCandidates(ctx, raw)
 	if len(candidates) == 0 {
 		return media
@@ -170,6 +173,10 @@ func removeSupersededWatermarkBaseMedia(ctx context.Context, media []MediaResult
 		}
 	}
 	return out
+}
+
+func isWatermarkResultTool(name string) bool {
+	return name == "apply_watermark" || strings.HasSuffix(name, "__fb_apply_watermark")
 }
 
 func watermarkBasePathCandidates(ctx context.Context, raw string) map[string]bool {
