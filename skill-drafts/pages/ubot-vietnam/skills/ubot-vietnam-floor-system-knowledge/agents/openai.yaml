@@ -1,0 +1,4 @@
+interface:
+  display_name: "UBOT Vietnam Floor System Knowledge"
+  short_description: "Ubot floor system content rules"
+  default_prompt: "Use this skill for UBOT Vietnam content about Ubot/U-Bot Beton, flat slabs, voided slabs, long-span floors, cost optimization, structural systems, MEP coordination, green materials, and technical claim safety."

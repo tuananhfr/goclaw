@@ -29,6 +29,12 @@ skill-drafts/
         lpc-france-outsourcing-knowledge/
       packages/
 
+    ubot-vietnam/
+      skills/
+        brand-ubot-vietnam-guidelines/
+        ubot-vietnam-floor-system-knowledge/
+      packages/
+
     duculaba/
       skills/
         brand-duculaba-guidelines/
@@ -123,6 +129,22 @@ pages/lpc-france/packages/lpc-france-outsourcing-knowledge.zip
 
 No LPC France brand kit exists yet.
 
+### UBOT Vietnam
+
+Purpose:
+
+- `brand-ubot-vietnam-guidelines`: UBOT VIỆT NAM page rules, Vietnamese technical-sales tone, fixed footer, CTA, hashtag selection, top-left watermark safe zone, visual guidance, and Ubot solution lead-generation positioning.
+- `ubot-vietnam-floor-system-knowledge`: Ubot/U-Bot Beton, beamless flat slabs, hollow/voided slabs, long-span floors, cost optimization, MEP coordination, project applications, green materials, and safe handling of technical/cost claims.
+
+Skill uploads:
+
+```text
+pages/ubot-vietnam/packages/brand-ubot-vietnam-guidelines.zip
+pages/ubot-vietnam/packages/ubot-vietnam-floor-system-knowledge.zip
+```
+
+No UBOT Vietnam brand kit exists yet.
+
 ### Duculaba
 
 Purpose:
@@ -215,6 +237,16 @@ shared/packages/facebook-fanpage-content-guidelines.zip
 shared/packages/fanpage-grounded-content-guidelines.zip
 pages/lpc-france/packages/brand-lpc-france-guidelines.zip
 pages/lpc-france/packages/lpc-france-outsourcing-knowledge.zip
+```
+
+UBOT Vietnam Lead:
+
+```text
+shared/packages/fanpage-lead-orchestration-guidelines.zip
+shared/packages/facebook-fanpage-content-guidelines.zip
+shared/packages/fanpage-grounded-content-guidelines.zip
+pages/ubot-vietnam/packages/brand-ubot-vietnam-guidelines.zip
+pages/ubot-vietnam/packages/ubot-vietnam-floor-system-knowledge.zip
 ```
 
 Duculaba Lead:

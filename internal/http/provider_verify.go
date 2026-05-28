@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/nextlevelbuilder/goclaw/internal/config"
 	"github.com/nextlevelbuilder/goclaw/internal/i18n"
+	"github.com/nextlevelbuilder/goclaw/internal/providerresolve"
 	"github.com/nextlevelbuilder/goclaw/internal/providers"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
 )
@@ -104,9 +105,7 @@ func (h *ProvidersHandler) handleVerifyProvider(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Use provider's own TenantID (not request context) so cross-tenant admins
-	// can verify providers belonging to other tenants.
-	provider, err := h.providerReg.GetForTenant(p.TenantID, p.Name)
+	provider, err := h.resolveProviderForVerification(p)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"valid": false, "error": "provider not registered: " + p.Name})
 		return
@@ -142,6 +141,21 @@ func (h *ProvidersHandler) handleVerifyProvider(w http.ResponseWriter, r *http.R
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"valid": true})
+}
+
+func (h *ProvidersHandler) resolveProviderForVerification(p *store.LLMProviderData) (providers.Provider, error) {
+	// Use provider's own TenantID (not request context) so cross-tenant admins
+	// can verify providers belonging to other tenants.
+	if p != nil && p.ProviderType == store.ProviderChatGPTOAuth {
+		resolved, err := providerresolve.ResolveConfiguredProvider(h.providerReg, &store.AgentData{
+			TenantID: p.TenantID,
+			Provider: p.Name,
+		})
+		if err == nil {
+			return resolved, nil
+		}
+	}
+	return h.providerReg.GetForTenant(p.TenantID, p.Name)
 }
 
 // handleClaudeCLIAuthStatus checks whether the Claude CLI is authenticated on the server.

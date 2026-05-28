@@ -1,0 +1,4 @@
+interface:
+  display_name: "Brand UBOT Vietnam Guidelines"
+  short_description: "UBOT Vietnam page and sales rules"
+  default_prompt: "Use this skill for UBOT Vietnam Facebook content, Ubot flat slab solution posts, image briefs, footer, hashtags, watermark, CTA, and page voice."
