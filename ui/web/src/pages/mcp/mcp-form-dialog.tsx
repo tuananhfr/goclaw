@@ -72,6 +72,10 @@ const defaultGoogleDrive: MCPFormData["googleDrive"] = {
   cache_dir: "/app/workspace/drive-cache",
   cache_ttl_seconds: 300,
   max_assets: 50,
+  agent_folder_grants: "{}",
+  allow_public_link_import: true,
+  sync_time: "00:00",
+  timezone: "Asia/Ho_Chi_Minh",
 };
 
 function sanitizeWatermark(watermark: NonNullable<MCPFormData["facebookPages"][number]["watermark"]>) {
@@ -101,6 +105,10 @@ function restoreGoogleDrive(
     cache_dir: headers["x-gdrive-cache-dir"] ?? settings?.cache_dir ?? defaultGoogleDrive.cache_dir,
     cache_ttl_seconds: Number(headers["x-gdrive-cache-ttl-seconds"] ?? settings?.cache_ttl_seconds ?? defaultGoogleDrive.cache_ttl_seconds),
     max_assets: Number(headers["x-gdrive-max-assets"] ?? settings?.max_assets ?? defaultGoogleDrive.max_assets),
+    agent_folder_grants: headers["x-gdrive-agent-folder-grants"] ?? settings?.agent_folder_grants ?? "{}",
+    allow_public_link_import: (headers["x-gdrive-allow-public-link-import"] ?? String(settings?.allow_public_link_import ?? "true")) !== "false",
+    sync_time: headers["x-gdrive-sync-time"] ?? settings?.sync_time ?? "00:00",
+    timezone: headers["x-gdrive-timezone"] ?? settings?.timezone ?? "Asia/Ho_Chi_Minh",
   };
 }
 
@@ -122,6 +130,10 @@ function stripGoogleDriveForSettings(drive: MCPFormData["googleDrive"]) {
     cache_dir: drive.cache_dir || undefined,
     cache_ttl_seconds: drive.cache_ttl_seconds,
     max_assets: drive.max_assets,
+    agent_folder_grants: drive.agent_folder_grants || "{}",
+    allow_public_link_import: drive.allow_public_link_import,
+    sync_time: drive.sync_time || "00:00",
+    timezone: drive.timezone || "Asia/Ho_Chi_Minh",
   };
 }
 
@@ -167,6 +179,10 @@ function buildGoogleDriveHeaders(
   if (drive.cache_dir) headers["x-gdrive-cache-dir"] = drive.cache_dir;
   if (drive.cache_ttl_seconds) headers["x-gdrive-cache-ttl-seconds"] = String(drive.cache_ttl_seconds);
   if (drive.max_assets) headers["x-gdrive-max-assets"] = String(drive.max_assets);
+  if (drive.agent_folder_grants) headers["x-gdrive-agent-folder-grants"] = drive.agent_folder_grants;
+  headers["x-gdrive-allow-public-link-import"] = String(drive.allow_public_link_import ?? true);
+  if (drive.sync_time) headers["x-gdrive-sync-time"] = drive.sync_time;
+  if (drive.timezone) headers["x-gdrive-timezone"] = drive.timezone;
   return headers;
 }
 
@@ -338,7 +354,7 @@ export function MCPFormDialog({ open, onOpenChange, server, onSubmit, onTest }: 
         <div className="grid gap-4 py-2 -mx-4 px-4 sm:-mx-6 sm:px-6 overflow-y-auto min-h-0">
           <McpConnectionFields form={form} />
           {watch("preset") === "facebook" && <FacebookMcpFields form={form} serverId={server?.id} />}
-          {watch("preset") === "google_drive" && <GoogleDriveMcpFields form={form} />}
+          {watch("preset") === "google_drive" && <GoogleDriveMcpFields form={form} serverId={server?.id} />}
           <McpSettingsFields form={form} />
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>

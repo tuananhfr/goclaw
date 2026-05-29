@@ -9,7 +9,7 @@ import express from "express";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { createMcpServer } from "./mcp-server.js";
 import type { DriveConfig } from "./types.js";
-import { envOrHeader, intEnvOrHeader } from "./utils.js";
+import { boolEnvOrHeader, envOrHeader, intEnvOrHeader, jsonEnvOrHeader } from "./utils.js";
 
 const PORT = Number.parseInt(process.env.PORT ?? "3200", 10);
 const app = express();
@@ -26,6 +26,10 @@ function extractConfig(headers: Record<string, any>, env: NodeJS.ProcessEnv): Dr
     cacheDir: envOrHeader(headers, env, "x-gdrive-cache-dir", "GOOGLE_DRIVE_CACHE_DIR") || "/app/workspace/drive-cache",
     cacheTTLSeconds: intEnvOrHeader(headers, env, "x-gdrive-cache-ttl-seconds", "GOOGLE_DRIVE_CACHE_TTL_SECONDS", 300),
     maxAssets: intEnvOrHeader(headers, env, "x-gdrive-max-assets", "GOOGLE_DRIVE_MAX_ASSETS", 50),
+    agentFolderGrants: jsonEnvOrHeader<Record<string, string[]>>(headers, env, "x-gdrive-agent-folder-grants", "GOOGLE_DRIVE_AGENT_FOLDER_GRANTS", {}),
+    allowPublicLinkImport: boolEnvOrHeader(headers, env, "x-gdrive-allow-public-link-import", "GOOGLE_DRIVE_ALLOW_PUBLIC_LINK_IMPORT", true),
+    syncTime: envOrHeader(headers, env, "x-gdrive-sync-time", "GOOGLE_DRIVE_SYNC_TIME") || "00:00",
+    timezone: envOrHeader(headers, env, "x-gdrive-timezone", "GOOGLE_DRIVE_TIMEZONE") || "Asia/Ho_Chi_Minh",
   };
 }
 

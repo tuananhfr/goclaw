@@ -3,7 +3,12 @@ import { z } from "zod";
 import type { DriveAssetCache } from "./cache.js";
 import type { DriveClient } from "./drive-client.js";
 import type { DriveConfig, DriveFile } from "./types.js";
-import { normalizeName } from "./utils.js";
+import { parseDriveID } from "./utils.js";
+
+const internalAgentFields = {
+  goclaw_agent_key: z.string().optional().describe("Internal GoClaw agent key injected by the bridge."),
+  goclaw_agent_id: z.string().optional().describe("Internal GoClaw agent UUID injected by the bridge."),
+};
 
 function ok(data: unknown, label: string) {
   return { content: [{ type: "text" as const, text: `OK: ${label}\n\n${JSON.stringify(data, null, 2)}` }] };
@@ -16,11 +21,11 @@ function errorResult(err: unknown) {
 export function registerDriveTools(server: McpServer, config: DriveConfig, client: DriveClient, cache: DriveAssetCache) {
   server.tool(
     "gdrive_health",
-    "Check Google Drive OAuth credentials and verify the configured root folder is readable.",
+    "Check Google Drive OAuth credentials, root folder, index and sync status.",
     {},
     async () => {
       try {
-        return ok(await client.health(), "Google Drive connection is healthy");
+        return ok({ ...(await client.health()), sync: await cache.status() }, "Google Drive connection is healthy");
       } catch (e) {
         return errorResult(e);
       }
@@ -28,48 +33,177 @@ export function registerDriveTools(server: McpServer, config: DriveConfig, clien
   );
 
   server.tool(
-    "gdrive_list_product_folders",
-    "List product folders directly under the configured Google Drive root folder. This never searches outside the root.",
-    {},
-    async () => {
+    "gdrive_list_allowed_folders",
+    "List Google Drive folders granted to the current GoClaw agent.",
+    internalAgentFields,
+    async ({ goclaw_agent_id, goclaw_agent_key }) => {
       try {
-        const folders = await client.listChildFolders(config.rootFolderId);
-        return ok({
-          root_folder_id: config.rootFolderId,
-          root_folder_name: config.rootFolderName || undefined,
-          count: folders.length,
-          folders: folders.map(folderDTO),
-        }, `Found ${folders.length} product folders`);
+        const folders = await cache.allowedFolders(goclaw_agent_id ?? "", goclaw_agent_key ?? "");
+        return ok({ agent_key: goclaw_agent_key, agent_id: goclaw_agent_id, folders }, `Found ${folders.length} allowed folders`);
       } catch (e) {
         return errorResult(e);
       }
     },
   );
+
+  server.tool(
+    "gdrive_search",
+    "Search cached Google Drive files inside folders granted to the current GoClaw agent.",
+    {
+      query: z.string().optional().describe("Filename or keyword to search in the local Drive index."),
+      limit: z.number().int().positive().optional().describe("Maximum results"),
+      ...internalAgentFields,
+    },
+    async ({ query, limit, goclaw_agent_id, goclaw_agent_key }) => {
+      try {
+        const allowed = cache.allowedFolderIDs(goclaw_agent_id ?? "", goclaw_agent_key ?? "");
+        const assets = await cache.search(query ?? "", allowed, Math.min(Math.max(limit ?? 20, 1), config.maxAssets));
+        return ok({ count: assets.length, assets }, `Found ${assets.length} cached Drive files`);
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.tool(
+    "gdrive_list_folder",
+    "List a cached Google Drive folder if it is granted to the current GoClaw agent.",
+    {
+      folder_id_or_url: z.string().describe("Google Drive folder ID or URL"),
+      recursive: z.boolean().optional().describe("Include descendants"),
+      limit: z.number().int().positive().optional(),
+      ...internalAgentFields,
+    },
+    async ({ folder_id_or_url, recursive, limit, goclaw_agent_id, goclaw_agent_key }) => {
+      try {
+        const folderId = parseDriveID(folder_id_or_url);
+        const allowed = cache.allowedFolderIDs(goclaw_agent_id ?? "", goclaw_agent_key ?? "");
+        const items = await cache.listFolder(folderId, allowed, recursive ?? false, Math.min(Math.max(limit ?? 100, 1), config.maxAssets * 5));
+        return ok({ folder_id: folderId, count: items.length, items }, `Listed ${items.length} Drive items`);
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.tool(
+    "gdrive_download",
+    "Download/cache one Google Drive file after verifying it belongs to a folder granted to the current GoClaw agent.",
+    {
+      file_id_or_url: z.string().describe("Google Drive file ID or URL"),
+      ...internalAgentFields,
+    },
+    async ({ file_id_or_url, goclaw_agent_id, goclaw_agent_key }) => {
+      try {
+        const fileId = parseDriveID(file_id_or_url);
+        const allowed = cache.allowedFolderIDs(goclaw_agent_id ?? "", goclaw_agent_key ?? "");
+        const indexed = await cache.assertFileAllowed(fileId, allowed);
+        const file: DriveFile = {
+          id: indexed.drive_file_id,
+          name: indexed.name,
+          mimeType: indexed.mime_type,
+          parents: indexed.parents,
+          modifiedTime: indexed.modified_time,
+          md5Checksum: indexed.md5_checksum,
+          size: indexed.size ? String(indexed.size) : undefined,
+          webViewLink: indexed.web_view_link,
+        };
+        const folderId = indexed.parents[0] ?? config.rootFolderId;
+        const asset = await cache.cacheSingle(client, folderId, file);
+        return ok({ asset, reference_image_path: asset.media }, "Downloaded Google Drive file");
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.tool(
+    "gdrive_import_url",
+    "Import a public or private Google Drive file/folder URL. Private links require OAuth account view permission.",
+    {
+      url: z.string().describe("Google Drive file or folder URL"),
+      recursive: z.boolean().optional(),
+      limit: z.number().int().positive().optional(),
+      ...internalAgentFields,
+    },
+    async ({ url, recursive, limit, goclaw_agent_id, goclaw_agent_key }) => {
+      try {
+        const id = parseDriveID(url);
+        const file = await client.getFile(id);
+        if (file.mimeType === "application/vnd.google-apps.folder") {
+          if (!config.allowPublicLinkImport) await client.assertFolderInScope(id);
+          const listed = await client.listFolder(id, recursive ?? true, Math.min(Math.max(limit ?? config.maxAssets, 1), config.maxAssets * 10));
+          const synced = await cache.syncFolder(client, id, [file, ...listed]);
+          return ok({ folder_id: id, synced }, "Imported Google Drive folder URL");
+        }
+
+        const allowed = cache.allowedFolderIDs(goclaw_agent_id ?? "", goclaw_agent_key ?? "");
+        const inGrant = file.parents?.some((parent) => allowed.includes(parent)) ?? false;
+        if (!inGrant && !config.allowPublicLinkImport) {
+          throw new Error("file is outside granted folders and public link import is disabled");
+        }
+        const asset = await cache.cacheSingle(client, file.parents?.[0] ?? config.rootFolderId, file);
+        return ok({ asset, reference_image_path: asset.media }, "Imported Google Drive file URL");
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.tool(
+    "gdrive_sync_now",
+    "Synchronize Google Drive now. Use changes for incremental sync or folder for a specific folder refresh.",
+    {
+      scope: z.enum(["changes", "folder", "root"]).optional().describe("Sync scope"),
+      folder_id_or_url: z.string().optional().describe("Required for scope=folder"),
+      recursive: z.boolean().optional(),
+      ...internalAgentFields,
+    },
+    async ({ scope, folder_id_or_url }) => {
+      try {
+        const mode = scope ?? "changes";
+        if (mode === "root") {
+          return ok(await cache.syncRoot(client), "Root sync completed");
+        }
+        if (mode === "folder") {
+          if (!folder_id_or_url) throw new Error("folder_id_or_url is required for folder sync");
+          const folderId = parseDriveID(folder_id_or_url);
+          return ok(await cache.syncFolder(client, folderId), "Folder sync completed");
+        }
+        return ok(await cache.syncChanges(client), "Changes sync completed");
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  // Backward-compatible tools.
+  server.tool("gdrive_list_product_folders", "Deprecated alias for gdrive_list_allowed_folders.", internalAgentFields, async (args) => {
+    try {
+      const folders = await cache.allowedFolders(args.goclaw_agent_id ?? "", args.goclaw_agent_key ?? "");
+      return ok({ folders }, `Found ${folders.length} allowed folders`);
+    } catch (e) {
+      return errorResult(e);
+    }
+  });
 
   server.tool(
     "gdrive_get_product_assets",
-    "Get image assets for a product folder under the configured Google Drive root. Use this before creating or editing product images.",
+    "Deprecated alias for gdrive_search. Searches cached assets inside granted folders.",
     {
-      product: z.string().optional().describe("Product folder name, for example 'Banh dua'"),
-      folder_id: z.string().optional().describe("Specific Google Drive folder ID; must be within the configured root"),
-      refresh: z.boolean().optional().describe("Refresh Drive metadata before returning assets; currently always true"),
-      limit: z.number().int().positive().optional().describe("Maximum image assets to return"),
+      product: z.string().optional(),
+      folder_id: z.string().optional(),
+      limit: z.number().int().positive().optional(),
+      ...internalAgentFields,
     },
-    async ({ product, folder_id, limit }) => {
+    async ({ product, folder_id, limit, goclaw_agent_id, goclaw_agent_key }) => {
       try {
-        const folder = await resolveProductFolder(client, config, product, folder_id);
-        const boundedLimit = Math.min(Math.max(limit ?? 12, 1), config.maxAssets);
-        const files = await client.listImageFiles(folder.id, boundedLimit);
-        const synced = await cache.syncFolder(client, folder.id, files);
-        return ok({
-          product: product || folder.name,
-          folder_id: folder.id,
-          folder_name: folder.name,
-          changed: synced.changed,
-          synced_at: new Date().toISOString(),
-          assets: synced.assets,
-          asset_versions: synced.asset_versions,
-        }, `Loaded ${synced.assets.length} image assets`);
+        const allowed = cache.allowedFolderIDs(goclaw_agent_id ?? "", goclaw_agent_key ?? "");
+        if (folder_id && !allowed.includes(folder_id)) {
+          await cache.listFolder(folder_id, allowed, true, 1);
+        }
+        const assets = await cache.search(product ?? "", folder_id ? [folder_id] : allowed, Math.min(Math.max(limit ?? 12, 1), config.maxAssets));
+        return ok({ product, folder_id, assets }, `Loaded ${assets.length} image assets`);
       } catch (e) {
         return errorResult(e);
       }
@@ -78,27 +212,17 @@ export function registerDriveTools(server: McpServer, config: DriveConfig, clien
 
   server.tool(
     "gdrive_sync_product_folder",
-    "Refresh and cache image assets for one product folder under the configured root. Returns asset metadata only; it does not generate content.",
+    "Deprecated alias for gdrive_sync_now(scope=folder).",
     {
-      product: z.string().optional().describe("Product folder name"),
-      folder_id: z.string().optional().describe("Specific Google Drive folder ID; must be within the configured root"),
-      limit: z.number().int().positive().optional().describe("Maximum image assets to sync"),
+      product: z.string().optional(),
+      folder_id: z.string().optional(),
+      limit: z.number().int().positive().optional(),
+      ...internalAgentFields,
     },
-    async ({ product, folder_id, limit }) => {
+    async ({ folder_id }) => {
       try {
-        const folder = await resolveProductFolder(client, config, product, folder_id);
-        const boundedLimit = Math.min(Math.max(limit ?? config.maxAssets, 1), config.maxAssets);
-        const files = await client.listImageFiles(folder.id, boundedLimit);
-        const synced = await cache.syncFolder(client, folder.id, files);
-        return ok({
-          product: product || folder.name,
-          folder_id: folder.id,
-          folder_name: folder.name,
-          changed: synced.changed,
-          synced_at: new Date().toISOString(),
-          assets: synced.assets,
-          asset_versions: synced.asset_versions,
-        }, `Synced ${synced.assets.length} image assets`);
+        const synced = folder_id ? await cache.syncFolder(client, folder_id) : await cache.syncChanges(client);
+        return ok(synced, "Synced product folder");
       } catch (e) {
         return errorResult(e);
       }
@@ -107,57 +231,30 @@ export function registerDriveTools(server: McpServer, config: DriveConfig, clien
 
   server.tool(
     "gdrive_get_asset",
-    "Download one Google Drive image file by file ID after verifying it belongs to the configured root folder subtree.",
+    "Deprecated alias for gdrive_download.",
     {
-      file_id: z.string().describe("Google Drive file ID"),
+      file_id: z.string(),
+      ...internalAgentFields,
     },
-    async ({ file_id }) => {
+    async ({ file_id, goclaw_agent_id, goclaw_agent_key }) => {
       try {
-        const file = await client.assertFileInScope(file_id);
-        if (!file.mimeType.startsWith("image/")) {
-          throw new Error(`Google Drive file ${file_id} is not an image`);
-        }
-        const folderId = file.parents?.[0] ?? config.rootFolderId;
-        const asset = await cache.cacheSingle(client, folderId, file);
+        const allowed = cache.allowedFolderIDs(goclaw_agent_id ?? "", goclaw_agent_key ?? "");
+        const indexed = await cache.assertFileAllowed(file_id, allowed);
+        const file: DriveFile = {
+          id: indexed.drive_file_id,
+          name: indexed.name,
+          mimeType: indexed.mime_type,
+          parents: indexed.parents,
+          modifiedTime: indexed.modified_time,
+          md5Checksum: indexed.md5_checksum,
+          size: indexed.size ? String(indexed.size) : undefined,
+          webViewLink: indexed.web_view_link,
+        };
+        const asset = await cache.cacheSingle(client, indexed.parents[0] ?? config.rootFolderId, file);
         return ok({ asset }, "Downloaded Google Drive asset");
       } catch (e) {
         return errorResult(e);
       }
     },
   );
-}
-
-async function resolveProductFolder(client: DriveClient, config: DriveConfig, product?: string, folderId?: string): Promise<DriveFile> {
-  if (folderId) {
-    await client.assertFolderInScope(folderId);
-    return client.getFile(folderId);
-  }
-
-  if (!product || product.trim() === "") {
-    return client.getFile(config.rootFolderId);
-  }
-
-  const wanted = normalizeName(product);
-  const folders = await client.listChildFolders(config.rootFolderId);
-  const exact = folders.filter((folder) => normalizeName(folder.name) === wanted);
-  if (exact.length === 1) return exact[0]!;
-  if (exact.length > 1) {
-    throw new Error(`Multiple product folders match "${product}"; pass folder_id explicitly`);
-  }
-
-  const partial = folders.filter((folder) => normalizeName(folder.name).includes(wanted) || wanted.includes(normalizeName(folder.name)));
-  if (partial.length === 1) return partial[0]!;
-  if (partial.length > 1) {
-    throw new Error(`Multiple product folders partially match "${product}"; pass folder_id explicitly`);
-  }
-  throw new Error(`Product folder "${product}" not found under configured root folder`);
-}
-
-function folderDTO(folder: DriveFile) {
-  return {
-    name: folder.name,
-    folder_id: folder.id,
-    modified_time: folder.modifiedTime,
-    web_view_link: folder.webViewLink,
-  };
 }

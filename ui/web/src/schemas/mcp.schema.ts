@@ -59,6 +59,10 @@ export const mcpFormSchema = z.object({
     cache_dir: z.string().optional(),
     cache_ttl_seconds: z.number().min(1),
     max_assets: z.number().min(1),
+    agent_folder_grants: z.string().optional(),
+    allow_public_link_import: z.boolean(),
+    sync_time: z.string(),
+    timezone: z.string(),
   }),
 });
 

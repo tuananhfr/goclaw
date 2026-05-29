@@ -38,6 +38,10 @@ export interface MCPSettings {
     cache_dir?: string;
     cache_ttl_seconds?: number;
     max_assets?: number;
+    agent_folder_grants?: string;
+    allow_public_link_import?: boolean;
+    sync_time?: string;
+    timezone?: string;
   };
 }
 
@@ -79,6 +83,13 @@ export interface MCPServerInput {
 export interface MCPToolInfo {
   name: string;
   description?: string;
+}
+
+export interface MCPGoogleDriveFolder {
+  id: string;
+  name: string;
+  path: string;
+  parent?: string;
 }
 
 export interface MCPAgentGrant {

@@ -139,6 +139,7 @@ func (t *BridgeTool) Execute(ctx context.Context, args map[string]any) *tools.Re
 	// instead of omitting them, causing MCP servers to reject invalid values
 	// (e.g. empty string for UUID fields).
 	cleanedArgs := t.stripEmptyOptionalArgs(args)
+	t.injectGoclawContextArgs(ctx, cleanedArgs)
 
 	req := mcpgo.CallToolRequest{}
 	req.Params.Name = t.toolName
@@ -172,6 +173,23 @@ func (t *BridgeTool) Execute(ctx context.Context, args map[string]any) *tools.Re
 	out := tools.NewResult(wrapped)
 	out.Media = mediaFiles
 	return out
+}
+
+func (t *BridgeTool) injectGoclawContextArgs(ctx context.Context, args map[string]any) {
+	props, _ := t.inputSchema["properties"].(map[string]any)
+	if len(props) == 0 {
+		return
+	}
+	if _, ok := props["goclaw_agent_key"]; ok {
+		if key := tools.ToolAgentKeyFromCtx(ctx); key != "" {
+			args["goclaw_agent_key"] = key
+		}
+	}
+	if _, ok := props["goclaw_agent_id"]; ok {
+		if id := store.AgentIDFromContext(ctx); id != uuid.Nil {
+			args["goclaw_agent_id"] = id.String()
+		}
+	}
 }
 
 // inputSchemaToMap converts mcp.ToolInputSchema to the map format expected by tools.Tool.Parameters().

@@ -1,6 +1,7 @@
 import type { DriveConfig, DriveFile } from "./types.js";
 
 const DRIVE_BASE = "https://www.googleapis.com/drive/v3";
+const FETCH_TIMEOUT_MS = 120_000;
 
 export class DriveClient {
   private accessToken = "";
@@ -22,10 +23,13 @@ export class DriveClient {
       cache_dir: this.config.cacheDir,
       cache_ttl_seconds: this.config.cacheTTLSeconds,
       max_assets: this.config.maxAssets,
+      allow_public_link_import: this.config.allowPublicLinkImport,
+      sync_time: this.config.syncTime,
+      timezone: this.config.timezone,
     };
   }
 
-  async getFile(fileId: string, fields = "id,name,mimeType,parents,modifiedTime,size,webViewLink"): Promise<DriveFile> {
+  async getFile(fileId: string, fields = "id,name,mimeType,parents,modifiedTime,md5Checksum,size,webViewLink,trashed"): Promise<DriveFile> {
     return this.requestJSON<DriveFile>(`${DRIVE_BASE}/files/${encodeURIComponent(fileId)}?${new URLSearchParams({
       fields,
       supportsAllDrives: "true",
@@ -41,13 +45,97 @@ export class DriveClient {
     return files.filter((file) => file.mimeType.startsWith("image/"));
   }
 
+  async listFolder(folderId: string, recursive: boolean, limit = Number.POSITIVE_INFINITY): Promise<DriveFile[]> {
+    if (!recursive) return this.listChildren(folderId, "true", limit);
+    const out: DriveFile[] = [];
+    const queue = [folderId];
+    const seen = new Set<string>();
+    while (queue.length > 0 && out.length < limit) {
+      const current = queue.shift()!;
+      if (seen.has(current)) continue;
+      seen.add(current);
+      const remaining = Number.isFinite(limit) ? Math.max(limit - out.length, 1) : Number.POSITIVE_INFINITY;
+      const children = await this.listChildren(current, "true", Math.min(1000, remaining));
+      for (const child of children) {
+        out.push(child);
+        if (child.mimeType === "application/vnd.google-apps.folder") queue.push(child.id);
+      }
+    }
+    return Number.isFinite(limit) ? out.slice(0, limit) : out;
+  }
+
+  async listRootRecursive(limit = Number.POSITIVE_INFINITY): Promise<DriveFile[]> {
+    const root = await this.getFile(this.config.rootFolderId);
+    return [root, ...(await this.listFolder(this.config.rootFolderId, true, limit))];
+  }
+
+  async getStartPageToken(): Promise<string> {
+    const res = await this.requestJSON<{ startPageToken: string }>(`${DRIVE_BASE}/changes/startPageToken?${new URLSearchParams({
+      supportsAllDrives: "true",
+    })}`);
+    return res.startPageToken;
+  }
+
+  async listChanges(pageToken: string, limit: number): Promise<{ files: DriveFile[]; newStartPageToken?: string; nextPageToken?: string }> {
+    const files: DriveFile[] = [];
+    let token = pageToken;
+    let newStartPageToken = "";
+    let nextPageToken = "";
+    do {
+      const params = new URLSearchParams({
+        pageToken: token,
+        pageSize: String(Math.min(Math.max(limit - files.length, 1), 1000)),
+        fields: "nextPageToken,newStartPageToken,changes(file(id,name,mimeType,parents,modifiedTime,md5Checksum,size,webViewLink,trashed),removed,fileId)",
+        supportsAllDrives: "true",
+        includeItemsFromAllDrives: "true",
+      });
+      const page = await this.requestJSON<{ nextPageToken?: string; newStartPageToken?: string; changes?: Array<{ file?: DriveFile; fileId?: string; removed?: boolean }> }>(`${DRIVE_BASE}/changes?${params}`);
+      for (const change of page.changes ?? []) {
+        if (change.file) {
+          files.push({ ...change.file, trashed: change.removed || change.file.trashed });
+        } else if (change.fileId && change.removed) {
+          files.push({ id: change.fileId, name: change.fileId, mimeType: "", trashed: true });
+        }
+      }
+      nextPageToken = page.nextPageToken ?? "";
+      newStartPageToken = page.newStartPageToken ?? newStartPageToken;
+      token = nextPageToken;
+    } while (nextPageToken && files.length < limit);
+    return { files, newStartPageToken, nextPageToken };
+  }
+
   async downloadFile(fileId: string): Promise<Buffer> {
+    const meta = await this.getFile(fileId, "id,mimeType");
+    if (meta.mimeType.startsWith("application/vnd.google-apps.")) {
+      return this.exportFile(fileId, exportMime(meta.mimeType));
+    }
     const token = await this.getAccessToken();
-    const res = await fetch(`${DRIVE_BASE}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, {
+    const res = await fetchWithTimeout(`${DRIVE_BASE}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) {
       throw new Error(`Google Drive download failed for ${fileId}: ${res.status} ${await res.text()}`);
+    }
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  async exportFile(fileId: string, mimeType: string): Promise<Buffer> {
+    const token = await this.getAccessToken();
+    const res = await fetchWithTimeout(`${DRIVE_BASE}/files/${encodeURIComponent(fileId)}/export?${new URLSearchParams({
+      mimeType,
+    })}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      throw new Error(`Google Drive export failed for ${fileId}: ${res.status} ${await res.text()}`);
+    }
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  async downloadPublicFile(fileId: string): Promise<Buffer> {
+    const res = await fetchWithTimeout(`https://drive.google.com/uc?${new URLSearchParams({ export: "download", id: fileId })}`);
+    if (!res.ok) {
+      throw new Error(`Google Drive public download failed for ${fileId}: ${res.status} ${await res.text()}`);
     }
     return Buffer.from(await res.arrayBuffer());
   }
@@ -98,11 +186,11 @@ export class DriveClient {
     const files: DriveFile[] = [];
     let pageToken = "";
     do {
-      const q = `'${folderId.replace(/'/g, "\\'")}' in parents and trashed=false and ${qExtra}`;
+      const q = `'${folderId.replace(/'/g, "\\'")}' in parents and trashed=false${qExtra && qExtra !== "true" ? ` and ${qExtra}` : ""}`;
       const params = new URLSearchParams({
         q,
-        fields: "nextPageToken,files(id,name,mimeType,parents,modifiedTime,size,webViewLink)",
-        pageSize: String(Math.min(Math.max(limit - files.length, 1), 100)),
+        fields: "nextPageToken,files(id,name,mimeType,parents,modifiedTime,md5Checksum,size,webViewLink,trashed)",
+        pageSize: String(Number.isFinite(limit) ? Math.min(Math.max(limit - files.length, 1), 100) : 100),
         supportsAllDrives: "true",
         includeItemsFromAllDrives: "true",
         corpora: "allDrives",
@@ -113,14 +201,14 @@ export class DriveClient {
       pageToken = page.nextPageToken ?? "";
     } while (pageToken && files.length < limit);
 
-    return files
-      .slice(0, limit)
+    const limited = Number.isFinite(limit) ? files.slice(0, limit) : files;
+    return limited
       .sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
   }
 
   private async requestJSON<T>(url: string): Promise<T> {
     const token = await this.getAccessToken();
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) {
       throw new Error(`Google Drive API failed: ${res.status} ${await res.text()}`);
     }
@@ -139,7 +227,7 @@ export class DriveClient {
       refresh_token: this.config.refreshToken,
       grant_type: "refresh_token",
     });
-    const res = await fetch("https://oauth2.googleapis.com/token", {
+    const res = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
@@ -154,5 +242,28 @@ export class DriveClient {
     this.accessToken = data.access_token;
     this.accessTokenExpiresAt = now + (data.expires_in ?? 3600) * 1000;
     return this.accessToken;
+  }
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function exportMime(mimeType: string): string {
+  switch (mimeType) {
+    case "application/vnd.google-apps.document":
+      return "application/pdf";
+    case "application/vnd.google-apps.spreadsheet":
+      return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    case "application/vnd.google-apps.presentation":
+      return "application/pdf";
+    default:
+      return "application/pdf";
   }
 }

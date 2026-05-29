@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,6 +38,15 @@ type StorageHandler struct {
 
 	// sizeCache caches the total storage size per tenant for 60 minutes.
 	sizeCache sync.Map // tenantBaseDir (string) → *sizeCacheEntry
+}
+
+type storageFileEntry struct {
+	Path        string `json:"path"`
+	Name        string `json:"name"`
+	IsDir       bool   `json:"isDir"`
+	Size        int64  `json:"size"`
+	HasChildren bool   `json:"hasChildren,omitempty"`
+	Protected   bool   `json:"protected"`
 }
 
 // NewStorageHandler creates a handler for workspace storage management.
@@ -69,7 +79,7 @@ func (h *StorageHandler) tenantBaseDir(r *http.Request) string {
 // protectedDirs are top-level directories where upload, move, and deletion are blocked.
 // These are system-managed: skills (managed via Skills page), media (managed via media handler),
 // tenants (tenant isolation root — each tenant's data is scoped internally).
-var protectedDirs = []string{"skills", "skills-store", "media", "tenants"}
+var protectedDirs = []string{"skills", "skills-store", "media", "tenants", "drive-cache"}
 
 // topLevelPath returns the first path component of rel.
 func topLevelPath(rel string) string {
@@ -137,16 +147,15 @@ func (h *StorageHandler) handleList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	type fileEntry struct {
-		Path        string `json:"path"`
-		Name        string `json:"name"`
-		IsDir       bool   `json:"isDir"`
-		Size        int64  `json:"size"`
-		HasChildren bool   `json:"hasChildren,omitempty"`
-		Protected   bool   `json:"protected"`
+	if entries, ok := h.listGoogleDriveCacheVirtual(base, subPath); ok {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"files":   entries,
+			"baseDir": base,
+		})
+		return
 	}
 
-	var entries []fileEntry
+	var entries []storageFileEntry
 
 	filepath.WalkDir(rootDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -156,6 +165,13 @@ func (h *StorageHandler) handleList(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 		rel, _ := filepath.Rel(base, path)
+		rel = filepath.ToSlash(rel)
+		if topLevelPath(rel) == "drive-cache" && rel != "drive-cache" {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 
 		// Hide tenant isolation root from master storage listing.
 		if h.isHiddenPath(r, rel) {
@@ -184,7 +200,7 @@ func (h *StorageHandler) handleList(w http.ResponseWriter, r *http.Request) {
 
 		// Beyond depth boundary: record the dir (with hasChildren hint) but don't descend.
 		if d.IsDir() && depth > maxDepth {
-			e := fileEntry{
+			e := storageFileEntry{
 				Path:      rel,
 				Name:      d.Name(),
 				IsDir:     true,
@@ -197,10 +213,16 @@ func (h *StorageHandler) handleList(w http.ResponseWriter, r *http.Request) {
 			return filepath.SkipDir
 		}
 
-		entry := fileEntry{
+		entry := storageFileEntry{
 			Path:  rel,
 			Name:  d.Name(),
 			IsDir: d.IsDir(),
+		}
+		if rel == "drive-cache" && d.IsDir() {
+			entry.HasChildren = true
+			entry.Protected = true
+			entries = append(entries, entry)
+			return filepath.SkipDir
 		}
 
 		if !d.IsDir() {
@@ -222,13 +244,223 @@ func (h *StorageHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if entries == nil {
-		entries = []fileEntry{}
+		entries = []storageFileEntry{}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"files":   entries,
 		"baseDir": base,
 	})
+}
+
+const googleDriveStorageMarker = ".drive"
+const googleDriveStorageFileMarker = ".file"
+
+func (h *StorageHandler) listGoogleDriveCacheVirtual(base, subPath string) ([]storageFileEntry, bool) {
+	clean := strings.Trim(strings.Trim(filepath.ToSlash(filepath.Clean(subPath)), "."), "/")
+	if clean == "" || topLevelPath(clean) != "drive-cache" {
+		return nil, false
+	}
+	cacheBase := filepath.Join(base, "drive-cache")
+	parts := strings.Split(clean, "/")
+	if len(parts) == 1 {
+		dirEntries, err := os.ReadDir(cacheBase)
+		if err != nil {
+			return []storageFileEntry{}, true
+		}
+		entries := []storageFileEntry{}
+		for _, d := range dirEntries {
+			if !d.IsDir() || d.Type()&os.ModeSymlink != 0 {
+				continue
+			}
+			rootSegment := d.Name()
+			index, _ := readGoogleDriveStorageIndex(cacheBase, rootSegment)
+			name := rootSegment
+			if index.RootFolderID != "" {
+				if f, ok := index.Folders[index.RootFolderID]; ok && f.Name != "" {
+					name = f.Name
+				}
+			}
+			entries = append(entries, storageFileEntry{
+				Path:        "drive-cache/" + rootSegment,
+				Name:        name,
+				IsDir:       true,
+				HasChildren: true,
+				Protected:   true,
+			})
+		}
+		sortStorageEntries(entries)
+		return entries, true
+	}
+	rootSegment := parts[1]
+	index, err := readGoogleDriveStorageIndex(cacheBase, rootSegment)
+	if err != nil {
+		return []storageFileEntry{}, true
+	}
+	if len(parts) == 2 {
+		rootID := index.RootFolderID
+		if rootID == "" {
+			rootID = rootSegment
+		}
+		name := rootID
+		if f, ok := index.Folders[rootID]; ok && f.Name != "" {
+			name = f.Name
+		}
+		return []storageFileEntry{{
+			Path:        googleDriveVirtualFolderPath(rootSegment, rootID),
+			Name:        name,
+			IsDir:       true,
+			HasChildren: true,
+			Protected:   true,
+		}}, true
+	}
+	if len(parts) >= 4 && parts[2] == googleDriveStorageMarker {
+		folderID := parts[3]
+		entries := []storageFileEntry{}
+		for id, folder := range index.Folders {
+			if folder.Trashed || !stringSliceContains(folder.Parents, folderID) {
+				continue
+			}
+			entries = append(entries, storageFileEntry{
+				Path:        googleDriveVirtualFolderPath(rootSegment, id),
+				Name:        folder.Name,
+				IsDir:       true,
+				HasChildren: googleDriveFolderHasChildren(index, id),
+				Protected:   true,
+			})
+		}
+		for id, file := range index.Files {
+			if file.Trashed || !stringSliceContains(file.Parents, folderID) {
+				continue
+			}
+			entries = append(entries, storageFileEntry{
+				Path:      googleDriveVirtualFilePath(rootSegment, folderID, id, file.Name),
+				Name:      file.Name,
+				IsDir:     false,
+				Size:      file.Size,
+				Protected: true,
+			})
+		}
+		sortStorageEntries(entries)
+		return entries, true
+	}
+	return []storageFileEntry{}, true
+}
+
+func readGoogleDriveStorageIndex(cacheBase, rootSegment string) (googleDriveFolderIndex, error) {
+	raw, err := os.ReadFile(filepath.Join(cacheBase, rootSegment, "index.json"))
+	if err != nil {
+		return googleDriveFolderIndex{}, err
+	}
+	var index googleDriveFolderIndex
+	if err := json.Unmarshal(raw, &index); err != nil {
+		return googleDriveFolderIndex{}, err
+	}
+	if index.Files == nil {
+		index.Files = map[string]googleDriveFile{}
+	}
+	if index.Folders == nil {
+		index.Folders = map[string]googleDriveFolder{}
+	}
+	if index.PublicImports == nil {
+		index.PublicImports = map[string]googleDriveFile{}
+	}
+	return index, nil
+}
+
+func googleDriveVirtualFolderPath(rootSegment, folderID string) string {
+	return "drive-cache/" + rootSegment + "/" + googleDriveStorageMarker + "/" + folderID
+}
+
+func googleDriveVirtualFilePath(rootSegment, folderID, fileID, name string) string {
+	return "drive-cache/" + rootSegment + "/" + googleDriveStorageMarker + "/" + folderID + "/" + googleDriveStorageFileMarker + "/" + fileID + "/" + safeStorageVirtualName(name)
+}
+
+func safeStorageVirtualName(name string) string {
+	name = strings.ReplaceAll(name, "/", "_")
+	name = strings.ReplaceAll(name, "\\", "_")
+	if strings.TrimSpace(name) == "" {
+		return "file"
+	}
+	return name
+}
+
+func googleDriveFolderHasChildren(index googleDriveFolderIndex, folderID string) bool {
+	for _, folder := range index.Folders {
+		if !folder.Trashed && stringSliceContains(folder.Parents, folderID) {
+			return true
+		}
+	}
+	for _, file := range index.Files {
+		if !file.Trashed && stringSliceContains(file.Parents, folderID) {
+			return true
+		}
+	}
+	return false
+}
+
+func sortStorageEntries(entries []storageFileEntry) {
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].IsDir != entries[j].IsDir {
+			return entries[i].IsDir
+		}
+		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
+	})
+}
+
+func stringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func resolveGoogleDriveVirtualStorageFile(base, relPath string) (string, bool, error) {
+	file, rootSegment, err := googleDriveVirtualStorageFile(base, relPath)
+	if err != nil || file.DriveFileID == "" {
+		return "", false, err
+	}
+	if file.LocalPath == "" {
+		return "", false, nil
+	}
+	cacheRoot := filepath.Join(base, "drive-cache", rootSegment)
+	localPath := filepath.Clean(file.LocalPath)
+	if !strings.HasPrefix(localPath, cacheRoot+string(filepath.Separator)) {
+		slog.Warn("security.storage_drive_cache_escape", "resolved", localPath, "root", cacheRoot)
+		return "", false, fmt.Errorf("invalid Google Drive cache path")
+	}
+	return localPath, true, nil
+}
+
+func googleDriveVirtualStorageFile(base, relPath string) (googleDriveFile, string, error) {
+	clean := strings.Trim(strings.Trim(filepath.ToSlash(filepath.Clean(relPath)), "."), "/")
+	parts := strings.Split(clean, "/")
+	if len(parts) < 7 || parts[0] != "drive-cache" || parts[2] != googleDriveStorageMarker {
+		return googleDriveFile{}, "", nil
+	}
+	fileMarkerAt := -1
+	for i, part := range parts {
+		if part == googleDriveStorageFileMarker {
+			fileMarkerAt = i
+			break
+		}
+	}
+	if fileMarkerAt < 0 || fileMarkerAt+1 >= len(parts) {
+		return googleDriveFile{}, "", nil
+	}
+	rootSegment := parts[1]
+	fileID := parts[fileMarkerAt+1]
+	index, err := readGoogleDriveStorageIndex(filepath.Join(base, "drive-cache"), rootSegment)
+	if err != nil {
+		return googleDriveFile{}, rootSegment, err
+	}
+	file := index.Files[fileID]
+	if file.DriveFileID == "" {
+		file = index.PublicImports[fileID]
+	}
+	return file, rootSegment, nil
 }
 
 // sizeCacheTTL is how long storage size calculations are cached.
@@ -332,11 +564,21 @@ func (h *StorageHandler) handleRead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	readBase := h.tenantBaseDir(r)
-	absPath := filepath.Join(readBase, filepath.Clean(relPath))
-	if !strings.HasPrefix(absPath, readBase+string(filepath.Separator)) {
-		slog.Warn("security.storage_escape", "resolved", absPath, "root", readBase)
+	displayName := ""
+	absPath, ok, err := resolveGoogleDriveVirtualStorageFile(readBase, relPath)
+	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": i18n.T(locale, i18n.MsgInvalidPath)})
 		return
+	}
+	if !ok {
+		absPath = filepath.Join(readBase, filepath.Clean(relPath))
+		if !strings.HasPrefix(absPath, readBase+string(filepath.Separator)) {
+			slog.Warn("security.storage_escape", "resolved", absPath, "root", readBase)
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": i18n.T(locale, i18n.MsgInvalidPath)})
+			return
+		}
+	} else if file, _, err := googleDriveVirtualStorageFile(readBase, relPath); err == nil {
+		displayName = file.Name
 	}
 
 	info, err := os.Lstat(absPath)
@@ -365,7 +607,10 @@ func (h *StorageHandler) handleRead(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", ct)
 		w.Header().Set("Cache-Control", "private, max-age=300")
 		if r.URL.Query().Get("download") == "true" {
-			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filepath.Base(absPath)))
+			if displayName == "" {
+				displayName = filepath.Base(absPath)
+			}
+			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", displayName))
 		}
 		w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
 		w.Write(data)
@@ -396,6 +641,10 @@ func (h *StorageHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 
 	if isProtectedPath(relPath) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": i18n.T(locale, i18n.MsgCannotDeleteSkillsDir)})
+		return
+	}
+	if _, ok, err := resolveGoogleDriveVirtualStorageFile(h.tenantBaseDir(r), relPath); err != nil || ok {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "Google Drive cache files are managed by sync"})
 		return
 	}
 
@@ -576,6 +825,10 @@ func (h *StorageHandler) handleMove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	base := h.tenantBaseDir(r)
+	if _, ok, err := resolveGoogleDriveVirtualStorageFile(base, fromRel); err != nil || ok {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "Google Drive cache files are managed by sync"})
+		return
+	}
 
 	// Resolve and validate source path.
 	srcAbs := filepath.Join(base, filepath.Clean(fromRel))

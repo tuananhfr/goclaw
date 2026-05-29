@@ -74,6 +74,8 @@ func (h *MCPHandler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Server tools (read-only: viewer+)
 	mux.HandleFunc("GET /v1/mcp/servers/{id}/tools", h.auth(h.handleListServerTools))
+	mux.HandleFunc("GET /v1/mcp/servers/{id}/google-drive/folders", h.auth(h.handleGoogleDriveFolders))
+	mux.HandleFunc("POST /v1/mcp/servers/{id}/google-drive/sync", h.adminAuth(h.handleGoogleDriveSyncStart))
 	mux.HandleFunc("POST /v1/mcp/assets/watermark", h.adminAuth(h.handleUploadWatermarkAsset))
 	mux.HandleFunc("POST /v1/mcp/servers/{id}/assets/watermark", h.adminAuth(h.handleUploadWatermarkAsset))
 

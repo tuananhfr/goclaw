@@ -56,7 +56,17 @@ URL: http://google-drive-mcp:3200/sse
 MCP type: Google Drive
 ```
 
-Configure OAuth refresh-token credentials and the root folder ID in the UI. One
-Google Drive MCP server should represent one permission scope, such as one
-brand, client, or product asset folder. Tools only list and download image files
-inside that configured root folder subtree.
+Configure OAuth refresh-token credentials and the root folder ID in the UI. The
+Google Drive MCP now supports a shared root folder with per-agent folder grants:
+one MCP can serve multiple brand/client folders, while each agent only sees the
+folder IDs mapped to its agent key or UUID in `agent_folder_grants`.
+
+When an MCP client connects, the server immediately starts an initial recursive
+sync for the root folder, writes a local index under `drive-cache`, and caches
+downloaded files by Drive file ID. A daily incremental sync runs at the
+configured time (default `00:00`, `Asia/Ho_Chi_Minh`), and `gdrive_sync_now`
+can be called to sync changes or a specific folder immediately after uploading
+new assets.
+
+The MCP supports both public Drive links and private/shared files that the
+connected OAuth account can view. Domain-wide admin delegation is not required.

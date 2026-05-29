@@ -4,9 +4,9 @@ import i18next from "i18next";
 import { useHttp } from "@/hooks/use-ws";
 import { queryKeys } from "@/lib/query-keys";
 import { toast } from "@/stores/use-toast-store";
-import type { MCPServerData, MCPServerInput, MCPAgentGrant, MCPToolInfo, MCPUserCredentialStatus, MCPUserCredentialInput } from "@/types/mcp";
+import type { MCPServerData, MCPServerInput, MCPAgentGrant, MCPToolInfo, MCPUserCredentialStatus, MCPUserCredentialInput, MCPGoogleDriveFolder } from "@/types/mcp";
 
-export type { MCPServerData, MCPServerInput, MCPAgentGrant, MCPToolInfo, MCPUserCredentialStatus, MCPUserCredentialInput };
+export type { MCPServerData, MCPServerInput, MCPAgentGrant, MCPToolInfo, MCPUserCredentialStatus, MCPUserCredentialInput, MCPGoogleDriveFolder };
 
 export function useMCP() {
   const http = useHttp();
@@ -136,6 +136,14 @@ export function useMCP() {
     [http],
   );
 
+  const listGoogleDriveFolders = useCallback(
+    async (serverId: string) => {
+      const res = await http.get<{ folders: MCPGoogleDriveFolder[]; status?: string }>(`/v1/mcp/servers/${serverId}/google-drive/folders`);
+      return res.folders ?? [];
+    },
+    [http],
+  );
+
   const getUserCredentials = useCallback(
     async (serverId: string, userId?: string) => {
       const qs = userId ? `?user_id=${encodeURIComponent(userId)}` : "";
@@ -175,6 +183,7 @@ export function useMCP() {
     testConnection,
     reconnectServer,
     listServerTools,
+    listGoogleDriveFolders,
     getUserCredentials,
     setUserCredentials,
     deleteUserCredentials,
