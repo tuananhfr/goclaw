@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { buildTree, mergeSubtree, setNodeLoading, formatSize, isTextFile } from "@/lib/file-helpers";
+import { buildTree, mergeSubtree, setNodeLoading, formatSize, isTextFile, type TreeNode } from "@/lib/file-helpers";
 import { FileBrowser } from "@/components/shared/file-browser";
 import { useStorage, useStorageSize } from "./hooks/use-storage";
 import { useHttp } from "@/hooks/use-ws";
@@ -58,13 +58,6 @@ export function StoragePage() {
     }
   }, [loadSubtree]);
 
-  /** Find a file node's size from the flat files list. */
-  const fileSizeMap = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const f of files) if (!f.isDir) m.set(f.path, f.size);
-    return m;
-  }, [files]);
-
   const handleSelect = useCallback(async (path: string) => {
     setActivePath(path);
     if (isTextFile(path)) {
@@ -80,10 +73,10 @@ export function StoragePage() {
     } else {
       // For non-text files (images, binaries): don't fetch content — just set metadata.
       // ImageViewer will fetch the blob separately; UnsupportedViewer just shows size.
-      const size = fileSizeMap.get(path) ?? 0;
+      const size = findTreeNode(tree, path)?.size ?? 0;
       setFileContent({ content: "", path, size });
     }
-  }, [readFile, fileSizeMap]);
+  }, [readFile, tree]);
 
   const handleDeleteRequest = useCallback((path: string, isDir: boolean) => {
     setDeleteTarget({ path, isDir });
@@ -262,4 +255,13 @@ export function StoragePage() {
       </Dialog>
     </div>
   );
+}
+
+function findTreeNode(nodes: TreeNode[], path: string): TreeNode | null {
+  for (const node of nodes) {
+    if (node.path === path) return node;
+    const found = findTreeNode(node.children, path);
+    if (found) return found;
+  }
+  return null;
 }

@@ -333,6 +333,9 @@ func (h *StorageHandler) listGoogleDriveCacheVirtual(base, subPath string) ([]st
 			if file.Trashed || !stringSliceContains(file.Parents, folderID) {
 				continue
 			}
+			if file.LocalPath == "" {
+				continue
+			}
 			entries = append(entries, storageFileEntry{
 				Path:      googleDriveVirtualFilePath(rootSegment, folderID, id, file.Name),
 				Name:      file.Name,
