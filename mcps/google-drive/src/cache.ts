@@ -23,32 +23,14 @@ export class DriveAssetCache {
   }
 
   async syncRoot(client: DriveClient): Promise<SyncResult> {
-    return this.withSync(async () => {
-      const files = await client.listRootRecursive(Number.POSITIVE_INFINITY);
-      const index = await this.readGlobalIndex();
-      index.status = { syncing: true, indexed_files: 0, downloaded_files: 0, trashed_files: 0, errors: [] };
-      await this.writeGlobalIndex(index);
-      try {
-        const result = await this.applyFiles(client, files, index);
-        index.last_start_page_token = await client.getStartPageToken().catch(() => index.last_start_page_token);
-        index.last_sync_at = new Date().toISOString();
-        index.status.syncing = false;
-        await this.writeGlobalIndex(index);
-        return result;
-      } catch (err) {
-        index.status.syncing = false;
-        index.status.errors = [err instanceof Error ? err.message : String(err)];
-        await this.writeGlobalIndex(index);
-        throw err;
-      }
-    });
+    return this.withSync(() => this.syncRootUnlocked(client));
   }
 
   async syncChanges(client: DriveClient): Promise<SyncResult> {
     return this.withSync(async () => {
       const index = await this.readGlobalIndex();
       if (!index.last_start_page_token) {
-        return this.syncRoot(client);
+        return this.syncRootUnlocked(client, index);
       }
       index.status = { syncing: true, indexed_files: 0, downloaded_files: 0, trashed_files: 0, errors: [] };
       await this.writeGlobalIndex(index);
@@ -186,6 +168,72 @@ export class DriveAssetCache {
       this.syncPromise = null;
     });
     return this.syncPromise;
+  }
+
+  private async syncRootUnlocked(client: DriveClient, existingIndex?: GlobalDriveIndex): Promise<SyncResult> {
+    const files = await client.listRootRecursive(Number.POSITIVE_INFINITY);
+    const index = existingIndex ?? await this.readGlobalIndex();
+    index.status = { syncing: true, indexed_files: 0, downloaded_files: 0, trashed_files: 0, errors: [] };
+    await this.writeGlobalIndex(index);
+    try {
+      this.indexMetadata(files, index);
+      index.last_sync_at = new Date().toISOString();
+      index.last_start_page_token = await client.getStartPageToken().catch(() => index.last_start_page_token);
+      index.status = {
+        syncing: true,
+        indexed_files: Object.keys(index.files).length,
+        downloaded_files: 0,
+        trashed_files: 0,
+        errors: [],
+      };
+      await this.writeGlobalIndex(index);
+
+      const result = await this.applyFiles(client, files, index);
+      index.last_sync_at = new Date().toISOString();
+      index.status.syncing = false;
+      await this.writeGlobalIndex(index);
+      return result;
+    } catch (err) {
+      index.status.syncing = false;
+      index.status.errors = [err instanceof Error ? err.message : String(err)];
+      await this.writeGlobalIndex(index);
+      throw err;
+    }
+  }
+
+  private indexMetadata(files: DriveFile[], index: GlobalDriveIndex): void {
+    for (const file of files) {
+      if (file.trashed) continue;
+      if (file.mimeType !== "application/vnd.google-apps.folder") continue;
+      index.folders[file.id] = {
+        drive_file_id: file.id,
+        name: file.name,
+        parents: file.parents ?? [],
+        modified_time: file.modifiedTime,
+        web_view_link: file.webViewLink,
+        trashed: false,
+      };
+    }
+    for (const file of files) {
+      if (file.trashed || file.mimeType === "application/vnd.google-apps.folder") continue;
+      const previous = index.files[file.id];
+      const version = versionKey(file);
+      index.files[file.id] = {
+        drive_file_id: file.id,
+        name: file.name,
+        mime_type: file.mimeType,
+        parents: file.parents ?? [],
+        modified_time: file.modifiedTime,
+        md5_checksum: file.md5Checksum,
+        size: parseNumber(file.size),
+        web_view_link: file.webViewLink,
+        trashed: false,
+        local_path: previous?.version === version ? previous.local_path : undefined,
+        media: previous?.version === version ? previous.media : undefined,
+        version,
+        synced_at: new Date().toISOString(),
+      };
+    }
   }
 
   private async applyFiles(client: DriveClient, files: DriveFile[], index: GlobalDriveIndex): Promise<SyncResult> {
