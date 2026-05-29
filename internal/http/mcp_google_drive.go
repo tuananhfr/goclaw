@@ -174,7 +174,7 @@ func (h *MCPHandler) handleGoogleDriveSyncStart(w http.ResponseWriter, r *http.R
 	env := map[string]string{}
 	_ = json.Unmarshal(srv.Env, &env)
 
-	tools, err := mcpbridge.DiscoverTools(r.Context(), srv.Transport, srv.Command, args, env, srv.URL, headers)
+	result, err := mcpbridge.CallTemporaryTool(r.Context(), srv.Transport, srv.Command, args, env, srv.URL, headers, "gdrive_sync_now", map[string]any{"scope": "changes"})
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
@@ -186,8 +186,8 @@ func (h *MCPHandler) handleGoogleDriveSyncStart(w http.ResponseWriter, r *http.R
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status":     "sync_started",
-		"tool_count": len(tools),
+		"status": "changes_synced",
+		"result": result,
 	})
 }
 

@@ -124,7 +124,7 @@ export function GoogleDriveMcpFields({ form, serverId }: GoogleDriveMcpFieldsPro
     setSyncStarting(true);
     try {
       await http.post(`/v1/mcp/servers/${serverId}/google-drive/sync`, {});
-      setFolderStatus((prev) => ({ ...prev, status: "sync_started", syncing: true }));
+      setFolderStatus((prev) => ({ ...prev, status: "changes_sync_started", syncing: true }));
       window.setTimeout(() => loadDriveFolders(), 1500);
     } finally {
       setSyncStarting(false);
@@ -337,7 +337,7 @@ export function GoogleDriveMcpFields({ form, serverId }: GoogleDriveMcpFieldsPro
               <DriveFolderStatusLine status={folderStatus} loading={foldersLoading} folderCount={folderOptions.length} />
               {serverId && (
                 <Button type="button" variant="outline" size="sm" onClick={startDriveSync} disabled={syncStarting || foldersLoading}>
-                  {syncStarting ? "Starting sync..." : "Start sync"}
+                  {syncStarting ? "Syncing changes..." : "Sync changes"}
                 </Button>
               )}
             </div>

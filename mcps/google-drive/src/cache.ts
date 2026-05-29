@@ -16,7 +16,7 @@ export class DriveAssetCache {
 
   async ensureInitialSync(client: DriveClient): Promise<SyncResult> {
     const index = await this.readGlobalIndex();
-    if (!index.status.syncing && index.last_sync_at && Object.keys(index.files).length + Object.keys(index.folders).length > 0) {
+    if (index.last_sync_at && Object.keys(index.files).length + Object.keys(index.folders).length > 0) {
       return this.statusResult(index);
     }
     return this.syncRoot(client);
@@ -52,10 +52,41 @@ export class DriveAssetCache {
       }
       index.status = { syncing: true, indexed_files: 0, downloaded_files: 0, trashed_files: 0, errors: [] };
       await this.writeGlobalIndex(index);
-      const changes = await client.listChanges(index.last_start_page_token, this.config.maxAssets * 20);
-      const inScope = changes.files.filter((file) => file.trashed || this.fileTouchesKnownScope(file, index));
       try {
-        const result = await this.applyFiles(client, inScope, index);
+        let result: SyncResult = { changed: false, assets: [], asset_versions: {}, indexed_files: Object.keys(index.files).length, downloaded_files: 0, trashed_files: 0, errors: [] };
+        const missing = Object.values(index.files)
+          .filter((file) => !file.trashed && !file.local_path)
+          .sort((a, b) => {
+            const ai = a.mime_type.startsWith("image/") ? 0 : 1;
+            const bi = b.mime_type.startsWith("image/") ? 0 : 1;
+            if (ai !== bi) return ai - bi;
+            return (a.size ?? 0) - (b.size ?? 0);
+          })
+          .slice(0, this.config.maxAssets * 20)
+          .map(indexedFileToDriveFile);
+        if (missing.length > 0) {
+          result = await this.applyFiles(client, missing, index);
+          index.status = {
+            syncing: true,
+            indexed_files: Object.keys(index.files).length,
+            downloaded_files: result.downloaded_files ?? 0,
+            trashed_files: result.trashed_files ?? 0,
+            errors: result.errors ?? [],
+          };
+          await this.writeGlobalIndex(index);
+        }
+        const changes = await client.listChanges(index.last_start_page_token, this.config.maxAssets * 20);
+        const inScope = changes.files.filter((file) => file.trashed || this.fileTouchesKnownScope(file, index));
+        const changed = await this.applyFiles(client, inScope, index);
+        result = {
+          changed: result.changed || changed.changed,
+          assets: [...result.assets, ...changed.assets],
+          asset_versions: { ...result.asset_versions, ...changed.asset_versions },
+          indexed_files: changed.indexed_files,
+          downloaded_files: (result.downloaded_files ?? 0) + (changed.downloaded_files ?? 0),
+          trashed_files: (result.trashed_files ?? 0) + (changed.trashed_files ?? 0),
+          errors: [...(result.errors ?? []), ...(changed.errors ?? [])],
+        };
         if (changes.newStartPageToken) index.last_start_page_token = changes.newStartPageToken;
         index.last_sync_at = new Date().toISOString();
         index.status.syncing = false;
@@ -224,13 +255,21 @@ export class DriveAssetCache {
         if (file.mimeType === "application/vnd.google-apps.folder") {
           continue;
         }
-        const before = index.files[file.id]?.version;
+        const before = index.files[file.id];
         const entry = await this.cacheFile(client, file, false);
         index.files[file.id] = entry;
         assets.push(assetFromEntry(entry));
         assetVersions[file.id] = entry.version;
-        if (before !== entry.version) downloaded++;
-        changed = changed || before !== entry.version;
+        if (!before?.local_path || before.version !== entry.version) downloaded++;
+        changed = changed || !before?.local_path || before.version !== entry.version;
+        index.status = {
+          syncing: true,
+          indexed_files: Object.keys(index.files).length,
+          downloaded_files: downloaded,
+          trashed_files: trashed,
+          errors,
+        };
+        await this.writeGlobalIndex(index);
       } catch (err) {
         errors.push(err instanceof Error ? err.message : String(err));
       }
@@ -366,6 +405,20 @@ function assetFromEntry(entry: IndexedDriveFile): CachedAsset {
 
 function versionKey(file: DriveFile): string {
   return file.md5Checksum || `${file.modifiedTime ?? "unknown"}:${file.size ?? "0"}`;
+}
+
+function indexedFileToDriveFile(file: IndexedDriveFile): DriveFile {
+  return {
+    id: file.drive_file_id,
+    name: file.name,
+    mimeType: file.mime_type,
+    parents: file.parents,
+    modifiedTime: file.modified_time,
+    md5Checksum: file.md5_checksum,
+    size: file.size ? String(file.size) : undefined,
+    webViewLink: file.web_view_link,
+    trashed: file.trashed,
+  };
 }
 
 async function exists(filePath: string): Promise<boolean> {

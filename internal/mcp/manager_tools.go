@@ -150,6 +150,46 @@ func DiscoverTools(ctx context.Context, transportType, command string, args []st
 	return result, nil
 }
 
+// CallTemporaryTool connects to an MCP server, invokes one tool, then disconnects.
+// It is used by admin HTTP endpoints that need to run an MCP maintenance action
+// without depending on an agent-scoped Manager connection.
+func CallTemporaryTool(ctx context.Context, transportType, command string, args []string, env map[string]string, url string, headers map[string]string, toolName string, toolArgs map[string]any) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+
+	client, err := createClient(transportType, command, args, env, url, headers)
+	if err != nil {
+		return "", fmt.Errorf("create client: %w", err)
+	}
+	defer client.Close()
+
+	if transportType != "stdio" {
+		if err := client.Start(ctx); err != nil {
+			return "", fmt.Errorf("start transport: %w", err)
+		}
+	}
+
+	initReq := mcpgo.InitializeRequest{}
+	initReq.Params.ProtocolVersion = mcpgo.LATEST_PROTOCOL_VERSION
+	initReq.Params.ClientInfo = mcpgo.Implementation{Name: "goclaw-admin", Version: "1.0.0"}
+	if _, err := client.Initialize(ctx, initReq); err != nil {
+		return "", fmt.Errorf("initialize: %w", err)
+	}
+
+	req := mcpgo.CallToolRequest{}
+	req.Params.Name = toolName
+	req.Params.Arguments = toolArgs
+	result, err := client.CallTool(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("call tool: %w", err)
+	}
+	text := extractTextContent(result)
+	if result.IsError {
+		return text, fmt.Errorf("tool %s returned error: %s", toolName, text)
+	}
+	return text, nil
+}
+
 // filterTools removes tools from the registry that don't match the allow/deny lists.
 func (m *Manager) filterTools(serverName string, allow, deny []string) {
 	m.mu.Lock()
