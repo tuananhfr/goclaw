@@ -685,8 +685,13 @@ func writeGoogleDriveIndex(indexPath string, index googleDriveFolderIndex) error
 	if err != nil {
 		return fmt.Errorf("marshal Google Drive index: %w", err)
 	}
-	if err := os.WriteFile(indexPath, data, 0644); err != nil {
+	tmpPath := indexPath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
 		return fmt.Errorf("write Google Drive index: %w", err)
+	}
+	if err := os.Rename(tmpPath, indexPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("replace Google Drive index: %w", err)
 	}
 	return nil
 }
