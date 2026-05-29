@@ -132,7 +132,7 @@ export function GoogleDriveMcpFields({ form, serverId }: GoogleDriveMcpFieldsPro
   };
 
   const writeGrants = (next: Record<string, string[]>) => {
-    update({ agent_folder_grants: JSON.stringify(next, null, 2) });
+    update({ agent_folder_grants: JSON.stringify(next) });
   };
 
   const addOrUpdateGrant = () => {

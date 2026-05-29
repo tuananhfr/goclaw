@@ -130,7 +130,7 @@ function stripGoogleDriveForSettings(drive: MCPFormData["googleDrive"]) {
     cache_dir: drive.cache_dir || undefined,
     cache_ttl_seconds: drive.cache_ttl_seconds,
     max_assets: drive.max_assets,
-    agent_folder_grants: drive.agent_folder_grants || "{}",
+    agent_folder_grants: compactJSONHeaderValue(drive.agent_folder_grants || "{}"),
     allow_public_link_import: drive.allow_public_link_import,
     sync_time: drive.sync_time || "00:00",
     timezone: drive.timezone || "Asia/Ho_Chi_Minh",
@@ -179,11 +179,19 @@ function buildGoogleDriveHeaders(
   if (drive.cache_dir) headers["x-gdrive-cache-dir"] = drive.cache_dir;
   if (drive.cache_ttl_seconds) headers["x-gdrive-cache-ttl-seconds"] = String(drive.cache_ttl_seconds);
   if (drive.max_assets) headers["x-gdrive-max-assets"] = String(drive.max_assets);
-  if (drive.agent_folder_grants) headers["x-gdrive-agent-folder-grants"] = drive.agent_folder_grants;
+  if (drive.agent_folder_grants) headers["x-gdrive-agent-folder-grants"] = compactJSONHeaderValue(drive.agent_folder_grants);
   headers["x-gdrive-allow-public-link-import"] = String(drive.allow_public_link_import ?? true);
   if (drive.sync_time) headers["x-gdrive-sync-time"] = drive.sync_time;
   if (drive.timezone) headers["x-gdrive-timezone"] = drive.timezone;
   return headers;
+}
+
+function compactJSONHeaderValue(raw: string): string {
+  try {
+    return JSON.stringify(JSON.parse(raw));
+  } catch {
+    return raw.replace(/[\r\n]+/g, " ").trim();
+  }
 }
 
 interface MCPFormDialogProps {
