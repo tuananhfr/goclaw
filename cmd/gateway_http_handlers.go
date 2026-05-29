@@ -48,6 +48,7 @@ func wireHTTP(stores *store.Stores, defaultWorkspace, dataDir, bundledSkillsDir 
 	if stores != nil && stores.MCP != nil {
 		mcpH = httpapi.NewMCPHandler(stores.MCP, msgBus, mcpToolLister)
 		mcpH.SetDB(stores.DB)
+		mcpH.SetProviderRegistry(providerReg)
 	}
 	var mcpUserCredsH *httpapi.MCPUserCredentialsHandler
 	if stores != nil && stores.MCP != nil {

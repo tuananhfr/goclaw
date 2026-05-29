@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { DriveClient } from "./drive-client.js";
-import type { CachedAsset, DriveConfig, DriveFile, GlobalDriveIndex, IndexedDriveFile, SyncResult } from "./types.js";
+import type { CachedAsset, DriveConfig, DriveFile, GlobalDriveIndex, IndexedDriveFile, SyncResult, VisualIndexStatus } from "./types.js";
 import { fileExt, normalizeName, parseNumber, safeSegment } from "./utils.js";
 
 export class DriveAssetCache {
@@ -95,7 +95,9 @@ export class DriveAssetCache {
 
   async cacheSingle(client: DriveClient, folderId: string, file: DriveFile, publicDownload = false): Promise<CachedAsset> {
     const index = await this.readGlobalIndex();
+    const previous = index.files[file.id];
     const entry = await this.cacheFile(client, file, publicDownload);
+    Object.assign(entry, preserveVisualFields(previous, entry.version));
     index.files[file.id] = entry;
     await this.writeGlobalIndex(index);
     return assetFromEntry(entry);
@@ -106,7 +108,7 @@ export class DriveAssetCache {
     const index = await this.readGlobalIndex();
     const assets = Object.values(index.files)
       .filter((file) => !file.trashed && this.entryAllowed(file, allowedFolderIds, index))
-      .filter((file) => q === "" || normalizeName(file.name).includes(q))
+      .filter((file) => q === "" || this.searchText(file, index).includes(q))
       .sort((a, b) => (b.modified_time ?? "").localeCompare(a.modified_time ?? ""))
       .slice(0, limit)
       .map(assetFromEntry);
@@ -232,6 +234,7 @@ export class DriveAssetCache {
         media: previous?.version === version ? previous.media : undefined,
         version,
         synced_at: new Date().toISOString(),
+        ...preserveVisualFields(previous, version),
       };
     }
   }
@@ -275,6 +278,7 @@ export class DriveAssetCache {
         media: previous?.version === versionKey(file) ? previous.media : undefined,
         version: versionKey(file),
         synced_at: new Date().toISOString(),
+        ...preserveVisualFields(previous, versionKey(file)),
       };
       changed = true;
     }
@@ -305,6 +309,7 @@ export class DriveAssetCache {
         }
         const before = index.files[file.id];
         const entry = await this.cacheFile(client, file, false);
+        Object.assign(entry, preserveVisualFields(before, entry.version));
         index.files[file.id] = entry;
         assets.push(assetFromEntry(entry));
         assetVersions[file.id] = entry.version;
@@ -395,6 +400,34 @@ export class DriveAssetCache {
     return Boolean(index.files[file.id] || index.folders[file.id]);
   }
 
+  private searchText(file: IndexedDriveFile, index: GlobalDriveIndex): string {
+    const folderPaths = file.parents.map((parent) => this.folderPath(parent, index)).join(" ");
+    return normalizeName([
+      file.name,
+      folderPaths,
+      file.visual_summary_vi,
+      file.visual_description_vi,
+      file.visual_tags_vi?.join(" "),
+      file.visual_tags_en?.join(" "),
+      file.visual_main_subject,
+      file.visual_scene_type,
+      file.visual_detected_text?.join(" "),
+    ].filter(Boolean).join(" "));
+  }
+
+  private folderPath(folderId: string, index: GlobalDriveIndex): string {
+    const names: string[] = [];
+    const seen = new Set<string>();
+    for (let current = folderId; current && !seen.has(current);) {
+      seen.add(current);
+      const folder = index.folders[current];
+      if (!folder) break;
+      if (folder.name) names.unshift(folder.name);
+      current = folder.parents?.[0] ?? "";
+    }
+    return names.join(" / ");
+  }
+
   private statusResult(index: GlobalDriveIndex): SyncResult {
     return {
       changed: false,
@@ -404,6 +437,7 @@ export class DriveAssetCache {
       downloaded_files: index.status.downloaded_files,
       trashed_files: index.status.trashed_files,
       errors: index.status.errors,
+      visual_index_status: index.visual_index_status,
     };
   }
 
@@ -419,6 +453,7 @@ export class DriveAssetCache {
         folders: parsed.folders ?? {},
         public_imports: parsed.public_imports ?? {},
         status: parsed.status ?? { syncing: false, indexed_files: 0, downloaded_files: 0, trashed_files: 0, errors: [] },
+        visual_index_status: parsed.visual_index_status ?? defaultVisualIndexStatus(),
       };
     } catch {
       return {
@@ -427,6 +462,7 @@ export class DriveAssetCache {
         folders: {},
         public_imports: {},
         status: { syncing: false, indexed_files: 0, downloaded_files: 0, trashed_files: 0, errors: [] },
+        visual_index_status: defaultVisualIndexStatus(),
       };
     }
   }
@@ -448,7 +484,37 @@ function assetFromEntry(entry: IndexedDriveFile): CachedAsset {
     media: entry.media ?? "",
     role: "candidate",
     web_view_link: entry.web_view_link,
+    visual_summary_vi: entry.visual_summary_vi,
+    visual_description_vi: entry.visual_description_vi,
+    visual_tags_vi: entry.visual_tags_vi,
+    visual_tags_en: entry.visual_tags_en,
+    visual_main_subject: entry.visual_main_subject,
+    visual_scene_type: entry.visual_scene_type,
+    visual_detected_text: entry.visual_detected_text,
+    visual_usable_as_reference: entry.visual_usable_as_reference,
+    visual_quality: entry.visual_quality,
   };
+}
+
+function preserveVisualFields(previous: IndexedDriveFile | undefined, version: string): Partial<IndexedDriveFile> {
+  if (!previous || previous.visual_index_version !== version) return {};
+  return {
+    visual_summary_vi: previous.visual_summary_vi,
+    visual_description_vi: previous.visual_description_vi,
+    visual_tags_vi: previous.visual_tags_vi,
+    visual_tags_en: previous.visual_tags_en,
+    visual_main_subject: previous.visual_main_subject,
+    visual_scene_type: previous.visual_scene_type,
+    visual_detected_text: previous.visual_detected_text,
+    visual_usable_as_reference: previous.visual_usable_as_reference,
+    visual_quality: previous.visual_quality,
+    visual_indexed_at: previous.visual_indexed_at,
+    visual_index_version: previous.visual_index_version,
+  };
+}
+
+function defaultVisualIndexStatus(): VisualIndexStatus {
+  return { indexing: false, indexed_images: 0, pending_images: 0, failed_images: 0, errors: [] };
 }
 
 function versionKey(file: DriveFile): string {

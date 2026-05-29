@@ -7,6 +7,7 @@ This folder keeps editable skill source folders, page-specific brand kits, and u
 ```text
 skill-drafts/
   shared/
+    drive-reference-search-guidelines/
     facebook-fanpage-content-guidelines/
     fanpage-content-creator-guidelines/
     fanpage-design-guidelines/
@@ -71,6 +72,7 @@ Use these across fanpage teams:
 
 ```text
 shared/facebook-fanpage-content-guidelines/
+shared/drive-reference-search-guidelines/
 shared/fanpage-content-creator-guidelines/
 shared/fanpage-design-guidelines/
 shared/fanpage-grounded-content-guidelines/
@@ -82,6 +84,7 @@ Upload packages:
 
 ```text
 shared/packages/facebook-fanpage-content-guidelines.zip
+shared/packages/drive-reference-search-guidelines.zip
 shared/packages/fanpage-content-creator-guidelines.zip
 shared/packages/fanpage-design-guidelines.zip
 shared/packages/fanpage-grounded-content-guidelines.zip
@@ -237,6 +240,7 @@ Design agent:
 ```text
 shared/packages/facebook-fanpage-content-guidelines.zip
 shared/packages/fanpage-design-guidelines.zip
+shared/packages/drive-reference-search-guidelines.zip
 ```
 
 ### Page Lead Agents

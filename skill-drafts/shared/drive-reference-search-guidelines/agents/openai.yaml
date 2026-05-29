@@ -1,0 +1,4 @@
+interface:
+  display_name: "Drive Reference Search Guidelines"
+  short_description: "Drive image reference search workflow"
+  default_prompt: "Use this skill when a design agent needs to search allowed Drive/cache folders, inspect a limited set of images, select real reference images, download them, and pass local MEDIA paths into image generation."

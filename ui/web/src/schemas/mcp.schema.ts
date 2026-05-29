@@ -63,6 +63,12 @@ export const mcpFormSchema = z.object({
     allow_public_link_import: z.boolean(),
     sync_time: z.string(),
     timezone: z.string(),
+    visual_index_enabled: z.boolean(),
+    visual_index_provider: z.string().optional(),
+    visual_index_model: z.string().optional(),
+    visual_index_concurrency: z.number().min(1),
+    visual_index_max_per_run: z.number().min(0),
+    visual_index_time: z.string().optional(),
   }),
 });
 

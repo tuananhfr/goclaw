@@ -42,6 +42,12 @@ export interface MCPSettings {
     allow_public_link_import?: boolean;
     sync_time?: string;
     timezone?: string;
+    visual_index_enabled?: boolean;
+    visual_index_provider?: string;
+    visual_index_model?: string;
+    visual_index_concurrency?: number;
+    visual_index_max_per_run?: number;
+    visual_index_time?: string;
   };
 }
 

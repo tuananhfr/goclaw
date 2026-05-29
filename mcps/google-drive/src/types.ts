@@ -35,6 +35,15 @@ export interface CachedAsset {
   media: string;
   role: "candidate";
   web_view_link?: string;
+  visual_summary_vi?: string;
+  visual_description_vi?: string;
+  visual_tags_vi?: string[];
+  visual_tags_en?: string[];
+  visual_main_subject?: string;
+  visual_scene_type?: VisualSceneType;
+  visual_detected_text?: string[];
+  visual_usable_as_reference?: boolean;
+  visual_quality?: VisualQuality;
 }
 
 export interface SyncResult {
@@ -45,7 +54,11 @@ export interface SyncResult {
   downloaded_files?: number;
   trashed_files?: number;
   errors?: string[];
+  visual_index_status?: VisualIndexStatus;
 }
+
+export type VisualSceneType = "product" | "factory" | "construction" | "food" | "document" | "people" | "other";
+export type VisualQuality = "low" | "medium" | "high";
 
 export interface IndexedDriveFile {
   drive_file_id: string;
@@ -61,6 +74,26 @@ export interface IndexedDriveFile {
   media?: string;
   version: string;
   synced_at: string;
+  visual_summary_vi?: string;
+  visual_description_vi?: string;
+  visual_tags_vi?: string[];
+  visual_tags_en?: string[];
+  visual_main_subject?: string;
+  visual_scene_type?: VisualSceneType;
+  visual_detected_text?: string[];
+  visual_usable_as_reference?: boolean;
+  visual_quality?: VisualQuality;
+  visual_indexed_at?: string;
+  visual_index_version?: string;
+}
+
+export interface VisualIndexStatus {
+  indexing: boolean;
+  indexed_images: number;
+  pending_images: number;
+  failed_images: number;
+  last_indexed_at?: string;
+  errors: string[];
 }
 
 export interface GlobalDriveIndex {
@@ -84,4 +117,5 @@ export interface GlobalDriveIndex {
     trashed_files: number;
     errors: string[];
   };
+  visual_index_status: VisualIndexStatus;
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/nextlevelbuilder/goclaw/internal/i18n"
 	"github.com/nextlevelbuilder/goclaw/internal/mcp"
 	"github.com/nextlevelbuilder/goclaw/internal/permissions"
+	"github.com/nextlevelbuilder/goclaw/internal/providers"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
 	"github.com/nextlevelbuilder/goclaw/pkg/protocol"
 )
@@ -34,6 +35,7 @@ type MCPHandler struct {
 	poolEvictor MCPPoolEvictor // optional, nil when pool not available
 	db          *sql.DB        // for export/import direct queries
 	dataDir     string         // root for MCP-owned uploaded assets
+	providerReg *providers.Registry
 }
 
 // NewMCPHandler creates a handler for MCP server management endpoints.
@@ -46,6 +48,11 @@ func (h *MCPHandler) SetPoolEvictor(e MCPPoolEvictor) { h.poolEvictor = e }
 
 // SetDataDir sets the root data directory used for MCP-owned assets.
 func (h *MCPHandler) SetDataDir(dataDir string) { h.dataDir = dataDir }
+
+// SetProviderRegistry lets admin maintenance jobs use configured LLM providers.
+func (h *MCPHandler) SetProviderRegistry(providerReg *providers.Registry) {
+	h.providerReg = providerReg
+}
 
 func (h *MCPHandler) emitCacheInvalidate() {
 	if h.msgBus == nil {
@@ -76,6 +83,7 @@ func (h *MCPHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/mcp/servers/{id}/tools", h.auth(h.handleListServerTools))
 	mux.HandleFunc("GET /v1/mcp/servers/{id}/google-drive/folders", h.auth(h.handleGoogleDriveFolders))
 	mux.HandleFunc("POST /v1/mcp/servers/{id}/google-drive/sync", h.adminAuth(h.handleGoogleDriveSyncStart))
+	mux.HandleFunc("POST /v1/mcp/servers/{id}/google-drive/index-images", h.adminAuth(h.handleGoogleDriveIndexImages))
 	mux.HandleFunc("POST /v1/mcp/assets/watermark", h.adminAuth(h.handleUploadWatermarkAsset))
 	mux.HandleFunc("POST /v1/mcp/servers/{id}/assets/watermark", h.adminAuth(h.handleUploadWatermarkAsset))
 

@@ -14,7 +14,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useHttp } from "@/hooks/use-ws";
 import { useAgents } from "@/pages/agents/hooks/use-agents";
+import { ProviderModelSelect } from "@/components/shared/provider-model-select";
 import type { MCPFormData } from "@/schemas/mcp.schema";
+import { toast } from "@/stores/use-toast-store";
 import type { MCPGoogleDriveFolder } from "@/types/mcp";
 
 interface GoogleDriveMcpFieldsProps {
@@ -33,6 +35,7 @@ export function GoogleDriveMcpFields({ form, serverId }: GoogleDriveMcpFieldsPro
   const [folderStatus, setFolderStatus] = useState<DriveFolderStatus>({ status: "idle" });
   const [foldersLoading, setFoldersLoading] = useState(false);
   const [syncStarting, setSyncStarting] = useState(false);
+  const [indexStarting, setIndexStarting] = useState(false);
   const [expandedFolderIDs, setExpandedFolderIDs] = useState<Set<string>>(new Set());
   const drive = watch("googleDrive") ?? {
     client_id: "",
@@ -47,6 +50,12 @@ export function GoogleDriveMcpFields({ form, serverId }: GoogleDriveMcpFieldsPro
     allow_public_link_import: true,
     sync_time: "00:00",
     timezone: "Asia/Ho_Chi_Minh",
+    visual_index_enabled: true,
+    visual_index_provider: "",
+    visual_index_model: "",
+    visual_index_concurrency: 1,
+    visual_index_max_per_run: 100,
+    visual_index_time: "",
   };
 
   const update = (patch: Partial<MCPFormData["googleDrive"]>) => {
@@ -94,6 +103,7 @@ export function GoogleDriveMcpFields({ form, serverId }: GoogleDriveMcpFieldsPro
             indexedFiles: res.sync?.indexed_files,
             downloadedFiles: res.sync?.downloaded_files,
             errors: res.sync?.errors ?? [],
+            visualIndex: res.visual_index,
           });
         }
       })
@@ -128,6 +138,35 @@ export function GoogleDriveMcpFields({ form, serverId }: GoogleDriveMcpFieldsPro
       window.setTimeout(() => loadDriveFolders(), 1500);
     } finally {
       setSyncStarting(false);
+    }
+  };
+
+  const startImageIndex = async () => {
+    if (!serverId) return;
+    if (!drive.visual_index_provider || !drive.visual_index_model) {
+      toast.error("Vision provider and model are required");
+      return;
+    }
+    setIndexStarting(true);
+    setFolderStatus((prev) => ({
+      ...prev,
+      visualIndex: {
+        indexing: true,
+        indexed_images: prev.visualIndex?.indexed_images ?? 0,
+        pending_images: prev.visualIndex?.pending_images ?? 0,
+        failed_images: prev.visualIndex?.failed_images ?? 0,
+        errors: prev.visualIndex?.errors ?? [],
+      },
+    }));
+    try {
+      await http.post(`/v1/mcp/servers/${serverId}/google-drive/index-images`, {});
+      toast.success("Image indexing started");
+      window.setTimeout(() => loadDriveFolders(), 1000);
+      window.setTimeout(() => loadDriveFolders(), 5000);
+    } catch (err) {
+      toast.error("Failed to start image indexing", err instanceof Error ? err.message : String(err));
+    } finally {
+      setIndexStarting(false);
     }
   };
 
@@ -264,6 +303,58 @@ export function GoogleDriveMcpFields({ form, serverId }: GoogleDriveMcpFieldsPro
           />
         </div>
         <div className="grid gap-2 sm:col-span-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary"
+              checked={drive.visual_index_enabled ?? true}
+              onChange={(e) => update({ visual_index_enabled: e.target.checked })}
+            />
+            <Label>Visual image indexing</Label>
+          </div>
+          <ProviderModelSelect
+            provider={drive.visual_index_provider ?? ""}
+            onProviderChange={(value) => update({ visual_index_provider: value })}
+            model={drive.visual_index_model ?? ""}
+            onModelChange={(value) => update({ visual_index_model: value })}
+            providerLabel="Vision provider"
+            modelLabel="Vision model"
+            providerPlaceholder="Select provider"
+            modelPlaceholder="Select or enter model"
+            allowEmpty
+          />
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-1.5">
+              <Label>Index concurrency</Label>
+              <Input
+                type="number"
+                min={1}
+                value={drive.visual_index_concurrency ?? 1}
+                onChange={(e) => update({ visual_index_concurrency: Math.max(1, Number(e.target.value) || 1) })}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Max images per run</Label>
+              <Input
+                type="number"
+                min={0}
+                value={drive.visual_index_max_per_run ?? 100}
+                onChange={(e) => update({ visual_index_max_per_run: Math.max(0, Number(e.target.value) || 0) })}
+              />
+              <p className="text-[11px] text-muted-foreground">Use 0 to index all pending cached images.</p>
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Visual index time</Label>
+              <Input
+                value={drive.visual_index_time ?? ""}
+                onChange={(e) => update({ visual_index_time: e.target.value })}
+                placeholder="00:30"
+                className="font-mono"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="grid gap-2 sm:col-span-3">
           <Label>Agent folder access</Label>
           <div className="grid gap-2 rounded-md border border-border p-3">
             {grantRows.length > 0 && (
@@ -336,11 +427,28 @@ export function GoogleDriveMcpFields({ form, serverId }: GoogleDriveMcpFieldsPro
             <div className="flex flex-wrap items-center justify-between gap-2">
               <DriveFolderStatusLine status={folderStatus} loading={foldersLoading} folderCount={folderOptions.length} />
               {serverId && (
-                <Button type="button" variant="outline" size="sm" onClick={startDriveSync} disabled={syncStarting || foldersLoading}>
-                  {syncStarting ? "Syncing changes..." : "Sync changes"}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={startDriveSync} disabled={syncStarting || foldersLoading || indexStarting}>
+                    {syncStarting ? "Syncing changes..." : "Sync changes"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={startImageIndex}
+                    disabled={indexStarting || foldersLoading || syncStarting || !drive.visual_index_enabled}
+                  >
+                    {indexStarting ? "Indexing images..." : "Index images"}
+                  </Button>
+                </div>
               )}
             </div>
+            {folderStatus.visualIndex && (
+              <p className="text-xs text-muted-foreground">
+                Visual index: {folderStatus.visualIndex.indexed_images} indexed, {folderStatus.visualIndex.pending_images} pending, {folderStatus.visualIndex.failed_images} failed
+                {folderStatus.visualIndex.indexing ? " — indexing now" : ""}
+              </p>
+            )}
 
             <details className="group">
               <summary className="cursor-pointer text-xs text-muted-foreground">Advanced</summary>
@@ -374,6 +482,7 @@ interface DriveFolderResponse {
     downloaded_files?: number;
     errors?: string[];
   };
+  visual_index?: VisualIndexStatus;
 }
 
 interface DriveFolderStatus {
@@ -381,6 +490,16 @@ interface DriveFolderStatus {
   syncing?: boolean;
   indexedFiles?: number;
   downloadedFiles?: number;
+  errors?: string[];
+  visualIndex?: VisualIndexStatus;
+}
+
+interface VisualIndexStatus {
+  indexing?: boolean;
+  indexed_images?: number;
+  pending_images?: number;
+  failed_images?: number;
+  last_indexed_at?: string;
   errors?: string[];
 }
 

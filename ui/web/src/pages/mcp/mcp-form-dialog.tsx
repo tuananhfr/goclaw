@@ -76,6 +76,12 @@ const defaultGoogleDrive: MCPFormData["googleDrive"] = {
   allow_public_link_import: true,
   sync_time: "00:00",
   timezone: "Asia/Ho_Chi_Minh",
+  visual_index_enabled: true,
+  visual_index_provider: "",
+  visual_index_model: "",
+  visual_index_concurrency: 1,
+  visual_index_max_per_run: 100,
+  visual_index_time: "",
 };
 
 function sanitizeWatermark(watermark: NonNullable<MCPFormData["facebookPages"][number]["watermark"]>) {
@@ -109,6 +115,12 @@ function restoreGoogleDrive(
     allow_public_link_import: (headers["x-gdrive-allow-public-link-import"] ?? String(settings?.allow_public_link_import ?? "true")) !== "false",
     sync_time: headers["x-gdrive-sync-time"] ?? settings?.sync_time ?? "00:00",
     timezone: headers["x-gdrive-timezone"] ?? settings?.timezone ?? "Asia/Ho_Chi_Minh",
+    visual_index_enabled: settings?.visual_index_enabled ?? true,
+    visual_index_provider: settings?.visual_index_provider ?? "",
+    visual_index_model: settings?.visual_index_model ?? "",
+    visual_index_concurrency: Number(settings?.visual_index_concurrency ?? 1),
+    visual_index_max_per_run: Number(settings?.visual_index_max_per_run ?? 100),
+    visual_index_time: settings?.visual_index_time ?? "",
   };
 }
 
@@ -134,6 +146,12 @@ function stripGoogleDriveForSettings(drive: MCPFormData["googleDrive"]) {
     allow_public_link_import: drive.allow_public_link_import,
     sync_time: drive.sync_time || "00:00",
     timezone: drive.timezone || "Asia/Ho_Chi_Minh",
+    visual_index_enabled: drive.visual_index_enabled,
+    visual_index_provider: drive.visual_index_provider || undefined,
+    visual_index_model: drive.visual_index_model || undefined,
+    visual_index_concurrency: drive.visual_index_concurrency || 1,
+    visual_index_max_per_run: drive.visual_index_max_per_run ?? 100,
+    visual_index_time: drive.visual_index_time || undefined,
   };
 }
 

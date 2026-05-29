@@ -1,33 +1,47 @@
 package http
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
 	mcpbridge "github.com/nextlevelbuilder/goclaw/internal/mcp"
+	"github.com/nextlevelbuilder/goclaw/internal/providers"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
 )
 
 type googleDriveMCPSettings struct {
 	GoogleDrive *struct {
-		RootFolderID   string `json:"root_folder_id"`
-		RootFolderName string `json:"root_folder_name"`
-		CacheDir       string `json:"cache_dir"`
+		RootFolderID           string `json:"root_folder_id"`
+		RootFolderName         string `json:"root_folder_name"`
+		CacheDir               string `json:"cache_dir"`
+		VisualIndexEnabled     *bool  `json:"visual_index_enabled"`
+		VisualIndexProvider    string `json:"visual_index_provider"`
+		VisualIndexModel       string `json:"visual_index_model"`
+		VisualIndexConcurrency int    `json:"visual_index_concurrency"`
+		VisualIndexMaxPerRun   *int   `json:"visual_index_max_per_run"`
+		VisualIndexTime        string `json:"visual_index_time"`
 	} `json:"google_drive"`
 }
 
 type googleDriveFolderIndex struct {
-	RootFolderID string                       `json:"root_folder_id"`
-	Files        map[string]googleDriveFile   `json:"files"`
-	Folders      map[string]googleDriveFolder `json:"folders"`
-	PublicImports map[string]googleDriveFile  `json:"public_imports"`
-	Status       googleDriveSyncStatus        `json:"status"`
+	RootFolderID      string                       `json:"root_folder_id"`
+	Files             map[string]googleDriveFile   `json:"files"`
+	Folders           map[string]googleDriveFolder `json:"folders"`
+	PublicImports     map[string]googleDriveFile   `json:"public_imports"`
+	Status            googleDriveSyncStatus        `json:"status"`
+	VisualIndexStatus googleDriveVisualIndexStatus `json:"visual_index_status"`
 }
 
 type googleDriveSyncStatus struct {
@@ -43,19 +57,44 @@ type googleDriveFolder struct {
 	Name         string   `json:"name"`
 	Parents      []string `json:"parents"`
 	ModifiedTime string   `json:"modified_time,omitempty"`
+	WebViewLink  string   `json:"web_view_link,omitempty"`
 	Trashed      bool     `json:"trashed,omitempty"`
 }
 
 type googleDriveFile struct {
-	DriveFileID  string   `json:"drive_file_id"`
-	Name         string   `json:"name"`
-	MimeType     string   `json:"mime_type"`
-	Parents      []string `json:"parents"`
-	ModifiedTime string   `json:"modified_time,omitempty"`
-	Size         int64    `json:"size,omitempty"`
-	LocalPath    string   `json:"local_path,omitempty"`
-	Media        string   `json:"media,omitempty"`
-	Trashed      bool     `json:"trashed,omitempty"`
+	DriveFileID             string   `json:"drive_file_id"`
+	Name                    string   `json:"name"`
+	MimeType                string   `json:"mime_type"`
+	Parents                 []string `json:"parents"`
+	ModifiedTime            string   `json:"modified_time,omitempty"`
+	MD5Checksum             string   `json:"md5_checksum,omitempty"`
+	WebViewLink             string   `json:"web_view_link,omitempty"`
+	Size                    int64    `json:"size,omitempty"`
+	LocalPath               string   `json:"local_path,omitempty"`
+	Media                   string   `json:"media,omitempty"`
+	Trashed                 bool     `json:"trashed,omitempty"`
+	Version                 string   `json:"version,omitempty"`
+	SyncedAt                string   `json:"synced_at,omitempty"`
+	VisualSummaryVI         string   `json:"visual_summary_vi,omitempty"`
+	VisualDescriptionVI     string   `json:"visual_description_vi,omitempty"`
+	VisualTagsVI            []string `json:"visual_tags_vi,omitempty"`
+	VisualTagsEN            []string `json:"visual_tags_en,omitempty"`
+	VisualMainSubject       string   `json:"visual_main_subject,omitempty"`
+	VisualSceneType         string   `json:"visual_scene_type,omitempty"`
+	VisualDetectedText      []string `json:"visual_detected_text,omitempty"`
+	VisualUsableAsReference *bool    `json:"visual_usable_as_reference,omitempty"`
+	VisualQuality           string   `json:"visual_quality,omitempty"`
+	VisualIndexedAt         string   `json:"visual_indexed_at,omitempty"`
+	VisualIndexVersion      string   `json:"visual_index_version,omitempty"`
+}
+
+type googleDriveVisualIndexStatus struct {
+	Indexing      bool     `json:"indexing"`
+	IndexedImages int      `json:"indexed_images"`
+	PendingImages int      `json:"pending_images"`
+	FailedImages  int      `json:"failed_images"`
+	LastIndexedAt string   `json:"last_indexed_at,omitempty"`
+	Errors        []string `json:"errors"`
 }
 
 type googleDriveFolderOption struct {
@@ -142,9 +181,10 @@ func (h *MCPHandler) handleGoogleDriveFolders(w http.ResponseWriter, r *http.Req
 	})
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"folders": folders,
-		"status":  "ok",
-		"sync":    index.Status,
+		"folders":      folders,
+		"status":       "ok",
+		"sync":         index.Status,
+		"visual_index": index.VisualIndexStatus,
 	})
 }
 
@@ -191,6 +231,85 @@ func (h *MCPHandler) handleGoogleDriveSyncStart(w http.ResponseWriter, r *http.R
 	})
 }
 
+func (h *MCPHandler) handleGoogleDriveIndexImages(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid server id"})
+		return
+	}
+	if h.providerReg == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "provider registry is not configured"})
+		return
+	}
+
+	srv, err := h.store.GetServer(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "server not found"})
+		return
+	}
+
+	rootFolderID, cacheDir := googleDriveCacheConfig(srv.Settings, srv.Headers)
+	if rootFolderID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "google_drive.root_folder_id is not configured"})
+		return
+	}
+	if cacheDir == "" {
+		cacheDir = "/app/workspace/drive-cache"
+	}
+	visualCfg := parseGoogleDriveVisualConfig(srv.Settings)
+	if !visualCfg.Enabled {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "google_drive.visual_index_enabled is disabled"})
+		return
+	}
+	if visualCfg.Provider == "" || visualCfg.Model == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "google_drive.visual_index_provider and visual_index_model are required"})
+		return
+	}
+
+	var req struct {
+		FolderIDOrURL string `json:"folder_id_or_url"`
+		Limit         int    `json:"limit"`
+		Force         bool   `json:"force"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if req.Limit < 0 || (visualCfg.MaxPerRun > 0 && (req.Limit == 0 || req.Limit > visualCfg.MaxPerRun)) {
+		req.Limit = visualCfg.MaxPerRun
+	}
+
+	if _, err := h.providerReg.GetForTenant(store.TenantIDFromContext(r.Context()), visualCfg.Provider); err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+
+	ctx := context.WithoutCancel(r.Context())
+	slog.Info("gdrive.visual_index.requested",
+		"server", srv.Name,
+		"root", rootFolderID,
+		"provider", visualCfg.Provider,
+		"model", visualCfg.Model,
+		"limit", req.Limit,
+		"force", req.Force,
+	)
+	go func() {
+		result, err := h.indexGoogleDriveImages(ctx, cacheDir, rootFolderID, req.FolderIDOrURL, req.Limit, req.Force, visualCfg)
+		if err != nil {
+			slog.Error("gdrive.visual_index.failed", "server", srv.Name, "root", rootFolderID, "error", err)
+			return
+		}
+		slog.Info("gdrive.visual_index.completed",
+			"server", srv.Name,
+			"root", rootFolderID,
+			"indexed", result.IndexedImages,
+			"pending", result.PendingImages,
+			"failed", result.FailedImages,
+		)
+	}()
+
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"status": "images_index_started",
+	})
+}
+
 func googleDriveCacheConfig(settingsRaw, headersRaw json.RawMessage) (string, string) {
 	var settings googleDriveMCPSettings
 	_ = json.Unmarshal(settingsRaw, &settings)
@@ -225,6 +344,197 @@ func googleDriveRootName(settingsRaw json.RawMessage) string {
 	return strings.TrimSpace(raw.GoogleDrive.RootFolderName)
 }
 
+type googleDriveVisualConfig struct {
+	Enabled     bool
+	Provider    string
+	Model       string
+	Concurrency int
+	MaxPerRun   int
+}
+
+func googleDriveVisualConfigFromDefaults() googleDriveVisualConfig {
+	return googleDriveVisualConfig{Enabled: true, Concurrency: 1, MaxPerRun: 100}
+}
+
+func parseGoogleDriveVisualConfig(settingsRaw json.RawMessage) googleDriveVisualConfig {
+	cfg := googleDriveVisualConfigFromDefaults()
+	var settings googleDriveMCPSettings
+	_ = json.Unmarshal(settingsRaw, &settings)
+	if settings.GoogleDrive == nil {
+		return cfg
+	}
+	if settings.GoogleDrive.VisualIndexEnabled != nil {
+		cfg.Enabled = *settings.GoogleDrive.VisualIndexEnabled
+	}
+	cfg.Provider = strings.TrimSpace(settings.GoogleDrive.VisualIndexProvider)
+	cfg.Model = strings.TrimSpace(settings.GoogleDrive.VisualIndexModel)
+	if settings.GoogleDrive.VisualIndexConcurrency > 0 {
+		cfg.Concurrency = settings.GoogleDrive.VisualIndexConcurrency
+	}
+	if settings.GoogleDrive.VisualIndexMaxPerRun != nil {
+		cfg.MaxPerRun = max(*settings.GoogleDrive.VisualIndexMaxPerRun, 0)
+	}
+	if cfg.Concurrency <= 0 {
+		cfg.Concurrency = 1
+	}
+	if cfg.MaxPerRun < 0 {
+		cfg.MaxPerRun = 100
+	}
+	return cfg
+}
+
+type googleDriveVisualIndexResult struct {
+	Changed       bool     `json:"changed"`
+	IndexedImages int      `json:"indexed_images"`
+	PendingImages int      `json:"pending_images"`
+	FailedImages  int      `json:"failed_images"`
+	SkippedImages int      `json:"skipped_images"`
+	Errors        []string `json:"errors"`
+}
+
+func (h *MCPHandler) indexGoogleDriveImages(ctx context.Context, cacheDir, rootFolderID, folderIDOrURL string, limit int, force bool, cfg googleDriveVisualConfig) (googleDriveVisualIndexResult, error) {
+	indexPath := filepath.Join(cacheDir, safeDriveCacheSegment(rootFolderID), "index.json")
+	raw, err := os.ReadFile(indexPath)
+	if err != nil {
+		return googleDriveVisualIndexResult{}, fmt.Errorf("read Google Drive index: %w", err)
+	}
+	var index googleDriveFolderIndex
+	if err := json.Unmarshal(raw, &index); err != nil {
+		return googleDriveVisualIndexResult{}, fmt.Errorf("invalid Google Drive index: %w", err)
+	}
+	if index.Files == nil {
+		index.Files = map[string]googleDriveFile{}
+	}
+	if index.Folders == nil {
+		index.Folders = map[string]googleDriveFolder{}
+	}
+
+	folderID := parseGoogleDriveID(folderIDOrURL)
+	cacheRoot := filepath.Clean(filepath.Join(cacheDir, safeDriveCacheSegment(rootFolderID)))
+	candidates := make([]googleDriveFile, 0)
+	for _, file := range index.Files {
+		if file.Trashed || file.LocalPath == "" || !strings.HasPrefix(file.MimeType, "image/") {
+			continue
+		}
+		if folderID != "" && !googleDriveItemUnderFolder(file.Parents, folderID, true, index.Folders) {
+			continue
+		}
+		if !force && file.VisualIndexVersion == file.Version {
+			continue
+		}
+		local := filepath.Clean(file.LocalPath)
+		if local != cacheRoot && !strings.HasPrefix(local, cacheRoot+string(os.PathSeparator)) {
+			continue
+		}
+		candidates = append(candidates, file)
+	}
+	if cfg.MaxPerRun > 0 && (limit <= 0 || limit > cfg.MaxPerRun) {
+		limit = cfg.MaxPerRun
+	}
+	if limit > 0 && len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+
+	provider, err := h.providerReg.GetForTenant(store.TenantIDFromContext(ctx), cfg.Provider)
+	if err != nil {
+		return googleDriveVisualIndexResult{}, fmt.Errorf("resolve visual index provider: %w", err)
+	}
+
+	index.VisualIndexStatus = googleDriveVisualIndexStatus{
+		Indexing:      true,
+		IndexedImages: 0,
+		PendingImages: len(candidates),
+		FailedImages:  0,
+		Errors:        []string{},
+	}
+	if err := writeGoogleDriveIndex(indexPath, index); err != nil {
+		return googleDriveVisualIndexResult{}, err
+	}
+
+	var mu sync.Mutex
+	cursor := 0
+	indexed := 0
+	failed := 0
+	errors := []string{}
+	concurrency := cfg.Concurrency
+	if concurrency <= 0 {
+		concurrency = 1
+	}
+	if concurrency > len(candidates) && len(candidates) > 0 {
+		concurrency = len(candidates)
+	}
+	if concurrency == 0 {
+		concurrency = 1
+	}
+
+	worker := func() {
+		for {
+			mu.Lock()
+			if cursor >= len(candidates) {
+				mu.Unlock()
+				return
+			}
+			file := candidates[cursor]
+			cursor++
+			mu.Unlock()
+
+			visual, callErr := h.callVisualIndexProvider(ctx, provider, cfg.Model, file)
+
+			mu.Lock()
+			if callErr != nil {
+				failed++
+				errors = append(errors, fmt.Sprintf("%s: %v", file.Name, callErr))
+			} else if current, ok := index.Files[file.DriveFileID]; ok {
+				applyGoogleDriveVisual(&current, visual)
+				current.VisualIndexedAt = time.Now().UTC().Format(time.RFC3339)
+				current.VisualIndexVersion = current.Version
+				index.Files[file.DriveFileID] = current
+				indexed++
+			}
+			index.VisualIndexStatus = googleDriveVisualIndexStatus{
+				Indexing:      true,
+				IndexedImages: indexed,
+				PendingImages: max(len(candidates)-indexed-failed, 0),
+				FailedImages:  failed,
+				LastIndexedAt: time.Now().UTC().Format(time.RFC3339),
+				Errors:        tailStrings(errors, 20),
+			}
+			_ = writeGoogleDriveIndex(indexPath, index)
+			mu.Unlock()
+		}
+	}
+
+	var wg sync.WaitGroup
+	for range concurrency {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			worker()
+		}()
+	}
+	wg.Wait()
+
+	index.VisualIndexStatus = googleDriveVisualIndexStatus{
+		Indexing:      false,
+		IndexedImages: indexed,
+		PendingImages: max(len(candidates)-indexed-failed, 0),
+		FailedImages:  failed,
+		LastIndexedAt: time.Now().UTC().Format(time.RFC3339),
+		Errors:        tailStrings(errors, 20),
+	}
+	if err := writeGoogleDriveIndex(indexPath, index); err != nil {
+		return googleDriveVisualIndexResult{}, err
+	}
+	return googleDriveVisualIndexResult{
+		Changed:       indexed > 0,
+		IndexedImages: indexed,
+		PendingImages: index.VisualIndexStatus.PendingImages,
+		FailedImages:  failed,
+		SkippedImages: len(index.Files) - len(candidates),
+		Errors:        tailStrings(errors, 20),
+	}, nil
+}
+
 func googleDriveFolderPath(id, rootID string, folders map[string]googleDriveFolder) string {
 	names := []string{}
 	seen := map[string]bool{}
@@ -246,6 +556,230 @@ func googleDriveFolderPath(id, rootID string, folders map[string]googleDriveFold
 		return id
 	}
 	return strings.Join(names, " / ")
+}
+
+type googleDriveVisualPayload struct {
+	SummaryVI         string   `json:"summary_vi"`
+	DescriptionVI     string   `json:"description_vi"`
+	TagsVI            []string `json:"tags_vi"`
+	TagsEN            []string `json:"tags_en"`
+	MainSubject       string   `json:"main_subject"`
+	SceneType         string   `json:"scene_type"`
+	DetectedText      []string `json:"detected_text"`
+	UsableAsReference bool     `json:"usable_as_reference"`
+	Quality           string   `json:"quality"`
+}
+
+const googleDriveVisualPrompt = `Phan tich anh de lap chi muc tim kiem noi bo.
+Tra ve JSON hop le, khong markdown, khong giai thich.
+
+Yeu cau:
+- Chi mo ta nhung gi nhin thay duoc.
+- Khong bia thuong hieu, thong so, vat the neu khong chac.
+- Neu anh mo hoac khong chac, ghi than trong trong description_vi.
+- Mo ta chi tiet de tim kiem tot, nhung summary_vi phai ngan gon.
+
+Schema:
+{
+  "summary_vi": "1 cau ngan mo ta anh",
+  "description_vi": "3-6 cau mo ta chi tiet boi canh, chu the, vat the, mau sac, chat lieu, goc chup, ung dung neu thay ro",
+  "tags_vi": ["8-15 tag tieng Viet"],
+  "tags_en": ["8-15 English tags"],
+  "main_subject": "chu the chinh",
+  "scene_type": "product|factory|construction|food|document|people|other",
+  "detected_text": ["chu nhin thay neu co"],
+  "usable_as_reference": true,
+  "quality": "low|medium|high"
+}`
+
+func (h *MCPHandler) callVisualIndexProvider(ctx context.Context, provider providers.Provider, model string, file googleDriveFile) (googleDriveVisualPayload, error) {
+	mime, ok := googleDriveImageMime(file.LocalPath)
+	if !ok {
+		return googleDriveVisualPayload{}, fmt.Errorf("unsupported image type")
+	}
+	info, err := os.Stat(file.LocalPath)
+	if err != nil {
+		return googleDriveVisualPayload{}, fmt.Errorf("stat image: %w", err)
+	}
+	if info.Size() > 10*1024*1024 {
+		return googleDriveVisualPayload{}, fmt.Errorf("image too large: %d bytes", info.Size())
+	}
+	data, err := os.ReadFile(file.LocalPath)
+	if err != nil {
+		return googleDriveVisualPayload{}, fmt.Errorf("read image: %w", err)
+	}
+	resp, err := provider.Chat(ctx, providers.ChatRequest{
+		Messages: []providers.Message{{
+			Role:    "user",
+			Content: googleDriveVisualPrompt,
+			Images: []providers.ImageContent{{
+				MimeType: mime,
+				Data:     base64.StdEncoding.EncodeToString(data),
+			}},
+		}},
+		Model: model,
+		Options: map[string]any{
+			providers.OptMaxTokens:   1400,
+			providers.OptTemperature: 0,
+		},
+	})
+	if err != nil {
+		return googleDriveVisualPayload{}, err
+	}
+	return parseGoogleDriveVisualPayload(resp.Content)
+}
+
+func parseGoogleDriveVisualPayload(raw string) (googleDriveVisualPayload, error) {
+	text := strings.TrimSpace(raw)
+	text = strings.TrimPrefix(text, "```json")
+	text = strings.TrimPrefix(text, "```")
+	text = strings.TrimSuffix(text, "```")
+	text = strings.TrimSpace(text)
+	var payload googleDriveVisualPayload
+	if err := json.Unmarshal([]byte(text), &payload); err != nil {
+		start := strings.Index(text, "{")
+		end := strings.LastIndex(text, "}")
+		if start < 0 || end <= start {
+			return payload, fmt.Errorf("vision response is not valid JSON")
+		}
+		if err := json.Unmarshal([]byte(text[start:end+1]), &payload); err != nil {
+			return payload, fmt.Errorf("vision response is not valid JSON: %w", err)
+		}
+	}
+	payload.SceneType = normalizeEnum(payload.SceneType, []string{"product", "factory", "construction", "food", "document", "people", "other"}, "other")
+	payload.Quality = normalizeEnum(payload.Quality, []string{"low", "medium", "high"}, "medium")
+	return payload, nil
+}
+
+func applyGoogleDriveVisual(file *googleDriveFile, visual googleDriveVisualPayload) {
+	file.VisualSummaryVI = strings.TrimSpace(visual.SummaryVI)
+	file.VisualDescriptionVI = strings.TrimSpace(visual.DescriptionVI)
+	file.VisualTagsVI = cleanStringList(visual.TagsVI, 20)
+	file.VisualTagsEN = cleanStringList(visual.TagsEN, 20)
+	file.VisualMainSubject = strings.TrimSpace(visual.MainSubject)
+	file.VisualSceneType = visual.SceneType
+	file.VisualDetectedText = cleanStringList(visual.DetectedText, 30)
+	file.VisualUsableAsReference = &visual.UsableAsReference
+	file.VisualQuality = visual.Quality
+}
+
+func googleDriveImageMime(filePath string) (string, bool) {
+	switch strings.ToLower(filepath.Ext(filePath)) {
+	case ".jpg", ".jpeg", ".jfif":
+		return "image/jpeg", true
+	case ".png":
+		return "image/png", true
+	case ".webp":
+		return "image/webp", true
+	case ".gif":
+		return "image/gif", true
+	case ".bmp":
+		return "image/bmp", true
+	default:
+		return "", false
+	}
+}
+
+func writeGoogleDriveIndex(indexPath string, index googleDriveFolderIndex) error {
+	data, err := json.MarshalIndent(index, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal Google Drive index: %w", err)
+	}
+	if err := os.WriteFile(indexPath, data, 0644); err != nil {
+		return fmt.Errorf("write Google Drive index: %w", err)
+	}
+	return nil
+}
+
+func googleDriveItemUnderFolder(parents []string, folderID string, recursive bool, folders map[string]googleDriveFolder) bool {
+	for _, parent := range parents {
+		if parent == folderID {
+			return true
+		}
+	}
+	if !recursive {
+		return false
+	}
+	for _, parent := range parents {
+		if googleDriveFolderHasAncestor(parent, folderID, folders) {
+			return true
+		}
+	}
+	return false
+}
+
+func googleDriveFolderHasAncestor(folderID, ancestorID string, folders map[string]googleDriveFolder) bool {
+	seen := map[string]bool{}
+	for current := folderID; current != "" && !seen[current]; {
+		if current == ancestorID {
+			return true
+		}
+		seen[current] = true
+		folder := folders[current]
+		if len(folder.Parents) == 0 {
+			return false
+		}
+		current = folder.Parents[0]
+	}
+	return false
+}
+
+func parseGoogleDriveID(input string) string {
+	raw := strings.TrimSpace(input)
+	if raw == "" {
+		return ""
+	}
+	for _, marker := range []string{"/folders/", "/file/d/"} {
+		if idx := strings.Index(raw, marker); idx >= 0 {
+			rest := raw[idx+len(marker):]
+			if cut := strings.IndexAny(rest, "/?&#"); cut >= 0 {
+				rest = rest[:cut]
+			}
+			return strings.TrimSpace(rest)
+		}
+	}
+	if idx := strings.Index(raw, "id="); idx >= 0 {
+		rest := raw[idx+3:]
+		if cut := strings.IndexAny(rest, "&#"); cut >= 0 {
+			rest = rest[:cut]
+		}
+		return strings.TrimSpace(rest)
+	}
+	return raw
+}
+
+func normalizeEnum(value string, allowed []string, fallback string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	for _, item := range allowed {
+		if value == item {
+			return item
+		}
+	}
+	return fallback
+}
+
+func cleanStringList(values []string, limit int) []string {
+	out := make([]string, 0, min(len(values), limit))
+	seen := map[string]bool{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
+func tailStrings(values []string, limit int) []string {
+	if len(values) <= limit {
+		return values
+	}
+	return values[len(values)-limit:]
 }
 
 func safeDriveCacheSegment(value string) string {
