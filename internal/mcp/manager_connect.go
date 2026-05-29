@@ -238,20 +238,32 @@ func createClient(transportType, command string, args []string, env map[string]s
 	case "sse":
 		var opts []transport.ClientOption
 		if len(headers) > 0 {
-			opts = append(opts, mcpclient.WithHeaders(headers))
+			opts = append(opts, mcpclient.WithHeaders(sanitizeHTTPHeaders(headers)))
 		}
 		return mcpclient.NewSSEMCPClient(url, opts...)
 
 	case "streamable-http":
 		var opts []transport.StreamableHTTPCOption
 		if len(headers) > 0 {
-			opts = append(opts, transport.WithHTTPHeaders(headers))
+			opts = append(opts, transport.WithHTTPHeaders(sanitizeHTTPHeaders(headers)))
 		}
 		return mcpclient.NewStreamableHttpClient(url, opts...)
 
 	default:
 		return nil, fmt.Errorf("unsupported transport: %q", transportType)
 	}
+}
+
+func sanitizeHTTPHeaders(headers map[string]string) map[string]string {
+	clean := make(map[string]string, len(headers))
+	for key, value := range headers {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		clean[key] = strings.TrimSpace(strings.NewReplacer("\r", " ", "\n", " ").Replace(value))
+	}
+	return clean
 }
 
 // newHealthTicker creates a ticker for health check intervals.
