@@ -154,6 +154,17 @@ func (h *MCPHandler) handleGoogleDriveFolders(w http.ResponseWriter, r *http.Req
 	if index.RootFolderID == "" {
 		index.RootFolderID = rootFolderID
 	}
+	if index.VisualIndexStatus.Indexing && !h.isGoogleDriveVisualIndexActive(cacheDir, rootFolderID) {
+		index.VisualIndexStatus.Indexing = false
+		index.VisualIndexStatus.PendingImages = 0
+		index.VisualIndexStatus.Errors = append(index.VisualIndexStatus.Errors, "indexing status cleared after server restart")
+		index.VisualIndexStatus.Errors = tailStrings(index.VisualIndexStatus.Errors, 20)
+		if err := writeGoogleDriveIndex(indexPath, index); err != nil {
+			slog.Warn("gdrive.visual_index.clear_stale_failed", "root", rootFolderID, "error", err)
+		} else {
+			slog.Info("gdrive.visual_index.clear_stale", "root", rootFolderID)
+		}
+	}
 
 	folders := make([]googleDriveFolderOption, 0, len(index.Folders)+1)
 	if f, ok := index.Folders[index.RootFolderID]; ok && f.Name != "" {
@@ -280,6 +291,13 @@ func (h *MCPHandler) handleGoogleDriveIndexImages(w http.ResponseWriter, r *http
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
 	}
+	jobKey := googleDriveVisualJobKey(cacheDir, rootFolderID)
+	if _, loaded := h.visualIndexJobs.LoadOrStore(jobKey, true); loaded {
+		writeJSON(w, http.StatusAccepted, map[string]any{
+			"status": "images_index_already_running",
+		})
+		return
+	}
 
 	ctx := context.WithoutCancel(r.Context())
 	slog.Info("gdrive.visual_index.requested",
@@ -291,6 +309,7 @@ func (h *MCPHandler) handleGoogleDriveIndexImages(w http.ResponseWriter, r *http
 		"force", req.Force,
 	)
 	go func() {
+		defer h.visualIndexJobs.Delete(jobKey)
 		result, err := h.indexGoogleDriveImages(ctx, cacheDir, rootFolderID, req.FolderIDOrURL, req.Limit, req.Force, visualCfg)
 		if err != nil {
 			slog.Error("gdrive.visual_index.failed", "server", srv.Name, "root", rootFolderID, "error", err)
@@ -308,6 +327,15 @@ func (h *MCPHandler) handleGoogleDriveIndexImages(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"status": "images_index_started",
 	})
+}
+
+func googleDriveVisualJobKey(cacheDir, rootFolderID string) string {
+	return filepath.Clean(filepath.Join(cacheDir, safeDriveCacheSegment(rootFolderID)))
+}
+
+func (h *MCPHandler) isGoogleDriveVisualIndexActive(cacheDir, rootFolderID string) bool {
+	_, ok := h.visualIndexJobs.Load(googleDriveVisualJobKey(cacheDir, rootFolderID))
+	return ok
 }
 
 func googleDriveCacheConfig(settingsRaw, headersRaw json.RawMessage) (string, string) {
@@ -630,25 +658,156 @@ func (h *MCPHandler) callVisualIndexProvider(ctx context.Context, provider provi
 }
 
 func parseGoogleDriveVisualPayload(raw string) (googleDriveVisualPayload, error) {
-	text := strings.TrimSpace(raw)
-	text = strings.TrimPrefix(text, "```json")
-	text = strings.TrimPrefix(text, "```")
-	text = strings.TrimSuffix(text, "```")
-	text = strings.TrimSpace(text)
-	var payload googleDriveVisualPayload
-	if err := json.Unmarshal([]byte(text), &payload); err != nil {
-		start := strings.Index(text, "{")
-		end := strings.LastIndex(text, "}")
-		if start < 0 || end <= start {
-			return payload, fmt.Errorf("vision response is not valid JSON")
+	candidates := googleDriveVisualJSONCandidates(raw)
+	var lastErr error
+	for _, candidate := range candidates {
+		payload, err := decodeGoogleDriveVisualPayload(candidate)
+		if err == nil {
+			payload.SceneType = normalizeEnum(payload.SceneType, []string{"product", "factory", "construction", "food", "document", "people", "other"}, "other")
+			payload.Quality = normalizeEnum(payload.Quality, []string{"low", "medium", "high"}, "medium")
+			return payload, nil
 		}
-		if err := json.Unmarshal([]byte(text[start:end+1]), &payload); err != nil {
-			return payload, fmt.Errorf("vision response is not valid JSON: %w", err)
+		lastErr = err
+	}
+	if lastErr != nil {
+		return googleDriveVisualPayload{}, fmt.Errorf("vision response is not valid JSON: %w", lastErr)
+	}
+	return googleDriveVisualPayload{}, fmt.Errorf("vision response is not valid JSON")
+}
+
+func googleDriveVisualJSONCandidates(raw string) []string {
+	out := []string{}
+	seen := map[string]bool{}
+	add := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			return
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+
+	add(raw)
+
+	var wrapped struct {
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+		Content  string `json:"content"`
+		Response string `json:"response"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &wrapped); err == nil {
+		add(wrapped.Message.Content)
+		add(wrapped.Content)
+		add(wrapped.Response)
+	}
+
+	for _, candidate := range append([]string(nil), out...) {
+		add(stripMarkdownFence(candidate))
+		if fenced := extractMarkdownFence(candidate); fenced != "" {
+			add(fenced)
+		}
+		if object := extractJSONObject(candidate); object != "" {
+			add(object)
+		}
+		if object := extractJSONObject(stripMarkdownFence(candidate)); object != "" {
+			add(object)
 		}
 	}
-	payload.SceneType = normalizeEnum(payload.SceneType, []string{"product", "factory", "construction", "food", "document", "people", "other"}, "other")
-	payload.Quality = normalizeEnum(payload.Quality, []string{"low", "medium", "high"}, "medium")
+	return out
+}
+
+func decodeGoogleDriveVisualPayload(candidate string) (googleDriveVisualPayload, error) {
+	var payload googleDriveVisualPayload
+	if err := json.Unmarshal([]byte(strings.TrimSpace(candidate)), &payload); err != nil {
+		return payload, err
+	}
+	if !hasGoogleDriveVisualPayloadContent(payload) {
+		return payload, fmt.Errorf("missing visual payload fields")
+	}
 	return payload, nil
+}
+
+func hasGoogleDriveVisualPayloadContent(payload googleDriveVisualPayload) bool {
+	return strings.TrimSpace(payload.SummaryVI) != "" ||
+		strings.TrimSpace(payload.DescriptionVI) != "" ||
+		strings.TrimSpace(payload.MainSubject) != "" ||
+		len(payload.TagsVI) > 0 ||
+		len(payload.TagsEN) > 0 ||
+		len(payload.DetectedText) > 0
+}
+
+func stripMarkdownFence(value string) string {
+	text := strings.TrimSpace(value)
+	if !strings.HasPrefix(text, "```") {
+		return text
+	}
+	lines := strings.Split(text, "\n")
+	if len(lines) == 0 {
+		return text
+	}
+	lines = lines[1:]
+	if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "```" {
+		lines = lines[:len(lines)-1]
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+func extractMarkdownFence(value string) string {
+	text := strings.TrimSpace(value)
+	start := strings.Index(text, "```")
+	if start < 0 {
+		return ""
+	}
+	rest := text[start+3:]
+	if newline := strings.Index(rest, "\n"); newline >= 0 {
+		rest = rest[newline+1:]
+	}
+	end := strings.Index(rest, "```")
+	if end < 0 {
+		return ""
+	}
+	return strings.TrimSpace(rest[:end])
+}
+
+func extractJSONObject(value string) string {
+	text := strings.TrimSpace(value)
+	start := strings.Index(text, "{")
+	if start < 0 {
+		return ""
+	}
+	depth := 0
+	inString := false
+	escaped := false
+	for i := start; i < len(text); i++ {
+		ch := text[i]
+		if inString {
+			if escaped {
+				escaped = false
+				continue
+			}
+			if ch == '\\' {
+				escaped = true
+				continue
+			}
+			if ch == '"' {
+				inString = false
+			}
+			continue
+		}
+		switch ch {
+		case '"':
+			inString = true
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return strings.TrimSpace(text[start : i+1])
+			}
+		}
+	}
+	return ""
 }
 
 func applyGoogleDriveVisual(file *googleDriveFile, visual googleDriveVisualPayload) {

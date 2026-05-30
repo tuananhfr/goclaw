@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"sync"
 
 	"github.com/google/uuid"
 
@@ -29,13 +30,14 @@ type MCPPoolEvictor interface {
 
 // MCPHandler handles MCP server management HTTP endpoints.
 type MCPHandler struct {
-	store       store.MCPServerStore
-	msgBus      *bus.MessageBus
-	mgr         MCPToolLister  // optional, nil when Manager not available
-	poolEvictor MCPPoolEvictor // optional, nil when pool not available
-	db          *sql.DB        // for export/import direct queries
-	dataDir     string         // root for MCP-owned uploaded assets
-	providerReg *providers.Registry
+	store           store.MCPServerStore
+	msgBus          *bus.MessageBus
+	mgr             MCPToolLister  // optional, nil when Manager not available
+	poolEvictor     MCPPoolEvictor // optional, nil when pool not available
+	db              *sql.DB        // for export/import direct queries
+	dataDir         string         // root for MCP-owned uploaded assets
+	providerReg     *providers.Registry
+	visualIndexJobs sync.Map
 }
 
 // NewMCPHandler creates a handler for MCP server management endpoints.
