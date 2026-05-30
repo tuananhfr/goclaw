@@ -620,6 +620,11 @@ Schema:
   "quality": "low|medium|high"
 }`
 
+const googleDriveVisualRetryPrompt = `Return one compact valid JSON object only. No markdown. No explanation. No thinking text.
+Use short values to avoid truncation.
+Schema keys exactly:
+{"summary_vi":"","description_vi":"","tags_vi":[],"tags_en":[],"main_subject":"","scene_type":"product|factory|construction|food|document|people|other","detected_text":[],"usable_as_reference":true,"quality":"low|medium|high"}`
+
 func (h *MCPHandler) callVisualIndexProvider(ctx context.Context, provider providers.Provider, model string, file googleDriveFile) (googleDriveVisualPayload, error) {
 	mime, ok := googleDriveImageMime(file.LocalPath)
 	if !ok {
@@ -636,10 +641,22 @@ func (h *MCPHandler) callVisualIndexProvider(ctx context.Context, provider provi
 	if err != nil {
 		return googleDriveVisualPayload{}, fmt.Errorf("read image: %w", err)
 	}
+	visual, err := h.callVisualIndexProviderOnce(ctx, provider, model, data, mime, googleDriveVisualPrompt, 2400)
+	if err == nil {
+		return visual, nil
+	}
+	visual, retryErr := h.callVisualIndexProviderOnce(ctx, provider, model, data, mime, googleDriveVisualRetryPrompt, 1200)
+	if retryErr == nil {
+		return visual, nil
+	}
+	return googleDriveVisualPayload{}, fmt.Errorf("%w; retry failed: %v", err, retryErr)
+}
+
+func (h *MCPHandler) callVisualIndexProviderOnce(ctx context.Context, provider providers.Provider, model string, data []byte, mime, prompt string, maxTokens int) (googleDriveVisualPayload, error) {
 	resp, err := provider.Chat(ctx, providers.ChatRequest{
 		Messages: []providers.Message{{
 			Role:    "user",
-			Content: googleDriveVisualPrompt,
+			Content: prompt,
 			Images: []providers.ImageContent{{
 				MimeType: mime,
 				Data:     base64.StdEncoding.EncodeToString(data),
@@ -647,7 +664,7 @@ func (h *MCPHandler) callVisualIndexProvider(ctx context.Context, provider provi
 		}},
 		Model: model,
 		Options: map[string]any{
-			providers.OptMaxTokens:   1400,
+			providers.OptMaxTokens:   maxTokens,
 			providers.OptTemperature: 0,
 		},
 	})
