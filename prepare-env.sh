@@ -108,6 +108,7 @@ ensure_compose_file() {
   local required=()
   [ -f "docker-compose.yml" ] && required+=("docker-compose.yml")
   [ -f "docker-compose.postgres.yml" ] && required+=("docker-compose.postgres.yml")
+  [ -f "docker-compose.frpc.yml" ] && required+=("docker-compose.frpc.yml")
   for f in docker-compose.*-mcp.yml; do
     [ -f "$f" ] && required+=("$f")
   done
