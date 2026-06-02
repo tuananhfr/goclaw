@@ -14,6 +14,7 @@ skill-drafts/
     fanpage-grounded-content-guidelines/
     fanpage-internet-research-guidelines/
     fanpage-lead-orchestration-guidelines/
+    gpt-image-2-pro-max/
     packages/
 
   pages/
@@ -78,6 +79,7 @@ shared/fanpage-design-guidelines/
 shared/fanpage-grounded-content-guidelines/
 shared/fanpage-internet-research-guidelines/
 shared/fanpage-lead-orchestration-guidelines/
+shared/gpt-image-2-pro-max/
 ```
 
 Upload packages:
@@ -90,6 +92,8 @@ shared/packages/fanpage-design-guidelines.zip
 shared/packages/fanpage-grounded-content-guidelines.zip
 shared/packages/fanpage-internet-research-guidelines.zip
 shared/packages/fanpage-lead-orchestration-guidelines.zip
+shared/packages/gpt-image-2-pro-max.zip
+shared/packages/gpt-image-2-pro-max.tar.gz
 ```
 
 ## Page Skills And Uploads

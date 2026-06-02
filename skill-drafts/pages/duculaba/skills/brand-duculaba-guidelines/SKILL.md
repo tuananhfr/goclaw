@@ -66,11 +66,10 @@ Use `em` only when the post is written in a direct shop-admin sales voice. Keep 
 Use this fixed footer by default unless the user provides an updated version:
 
 ```text
-Duculaba - Thế giới đồ làm bánh
-Website: http://duculaba.com/
-Email: duculaba.hn@gmail.com
-Phone/Zalo: 0855568998
-Địa chỉ: Hoàng Mai, Hà Nội
+DUCULABA - THẾ GIỚI ĐỒ LÀM BÁNH
+▪ Địa chỉ: Hoàng Mai, Hà Nội
+▪ Hotline: 085.556.8998
+▪ Website: duculaba.com
 ```
 
 Do not invent alternate phone numbers, addresses, websites, emails, branches, or sales channels. If the user provides Shopee/TikTok Shop or updated contact information later, use the latest user-provided version exactly.
