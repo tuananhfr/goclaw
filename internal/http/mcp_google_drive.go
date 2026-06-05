@@ -1,10 +1,13 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,11 +17,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/disintegration/imaging"
 	"github.com/google/uuid"
+	_ "golang.org/x/image/bmp"
+	_ "golang.org/x/image/webp"
 
 	mcpbridge "github.com/nextlevelbuilder/goclaw/internal/mcp"
 	"github.com/nextlevelbuilder/goclaw/internal/providers"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
+)
+
+const (
+	googleDriveVisualMaxImageBytes  = 10 * 1024 * 1024
+	googleDriveVisualPreviewMaxSide = 1600
 )
 
 type googleDriveMCPSettings struct {
@@ -29,6 +40,8 @@ type googleDriveMCPSettings struct {
 		VisualIndexEnabled     *bool  `json:"visual_index_enabled"`
 		VisualIndexProvider    string `json:"visual_index_provider"`
 		VisualIndexModel       string `json:"visual_index_model"`
+		VisualFormatProvider   string `json:"visual_format_provider"`
+		VisualFormatModel      string `json:"visual_format_model"`
 		VisualIndexConcurrency int    `json:"visual_index_concurrency"`
 		VisualIndexMaxPerRun   *int   `json:"visual_index_max_per_run"`
 		VisualIndexTime        string `json:"visual_index_time"`
@@ -276,6 +289,10 @@ func (h *MCPHandler) handleGoogleDriveIndexImages(w http.ResponseWriter, r *http
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "google_drive.visual_index_provider and visual_index_model are required"})
 		return
 	}
+	if (visualCfg.FormatProvider == "") != (visualCfg.FormatModel == "") {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "google_drive.visual_format_provider and visual_format_model must be configured together"})
+		return
+	}
 
 	var req struct {
 		FolderIDOrURL string `json:"folder_id_or_url"`
@@ -291,6 +308,12 @@ func (h *MCPHandler) handleGoogleDriveIndexImages(w http.ResponseWriter, r *http
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
 	}
+	if visualCfg.HasFormatter() {
+		if _, err := h.providerReg.GetForTenant(store.TenantIDFromContext(r.Context()), visualCfg.FormatProvider); err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			return
+		}
+	}
 	jobKey := googleDriveVisualJobKey(cacheDir, rootFolderID)
 	if _, loaded := h.visualIndexJobs.LoadOrStore(jobKey, true); loaded {
 		writeJSON(w, http.StatusAccepted, map[string]any{
@@ -305,6 +328,8 @@ func (h *MCPHandler) handleGoogleDriveIndexImages(w http.ResponseWriter, r *http
 		"root", rootFolderID,
 		"provider", visualCfg.Provider,
 		"model", visualCfg.Model,
+		"format_provider", visualCfg.FormatProvider,
+		"format_model", visualCfg.FormatModel,
 		"limit", req.Limit,
 		"force", req.Force,
 	)
@@ -373,15 +398,21 @@ func googleDriveRootName(settingsRaw json.RawMessage) string {
 }
 
 type googleDriveVisualConfig struct {
-	Enabled     bool
-	Provider    string
-	Model       string
-	Concurrency int
-	MaxPerRun   int
+	Enabled        bool
+	Provider       string
+	Model          string
+	FormatProvider string
+	FormatModel    string
+	Concurrency    int
+	MaxPerRun      int
 }
 
 func googleDriveVisualConfigFromDefaults() googleDriveVisualConfig {
 	return googleDriveVisualConfig{Enabled: true, Concurrency: 1, MaxPerRun: 100}
+}
+
+func (cfg googleDriveVisualConfig) HasFormatter() bool {
+	return cfg.FormatProvider != "" && cfg.FormatModel != ""
 }
 
 func parseGoogleDriveVisualConfig(settingsRaw json.RawMessage) googleDriveVisualConfig {
@@ -396,6 +427,8 @@ func parseGoogleDriveVisualConfig(settingsRaw json.RawMessage) googleDriveVisual
 	}
 	cfg.Provider = strings.TrimSpace(settings.GoogleDrive.VisualIndexProvider)
 	cfg.Model = strings.TrimSpace(settings.GoogleDrive.VisualIndexModel)
+	cfg.FormatProvider = strings.TrimSpace(settings.GoogleDrive.VisualFormatProvider)
+	cfg.FormatModel = strings.TrimSpace(settings.GoogleDrive.VisualFormatModel)
 	if settings.GoogleDrive.VisualIndexConcurrency > 0 {
 		cfg.Concurrency = settings.GoogleDrive.VisualIndexConcurrency
 	}
@@ -463,9 +496,17 @@ func (h *MCPHandler) indexGoogleDriveImages(ctx context.Context, cacheDir, rootF
 		candidates = candidates[:limit]
 	}
 
-	provider, err := h.providerReg.GetForTenant(store.TenantIDFromContext(ctx), cfg.Provider)
+	tenantID := store.TenantIDFromContext(ctx)
+	provider, err := h.providerReg.GetForTenant(tenantID, cfg.Provider)
 	if err != nil {
 		return googleDriveVisualIndexResult{}, fmt.Errorf("resolve visual index provider: %w", err)
+	}
+	var formatter providers.Provider
+	if cfg.HasFormatter() {
+		formatter, err = h.providerReg.GetForTenant(tenantID, cfg.FormatProvider)
+		if err != nil {
+			return googleDriveVisualIndexResult{}, fmt.Errorf("resolve visual format provider: %w", err)
+		}
 	}
 
 	index.VisualIndexStatus = googleDriveVisualIndexStatus{
@@ -506,7 +547,7 @@ func (h *MCPHandler) indexGoogleDriveImages(ctx context.Context, cacheDir, rootF
 			cursor++
 			mu.Unlock()
 
-			visual, callErr := h.callVisualIndexProvider(ctx, provider, cfg.Model, file)
+			visual, callErr := h.callVisualIndexProvider(ctx, provider, cfg.Model, formatter, cfg.FormatModel, file)
 
 			mu.Lock()
 			if callErr != nil {
@@ -620,39 +661,156 @@ Schema:
   "quality": "low|medium|high"
 }`
 
+const googleDriveVisualCaptionPrompt = `Describe this image for an internal searchable asset index.
+Mention only visible objects, scene, colors, materials, composition, and readable text.
+Return plain text only. No JSON. No markdown.`
+
 const googleDriveVisualRetryPrompt = `Return one compact valid JSON object only. No markdown. No explanation. No thinking text.
 Use short values to avoid truncation.
 Schema keys exactly:
 {"summary_vi":"","description_vi":"","tags_vi":[],"tags_en":[],"main_subject":"","scene_type":"product|factory|construction|food|document|people|other","detected_text":[],"usable_as_reference":true,"quality":"low|medium|high"}`
 
-func (h *MCPHandler) callVisualIndexProvider(ctx context.Context, provider providers.Provider, model string, file googleDriveFile) (googleDriveVisualPayload, error) {
-	mime, ok := googleDriveImageMime(file.LocalPath)
+const googleDriveVisualFormatPrompt = `Convert this image caption into one compact valid JSON object for an internal image search index.
+Return JSON only. No markdown. No explanation.
+
+Rules:
+- Only use facts present in the caption.
+- If uncertain, keep fields generic.
+- Write summary_vi and description_vi in Vietnamese.
+- Use empty arrays when tags or text are unclear.
+
+Schema keys exactly:
+{"summary_vi":"","description_vi":"","tags_vi":[],"tags_en":[],"main_subject":"","scene_type":"product|factory|construction|food|document|people|other","detected_text":[],"usable_as_reference":true,"quality":"low|medium|high"}
+
+Caption:
+`
+
+func (h *MCPHandler) callVisualIndexProvider(ctx context.Context, provider providers.Provider, model string, formatter providers.Provider, formatterModel string, file googleDriveFile) (googleDriveVisualPayload, error) {
+	data, mime, err := prepareGoogleDriveVisualImage(file.LocalPath)
+	if err != nil {
+		return googleDriveVisualPayload{}, err
+	}
+
+	prompt := googleDriveVisualPrompt
+	maxTokens := 2400
+	if formatter != nil && formatterModel != "" {
+		prompt = googleDriveVisualCaptionPrompt
+		maxTokens = 700
+	}
+	raw, err := h.callVisualIndexProviderRaw(ctx, provider, model, data, mime, prompt, maxTokens)
+	if err == nil {
+		if formatter != nil && formatterModel != "" {
+			visual, formatErr := h.callVisualFormatProvider(ctx, formatter, formatterModel, raw)
+			if formatErr == nil {
+				return visual, nil
+			}
+			return parseGoogleDriveVisualPayload(raw)
+		}
+		return parseGoogleDriveVisualPayload(raw)
+	}
+
+	raw, retryErr := h.callVisualIndexProviderRaw(ctx, provider, model, data, mime, googleDriveVisualRetryPrompt, 1200)
+	if retryErr == nil {
+		return parseGoogleDriveVisualPayload(raw)
+	}
+	return googleDriveVisualPayload{}, fmt.Errorf("%w; retry failed: %v", err, retryErr)
+}
+
+func prepareGoogleDriveVisualImage(filePath string) ([]byte, string, error) {
+	mime, ok := googleDriveImageMime(filePath)
 	if !ok {
-		return googleDriveVisualPayload{}, fmt.Errorf("unsupported image type")
+		return nil, "", fmt.Errorf("unsupported image type")
 	}
-	info, err := os.Stat(file.LocalPath)
+	info, err := os.Stat(filePath)
 	if err != nil {
-		return googleDriveVisualPayload{}, fmt.Errorf("stat image: %w", err)
+		return nil, "", fmt.Errorf("stat image: %w", err)
 	}
-	if info.Size() > 10*1024*1024 {
-		return googleDriveVisualPayload{}, fmt.Errorf("image too large: %d bytes", info.Size())
+	if info.Size() <= googleDriveVisualMaxImageBytes {
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, "", fmt.Errorf("read image: %w", err)
+		}
+		return data, mime, nil
 	}
-	data, err := os.ReadFile(file.LocalPath)
+
+	img, err := imaging.Open(filePath, imaging.AutoOrientation(true))
 	if err != nil {
-		return googleDriveVisualPayload{}, fmt.Errorf("read image: %w", err)
+		return nil, "", fmt.Errorf("decode large image preview: %w", err)
 	}
-	visual, err := h.callVisualIndexProviderOnce(ctx, provider, model, data, mime, googleDriveVisualPrompt, 2400)
+	data, err := encodeGoogleDriveVisualPreview(img)
+	if err != nil {
+		return nil, "", err
+	}
+	if len(data) > googleDriveVisualMaxImageBytes {
+		return nil, "", fmt.Errorf("image preview too large: %d bytes", len(data))
+	}
+	return data, "image/jpeg", nil
+}
+
+func encodeGoogleDriveVisualPreview(img image.Image) ([]byte, error) {
+	if img == nil {
+		return nil, fmt.Errorf("empty image")
+	}
+	for _, side := range []int{googleDriveVisualPreviewMaxSide, 1280, 1024} {
+		preview := imaging.Fit(img, side, side, imaging.Lanczos)
+		for _, quality := range []int{85, 78, 70} {
+			var buf bytes.Buffer
+			if err := jpeg.Encode(&buf, preview, &jpeg.Options{Quality: quality}); err != nil {
+				return nil, fmt.Errorf("encode image preview: %w", err)
+			}
+			if buf.Len() <= googleDriveVisualMaxImageBytes {
+				return buf.Bytes(), nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("image preview too large after resize")
+}
+
+func (h *MCPHandler) callVisualFormatProvider(ctx context.Context, provider providers.Provider, model, caption string) (googleDriveVisualPayload, error) {
+	caption = cleanGoogleDriveVisualCaption(caption)
+	if caption == "" {
+		return googleDriveVisualPayload{}, fmt.Errorf("empty vision caption")
+	}
+	resp, err := provider.Chat(ctx, providers.ChatRequest{
+		Messages: []providers.Message{{
+			Role:    "user",
+			Content: googleDriveVisualFormatPrompt + caption,
+		}},
+		Model: model,
+		Options: map[string]any{
+			providers.OptMaxTokens:   1200,
+			providers.OptTemperature: 0,
+		},
+	})
+	if err != nil {
+		return googleDriveVisualPayload{}, err
+	}
+	visual, err := parseGoogleDriveVisualJSONPayload(resp.Content)
 	if err == nil {
 		return visual, nil
 	}
-	visual, retryErr := h.callVisualIndexProviderOnce(ctx, provider, model, data, mime, googleDriveVisualRetryPrompt, 1200)
+	resp, retryErr := provider.Chat(ctx, providers.ChatRequest{
+		Messages: []providers.Message{{
+			Role:    "user",
+			Content: googleDriveVisualRetryPrompt + "\n\nCaption:\n" + caption,
+		}},
+		Model: model,
+		Options: map[string]any{
+			providers.OptMaxTokens:   900,
+			providers.OptTemperature: 0,
+		},
+	})
+	if retryErr != nil {
+		return googleDriveVisualPayload{}, fmt.Errorf("%w; retry failed: %v", err, retryErr)
+	}
+	visual, retryErr = parseGoogleDriveVisualJSONPayload(resp.Content)
 	if retryErr == nil {
 		return visual, nil
 	}
 	return googleDriveVisualPayload{}, fmt.Errorf("%w; retry failed: %v", err, retryErr)
 }
 
-func (h *MCPHandler) callVisualIndexProviderOnce(ctx context.Context, provider providers.Provider, model string, data []byte, mime, prompt string, maxTokens int) (googleDriveVisualPayload, error) {
+func (h *MCPHandler) callVisualIndexProviderRaw(ctx context.Context, provider providers.Provider, model string, data []byte, mime, prompt string, maxTokens int) (string, error) {
 	resp, err := provider.Chat(ctx, providers.ChatRequest{
 		Messages: []providers.Message{{
 			Role:    "user",
@@ -669,12 +827,22 @@ func (h *MCPHandler) callVisualIndexProviderOnce(ctx context.Context, provider p
 		},
 	})
 	if err != nil {
-		return googleDriveVisualPayload{}, err
+		return "", err
 	}
-	return parseGoogleDriveVisualPayload(resp.Content)
+	return resp.Content, nil
 }
 
 func parseGoogleDriveVisualPayload(raw string) (googleDriveVisualPayload, error) {
+	if payload, err := parseGoogleDriveVisualJSONPayload(raw); err == nil {
+		return payload, nil
+	}
+	if payload, ok := fallbackGoogleDriveVisualPayload(raw); ok {
+		return payload, nil
+	}
+	return googleDriveVisualPayload{}, fmt.Errorf("vision response is empty")
+}
+
+func parseGoogleDriveVisualJSONPayload(raw string) (googleDriveVisualPayload, error) {
 	candidates := googleDriveVisualJSONCandidates(raw)
 	var lastErr error
 	for _, candidate := range candidates {
@@ -690,6 +858,71 @@ func parseGoogleDriveVisualPayload(raw string) (googleDriveVisualPayload, error)
 		return googleDriveVisualPayload{}, fmt.Errorf("vision response is not valid JSON: %w", lastErr)
 	}
 	return googleDriveVisualPayload{}, fmt.Errorf("vision response is not valid JSON")
+}
+
+func fallbackGoogleDriveVisualPayload(raw string) (googleDriveVisualPayload, bool) {
+	caption := cleanGoogleDriveVisualCaption(raw)
+	if caption == "" {
+		return googleDriveVisualPayload{}, false
+	}
+	return googleDriveVisualPayload{
+		SummaryVI:         caption,
+		DescriptionVI:     caption,
+		TagsVI:            []string{},
+		TagsEN:            []string{},
+		MainSubject:       "",
+		SceneType:         "other",
+		DetectedText:      []string{},
+		UsableAsReference: true,
+		Quality:           "medium",
+	}, true
+}
+
+func cleanGoogleDriveVisualCaption(raw string) string {
+	text := strings.TrimSpace(raw)
+	if text == "" {
+		return ""
+	}
+
+	var wrapped struct {
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+		Content  string `json:"content"`
+		Response string `json:"response"`
+	}
+	if err := json.Unmarshal([]byte(text), &wrapped); err == nil {
+		for _, candidate := range []string{wrapped.Message.Content, wrapped.Content, wrapped.Response} {
+			if cleaned := cleanGoogleDriveVisualCaption(candidate); cleaned != "" {
+				return cleaned
+			}
+		}
+	}
+
+	text = stripMarkdownFence(text)
+	text = strings.TrimSpace(strings.TrimPrefix(text, "```"))
+	text = strings.TrimSpace(strings.TrimSuffix(text, "```"))
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+	lines := strings.Split(text, "\n")
+	kept := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.EqualFold(line, "json") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	text = strings.Join(kept, " ")
+	text = strings.Join(strings.Fields(text), " ")
+	if len([]rune(text)) > 1200 {
+		runes := []rune(text)
+		text = strings.TrimSpace(string(runes[:1200]))
+	}
+	return text
 }
 
 func googleDriveVisualJSONCandidates(raw string) []string {

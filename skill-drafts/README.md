@@ -22,7 +22,13 @@ skill-drafts/
       skills/
         brand-pizza-hips-guidelines/
         pizza-hips-franchise-knowledge/
-      brand-kits/pizza-hips/
+      packages/
+
+    si-pizza-nuong-lua-hips/
+      skills/
+        brand-si-pizza-nuong-lua-hips-guidelines/
+        si-pizza-nuong-lua-hips-product-business-knowledge/
+        si-pizza-nuong-lua-hips-visual-content-profile/
       packages/
 
     lpc-france/
@@ -87,11 +93,13 @@ Upload packages:
 ```text
 shared/packages/facebook-fanpage-content-guidelines.zip
 shared/packages/drive-reference-search-guidelines.zip
+shared/packages/fanpage-brand-qa-claim-safety-guidelines.zip
 shared/packages/fanpage-content-creator-guidelines.zip
 shared/packages/fanpage-design-guidelines.zip
 shared/packages/fanpage-grounded-content-guidelines.zip
 shared/packages/fanpage-internet-research-guidelines.zip
 shared/packages/fanpage-lead-orchestration-guidelines.zip
+shared/packages/fanpage-sales-angle-guidelines.zip
 shared/packages/gpt-image-2-pro-max.zip
 shared/packages/gpt-image-2-pro-max.tar.gz
 ```
@@ -110,20 +118,25 @@ Skill uploads:
 ```text
 pages/pizza-hips/packages/brand-pizza-hips-guidelines.zip
 pages/pizza-hips/packages/pizza-hips-franchise-knowledge.zip
+pages/pizza-hips/packages/pizza-hips-visual-content-profile.zip
 ```
 
-Brand kit upload:
+Do not use a Pizza Hip'S brand-kit package for team setup.
+
+### Sỉ Pizza nướng lửa Hip'S
+
+Purpose:
+
+- `brand-si-pizza-nuong-lua-hips-guidelines`: B2B page identity, wholesale-sales direction, audience, CTA, hashtag logic, and safe claim framing for the Sỉ Pizza nướng lửa Hip'S Facebook page.
+- `si-pizza-nuong-lua-hips-product-business-knowledge`: product lines, process talking points, spaghetti support, B2B menu-fit logic, and small-store operations guidance.
+- `si-pizza-nuong-lua-hips-visual-content-profile`: default visual route mapping for B2B product, process, and store-operations posts.
+
+Skill uploads:
 
 ```text
-pages/pizza-hips/packages/brand-kits.zip
-```
-
-Brand kit contents:
-
-```text
-pages/pizza-hips/brand-kits/pizza-hips/BRAND.md
-pages/pizza-hips/brand-kits/pizza-hips/render-preset.json
-pages/pizza-hips/brand-kits/pizza-hips/assets/fonts/SVN-Bango.otf
+pages/si-pizza-nuong-lua-hips/packages/brand-si-pizza-nuong-lua-hips-guidelines.zip
+pages/si-pizza-nuong-lua-hips/packages/si-pizza-nuong-lua-hips-product-business-knowledge.zip
+pages/si-pizza-nuong-lua-hips/packages/si-pizza-nuong-lua-hips-visual-content-profile.zip
 ```
 
 ### LPC France

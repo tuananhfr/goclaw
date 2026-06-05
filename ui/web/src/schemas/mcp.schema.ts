@@ -66,6 +66,8 @@ export const mcpFormSchema = z.object({
     visual_index_enabled: z.boolean(),
     visual_index_provider: z.string().optional(),
     visual_index_model: z.string().optional(),
+    visual_format_provider: z.string().optional(),
+    visual_format_model: z.string().optional(),
     visual_index_concurrency: z.number().min(1),
     visual_index_max_per_run: z.number().min(0),
     visual_index_time: z.string().optional(),

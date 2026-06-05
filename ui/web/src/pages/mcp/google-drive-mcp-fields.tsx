@@ -53,6 +53,8 @@ export function GoogleDriveMcpFields({ form, serverId }: GoogleDriveMcpFieldsPro
     visual_index_enabled: true,
     visual_index_provider: "",
     visual_index_model: "",
+    visual_format_provider: "",
+    visual_format_model: "",
     visual_index_concurrency: 1,
     visual_index_max_per_run: 100,
     visual_index_time: "",
@@ -145,6 +147,10 @@ export function GoogleDriveMcpFields({ form, serverId }: GoogleDriveMcpFieldsPro
     if (!serverId) return;
     if (!drive.visual_index_provider || !drive.visual_index_model) {
       toast.error("Vision provider and model are required");
+      return;
+    }
+    if ((drive.visual_format_provider && !drive.visual_format_model) || (!drive.visual_format_provider && drive.visual_format_model)) {
+      toast.error("Format provider and model must be configured together");
       return;
     }
     setIndexStarting(true);
@@ -320,6 +326,17 @@ export function GoogleDriveMcpFields({ form, serverId }: GoogleDriveMcpFieldsPro
             providerLabel="Vision provider"
             modelLabel="Vision model"
             providerPlaceholder="Select provider"
+            modelPlaceholder="Select or enter model"
+            allowEmpty
+          />
+          <ProviderModelSelect
+            provider={drive.visual_format_provider ?? ""}
+            onProviderChange={(value) => update({ visual_format_provider: value })}
+            model={drive.visual_format_model ?? ""}
+            onModelChange={(value) => update({ visual_format_model: value })}
+            providerLabel="Format provider"
+            modelLabel="Format model"
+            providerPlaceholder="Optional formatter"
             modelPlaceholder="Select or enter model"
             allowEmpty
           />

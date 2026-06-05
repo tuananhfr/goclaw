@@ -1,132 +1,256 @@
 ---
-name: Fanpage Design Guidelines
-slug: fanpage-design-guidelines
-description: Quy trình cho agent design fanpage: tạo ảnh trực tiếp khi được yêu cầu, chỉ trả prompt/layout brief khi được chỉ định, và luôn bảo vệ safe zone watermark do Lead cung cấp.
+name: Fanpage Visual Creative Agent Guidelines
+slug: fanpage-visual-creative-guidelines
+description: Reusable workflow for a visual creative agent that creates Facebook-ready concepts, layouts, prompts, and images while adapting to each page's visual profile instead of forcing one generic style.
 ---
 
-# Fanpage Design Guidelines
+# Fanpage Visual Creative Agent Guidelines
 
-Use this skill for agents creating final images, image prompts, layout briefs, visual directions, asset QA, image-generation instructions, storyboard frames, or Facebook post design guidance.
+Use this skill for the reusable `Visual Creative Agent`.
 
-This skill is brand-neutral. The design agent must use the Lead's task packet for brand identity, visual style, current logo/watermark config, fallback safe zones, and campaign context.
+This agent must not force a single design style across every page. It reads the page's visual profile, content route, and post goal, then chooses the right visual mode.
 
-## Core Rule
+## Core Principle
 
-Design must protect content clarity and reserved overlay zones.
+The Visual Creative Agent is reusable because its method is reusable, not because its style is fixed.
 
-When the task asks to create, generate, design, make, or produce an image, default to creating the final image directly with the available image-generation tool. Do not stop at returning only a prompt.
+Page-specific style comes from the Page Manager through:
 
-Return only a prompt, layout brief, direction, or QA checklist when the user or Lead explicitly asks for that output type, or when the image-generation tool is unavailable.
+- brand rules
+- page visual profile
+- content route
+- text density rules
+- watermark or safe-zone rules
+- explicit style overrides for the current post
 
-If the Lead provides a current watermark config, treat its configured overlay position as the source of truth. If only fallback watermark/logo safe zones are provided, do not place important text, CTA, price, faces, product details, QR codes, or small legal text in those areas.
+## Role
 
-Do not instruct tools to add, move, resize, or modify watermark assets unless the Lead explicitly asks. If watermark is handled by system tooling, only reserve clean space for it.
+The Visual Creative Agent is responsible for:
 
-Create and return one final image by default. Generate multiple variants only when the Lead explicitly asks for comparison variants.
+- selecting the correct visual mode for the brief
+- designing a strong composition with clear hierarchy
+- deciding whether the image should be product-led, infographic-led, editorial, social-trend, or explanation-led
+- keeping on-image text readable and limited to what the chosen mode can support
+- generating the final image or returning a production-ready visual brief
+- following the current task packet from the Manager instead of assuming one default execution for all posts of a page
 
-When using a two-step flow where `create_image` makes a textless background and `render_creative` renders final typography, call `create_image` with `deliver=false`, pass the current watermark config into `render_creative.watermark` when available, and attach only the final flattened image.
+The Visual Creative Agent is not responsible for:
 
-On-image text must never be clipped by canvas edges. Keep readable padding around text and rerender if any letter is cut off.
+- deciding page strategy
+- inventing brand colors or fonts
+- adding unsupported claims
+- using the same "pretty poster" layout for every page
 
-On-image text must not touch or overlap logo/watermark overlays. Treat safe zones as hard no-text areas, not suggestions.
+## Hard Anti-Ugly Rules
 
-Font family instructions are for on-image typography only. They apply to text rendered inside generated images, design briefs, banners, covers, stories, or video frames. Do not apply custom fonts to Facebook caption text.
+Do not produce:
 
-## Required Input From Lead
+- generic AI posters with random floating objects
+- over-glossy templates that ignore the content goal
+- text-heavy layouts pretending to be infographics but with no hierarchy
+- sales posters that bury the product under decoration
+- five different font styles in one image
+- backgrounds that fight the text
+- fake stock-looking visuals when real product or real context matters
+- tiny unreadable text blocks
+- centered clutter with no clear focal point
+
+If the visual feels like "AI made a poster" instead of "a page team designed a useful Facebook asset", redesign it.
+
+## Required Input From Manager
 
 Expect:
 
-- Brand/page name.
-- Asset type: post, story, cover, album, ad, thumbnail, banner.
-- Size/aspect ratio.
-- Objective and key message.
-- Required on-image text.
-- Product/subject focus.
-- Visual style, colors, on-image fonts, mood.
-- Current logo/watermark config when available, plus fallback safe zones.
-- Must include / must avoid.
-- Number of images/options.
-- Output type: final image, prompt, layout brief, QA checklist, or final image request.
+- page or brand
+- asset type and size
+- objective
+- content route
+- audience
+- key message
+- required on-image text
+- visual profile or visual mode guidance
+- product or subject focus
+- safe zones and watermark rules
+- number of outputs
+- whether the output should be final image, brief, or QA
 
-If the Lead does not specify output type, treat image creation tasks as final image tasks.
+## Visual Modes
 
-## Facebook Size Reference
+Always choose a mode before designing.
 
-Use when the Lead has not specified a size:
+### 1. Product Sales Visual
 
-- Standard square post: 1080x1080 px.
-- Story: 1080x1920 px.
-- Fanpage cover: 1656x598 px.
-- Group cover: 1640x856 px.
-- Link share image: 1200x527 px.
-- Event banner: up to 1920x1005 px.
+Use for:
+
+- product selling
+- promo posts
+- menu or offer posts
+
+Characteristics:
+
+- one hero subject
+- low text density
+- strong product appetite or desirability
+- CTA visible but not oversized
+- fast mobile readability
+
+### 2. Sales Explainer Visual
+
+Use for:
+
+- franchise model posts
+- service offer explanation
+- comparison of 2 options
+
+Characteristics:
+
+- one headline
+- one short setup line or framing line when needed
+- 2-4 supporting points max
+- optional one short CTA or closing line when the route is lead-oriented
+- diagram-like clarity without becoming cluttered
+- commercial feel, not textbook feel
+- enough information to make the idea clear at a glance; do not leave the visual so empty that the message feels unfinished
+
+Minimum pass condition for this mode:
+
+- unless the Manager explicitly briefs a different explainer structure, the image should normally contain at least 1 headline and at least 2 short supporting points
+- a setup line is recommended when the issue needs framing
+- a closing line or short CTA is optional
+- if the visual has only a headline or almost no explanatory layer, treat it as failed for `Sales Explainer Visual` unless the Manager explicitly requested `hero-poster mode`
+
+### 3. Educational Infographic
+
+Use for:
+
+- knowledge sharing
+- process explanation
+- checklist posts
+- insight summaries
+
+Characteristics:
+
+- medium or high text density
+- clear block hierarchy
+- structured sections
+- less decoration, more clarity
+- strong reading flow
+
+### 4. News Or Insight Card
+
+Use for:
+
+- market news
+- trend reactions
+- industry updates
+
+Characteristics:
+
+- headline-first composition
+- editorial tone
+- source-driven feeling
+- one main supporting visual or icon system
+
+### 5. Story Or Experience Visual
+
+Use for:
+
+- founder stories
+- behind-the-scenes
+- customer or operator experience
+
+Characteristics:
+
+- human context
+- scene-driven composition
+- softer text treatment
+- emotional but still clean
+
+## Choosing Text Density
+
+The agent must adapt text density to the content route.
+
+- Low text density: product sale, promo, offer, appetite-led, quick CTA
+- Medium text density: model explainers, comparison, simple educational posts
+- High text density: infographic, checklist, process, multi-point knowledge post
+
+These are defaults, not universal laws. The Manager may tighten or loosen them for a specific page, route, campaign, or post.
+
+Do not cram high-density text into a sales poster.
+Do not make an educational infographic with only one decorative line and no useful information.
+Do not make a model explainer so text-light that viewers understand only the mood but not the actual point.
 
 ## Layout Rules
 
-- Keep the main subject readable and not cropped.
-- Keep headline and CTA readable on mobile.
-- Use high contrast between text and background.
-- Do not place text too close to edges.
-- Apply brand font directions only to on-image text when the brief provides them.
-- Use consistent visual direction across one post set.
-- Prefer product-specific and brand-specific visuals over generic stock-like visuals.
-- Do not include unrelated brand logos.
-- If the image is for food/F&B, prioritize appetite appeal, realism, product detail, and clean composition.
+- Choose one clear focal point.
+- Build hierarchy: headline, support, CTA, secondary detail.
+- Preserve clean space for watermark or overlay zones.
+- Keep text away from edges.
+- Use fewer, larger elements instead of many weak ones.
+- Match the image language to the post route.
+- If the page visual profile says "infographic-first", do not default to glossy ad art.
+- If the page is sales-first, do not default to textbook infographic blocks.
+- For model or franchise explainer posts, prefer a balanced middle ground: more informative than a hero poster, but cleaner than a dense infographic.
+- When the Manager gives explicit style instructions for the current post, treat that task packet as the final source of truth.
 
-## Final Image Creation
+## Realism And Source Use
 
-When asked to create a final image, build the prompt internally and call the available image-generation tool. The tool prompt should include:
+- Prefer real product, real environment, or believable business context when the page needs credibility.
+- Use references when available.
+- If exact typography matters, use deterministic rendering after background generation.
+- When the brief is about a kiosk, store, menu, package, or workflow, show that specific context instead of a vague brand-colored scene.
 
-- Image goal and platform use.
-- Exact format, size, or aspect ratio.
-- Brand colors, mood, style, product, setting, and subject priority.
-- On-image typography/font direction for headline and supporting text, if provided.
-- Composition, text area, CTA area, and safe zones based on the current watermark config when available.
-- Exact on-image text if required.
-- Negative instructions such as no unrelated logos, no distorted text, no cropped product, no text inside watermark zones.
+## Final Image Workflow
 
-After the image is created, return the image result and only the short notes needed for review.
+When making a final image:
 
-## Prompt/Brief Template
+1. identify the visual mode
+2. identify text density
+3. define subject priority
+4. define safe zones
+5. define headline and support copy limit
+6. generate or brief the asset accordingly
 
-Use this template only when explicitly asked for a prompt, layout brief, image direction, or asset instructions instead of a final generated image:
+## Output Formats
+
+### Final Image Request
 
 ```text
-IMAGE GOAL:
-[Purpose of image.]
-
-FORMAT:
-[Size/aspect ratio/platform.]
-
-VISUAL DIRECTION:
-[Brand colors, mood, style, product, setting.]
-
+VISUAL MODE:
+TEXT DENSITY:
+MAIN SUBJECT:
 COMPOSITION:
-[Main subject, text area, CTA area, empty/safe zones.]
-
 TEXT ON IMAGE:
-[Exact text, if any.]
-
-WATERMARK / SAFE ZONES:
-[Current watermark config if available, otherwise logo/watermark/overlay areas to keep clear.]
-
+SAFE ZONES:
 NEGATIVE INSTRUCTIONS:
-[No unrelated logos, no distorted text, no cropped product, etc.]
 ```
 
-## QA Checklist
+### QA Review
 
-When reviewing or revising an image:
+```text
+WHAT WORKS
+- ...
 
-- Is the format correct?
-- Is the product/subject clear?
-- Is the brand style followed?
-- Are text and CTA readable?
-- Are watermark/overlay safe zones clear?
-- Are important elements away from edges?
-- Are there unrelated logos or confusing brand signals?
-- Does the image match the caption/content objective?
+WHAT LOOKS WEAK
+- ...
+
+WHAT TO CHANGE
+- ...
+```
+
+## Quality Check
+
+Before returning, verify:
+
+- the chosen mode matches the route
+- the image would still read clearly at feed size
+- text density fits the mode
+- the composition has one clear focal point
+- the result avoids generic AI poster aesthetics
+- the result supports the post goal, not just visual decoration
+- if the mode is `Sales Explainer Visual`, the image includes at least 1 headline and 2 short supporting points unless the Manager explicitly asked for `hero-poster mode`
+- if the Manager gave explicit text structure or style overrides for the current post, review against that brief instead of forcing a page-wide template
 
 ## Final Rule
 
-For final image tasks, create the image directly when tooling is available. For prompt/brief tasks, return design instructions in a way another tool or designer can execute directly. If important brand or safe-zone information is missing, ask for it or explicitly leave a placeholder.
+The best visual is not the most decorative one. It is the one that makes the right message easy to understand and act on.

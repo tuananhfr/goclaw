@@ -1,189 +1,153 @@
 ---
-name: Fanpage Lead Orchestration Guidelines
-slug: fanpage-lead-orchestration-guidelines
-description: Quy trình cho Lead agent quản lý fanpage: giữ brand/page context, giao việc cho agent con bằng task packet đầy đủ, kiểm tra output cuối và tránh thất lạc thông tin thương hiệu.
+name: Fanpage Page Manager Orchestration Guidelines
+slug: fanpage-page-manager-orchestration-guidelines
+description: Reusable workflow for a Page Manager that owns page context, coordinates specialist agents, decides what page-specific skills apply, and can use Facebook operations tools directly instead of relying on a separate operations agent.
 ---
 
-# Fanpage Lead Orchestration Guidelines
+# Fanpage Page Manager Orchestration Guidelines
 
-Use this skill for any Lead, Manager, Coordinator, or Team Lead agent that manages Facebook fanpage work and delegates tasks to sub-agents.
+Use this skill for any reusable `Page Manager`.
 
-This skill is brand-neutral. The Lead must combine it with the page/brand profile, brand skill, and domain skills relevant to the current page.
+This manager owns the page context, delegates work to reusable agents, reviews outputs, and uses Facebook operations tools when available.
 
-## Core Rule
+## Core Principle
 
-The Lead is responsible for context transfer.
+The Page Manager is the only role that should need the full page picture.
 
-Sub-agents may not know the brand, page, market, offer, footer, legal limits, current watermark config, fallback watermark safe zones, or current campaign unless the Lead explicitly passes that information in the task.
+Reusable agents stay reusable because the Manager passes:
 
-Before delegating any work, the Lead must create a clear task packet that includes enough context for the sub-agent to complete the task without guessing.
+- page identity
+- content direction
+- visual profile
+- allowed claims
+- CTA direction
+- Facebook publishing constraints
 
-## Lead Responsibilities
+## Page Manager Responsibilities
 
-The Lead must:
+The Page Manager must:
 
-- Maintain the active page/brand context.
-- Select the right skills or page profile for the current task.
-- Convert user requests into clear sub-tasks.
-- Pass only relevant context, but include all constraints that affect the output.
-- Tell sub-agents what output format is expected.
-- Review sub-agent output before returning final work.
-- Fix or reject output that conflicts with brand, platform, legal, or campaign rules.
+- identify which page is active
+- load the relevant brand, domain, and visual profile
+- prepare clear task packets for each specialist agent
+- call Facebook tools directly when needed
+- review and combine outputs into one final deliverable
+- block unsafe, off-brand, or low-quality work before it reaches the user
 
-## Page Context The Lead Should Know
+## Facebook Operations
 
-For each page, keep or retrieve these fields when available:
+Facebook operations are a capability of the Page Manager, not a separate agent at this stage.
 
-- Page/brand name.
-- Product/service category.
-- Page objective: sales, awareness, franchise, recruitment, community, customer care, event, or mixed.
-- Target audience.
-- Customer insight or pain point.
-- Tone of voice.
-- Visual identity: colors, on-image fonts, image style.
-- Current watermark config when available, plus fallback logo/watermark safe zones.
-- CTA defaults.
-- Footer/footage.
-- Fixed hashtag pool.
-- Restricted claims and banned wording.
-- Legal or compliance cautions.
-- Current campaign, offer, promotion, or content route.
+When tools support it, the Page Manager may:
 
-If important context is missing and the task depends on it, ask the user or mark it as a placeholder instead of inventing it.
+- check which page is connected
+- read basic page information
+- inspect recent posts
+- inspect comments
+- read insight data
+- prepare post payloads
+- publish or schedule after user approval
+
+## Reusable Team Model
+
+The Page Manager may coordinate:
+
+- Research Agent
+- Content Writer Agent
+- Sales Angle Agent
+- Visual Creative Agent
+- Brand QA / Claim Safety Agent
+
+Not every task needs every agent. The Manager chooses only the roles needed for the request.
+
+## What The Manager Must Keep For Each Page
+
+- brand or page name
+- audience
+- business objective
+- content pillars
+- visual profile
+- CTA direction
+- footer and hashtag rules
+- claim safety rules
+- active campaign or current route
+- watermark or safe-zone rules
 
 ## Task Packet Template
 
-When delegating to any sub-agent, provide a task packet with these sections when relevant:
-
 ```text
 TASK:
-[What the sub-agent must do.]
+[What the agent must do]
 
-PAGE/BRAND CONTEXT:
-- Brand/page:
-- Product/service:
+PAGE CONTEXT:
+- Page or brand:
 - Audience:
-- Tone:
 - Objective:
+- Tone:
 
-CAMPAIGN/BRIEF:
+PAGE-SPECIFIC RULES:
+- Brand rules:
+- Domain rules:
+- Visual profile summary:
+- Claims allowed:
+- Claims to avoid:
+
+POST BRIEF:
 - Topic:
-- Key message:
-- Offer/detail:
-- CTA:
-- Footer:
-- Hashtag guidance:
-
-CONSTRAINTS:
-- Must include:
-- Must avoid:
-- Claims allowed/not allowed:
-- Legal/compliance cautions:
-- Current watermark config:
-- Visual/watermark fallback safe zones:
-- Platform/format requirements:
+- Route:
+- CTA goal:
+- Required facts:
+- Required on-image text:
 
 OUTPUT FORMAT:
-- Required format:
-- Number of options/versions:
-- Language:
+- Type:
+- Versions:
 - Length:
-- Include/exclude notes:
+- Notes:
 ```
 
-The Lead may omit sections that are irrelevant, but must not omit constraints that affect correctness.
+## Delegation Logic
 
-## Delegation Rules
+### Use Research Agent when:
 
-### For Research-like Tasks
+- facts are current or unstable
+- trend or market context is needed
+- named examples or sources are needed
 
-Pass:
+### Use Content Writer when:
 
-- Research question.
-- Market, region, and time scope.
-- Source preference.
-- Whether current internet verification is required.
-- Desired output: insight, source list, competitor scan, trend, legal caution, summary, or angle bank.
-- Any legal/compliance boundary.
+- publish-ready caption is needed
+- the team already has topic direction
 
-Require sources when facts may change or legal/market accuracy matters.
+### Use Sales Angle when:
 
-### For Content-like Tasks
+- the topic is too neutral
+- the CTA is weak
+- the page needs stronger lead intent
 
-Pass:
+### Use Visual Creative when:
 
-- Brand/page context.
-- Topic and audience.
-- Objective and CTA.
-- Footer/footage.
-- Hashtag pool or hashtag rule.
-- Tone and language.
-- Product/service facts.
-- Claims that are allowed and claims to avoid.
-- Required structure and number of variants.
+- image direction, concept, or final image is needed
+- the route requires a specific visual mode
 
-### For Design/Image-like Tasks
+### Use Brand QA / Claim Safety when:
 
-Pass:
-
-- Brand/page context.
-- Asset type and size.
-- Visual direction: colors, on-image fonts, mood, product focus.
-- Required on-image text.
-- Current watermark config from `fb_get_watermark_config` when available.
-- Fallback logo/watermark safe zones.
-- Areas to keep clear.
-- Subject priority.
-- Number of images/options.
-- Whether output should be a prompt, layout brief, QA checklist, or final asset request.
-
-If the user asks to create or generate an actual image, set the expected output to final image and tell the design agent to use the available image-generation tool directly. Do not ask for a prompt unless the user specifically wants a prompt or the image tool is unavailable.
-
-When passing font rules, state clearly that they apply to text rendered inside the image/creative asset, not to Facebook caption text.
-
-Before delegating image/design work, call `fb_get_watermark_config` when that tool is available and include the returned config in the task packet. Tell design agents to pass that object into `render_creative.watermark` when final typography is rendered. If the config cannot be fetched, pass the brand's fallback safe zones and note that the exact runtime watermark config is unavailable.
-
-Do not ask design agents to place important text or product details in configured or fallback watermark zones.
-
-### For Any Other Specialist Agent
-
-Pass:
-
-- The role-specific task.
-- The page/brand facts needed for that role.
-- The exact constraints that role must respect.
-- The expected output format.
-- How the output will be used in the final fanpage deliverable.
+- claims are sensitive
+- the page has strict brand rules
+- content may overpromise or drift off-tone
 
 ## Review Checklist
 
-Before returning final output to the user, the Lead must check:
+Before returning final output, verify:
 
-- Does the output match the requested page/brand?
-- Did any sub-agent invent missing details?
-- Is the CTA present and aligned with the objective?
-- Is footer/footage correct or clearly marked as missing?
-- Are hashtags correct for the page and route?
-- Are legal/compliance claims safe?
-- Does visual guidance preserve watermark safe zones?
-- Does content align with image/message direction?
-- Is the output ready to publish or does it need user confirmation?
+- the right page context was used
+- the chosen route fits the page objective
+- the caption, angle, and image point in the same direction
+- no agent invented missing facts
+- no claim became riskier during rewrites
+- the visual mode fits the page visual profile
+- the final output is either ready to publish or clearly marked as draft
 
-## Conflict Handling
+## Final Rule
 
-When a sub-agent output conflicts with brand/page rules:
-
-- Correct it before final response.
-- If the conflict comes from missing information, ask the user.
-- If the conflict is legal/compliance-related, use cautious wording and recommend verification.
-- If multiple brand/domain skills conflict, page-specific brand context wins for identity and tone; safety and truthfulness always win over marketing.
-
-## Final Response Pattern
-
-When returning final work, the Lead should provide:
-
-- The final deliverable first.
-- Any assumptions or missing fields after the deliverable.
-- Optional notes only when they materially affect publishing, legal safety, or image generation.
-
-Do not expose internal delegation chatter unless the user asks for process details.
+Page quality depends on context transfer. If the team output feels inconsistent, the Manager should assume the brief was incomplete and fix that first.

@@ -1,141 +1,82 @@
 ---
 name: Brand Pizza Hips Guidelines
 slug: brand-pizza-hips-guidelines
-description: Quy chuẩn nhận diện thương hiệu Pizza Hip'S cho agent khi viết content, lên brief hình ảnh và kiểm tra nội dung Facebook thuộc hệ sinh thái Pizza Hip'S.
+description: Page-specific brand rules for Pizza Hip'S Facebook work, including naming, audience direction, footer, hashtags, typography, watermark safe zones, and on-image brand consistency.
 ---
 
 # Brand Pizza Hip'S Guidelines
 
-Use this skill for any task involving Pizza Hip'S, Hips Resto, or any Facebook page that belongs to the Pizza Hip'S brand ecosystem.
+Use this skill for any Facebook work related to `Pizza Hip'S`, especially the `Pizza Hip'S Kiosk` franchise page.
 
-Also apply the general `facebook-fanpage-content-guidelines` skill when available.
+Apply this together with:
 
-For franchise/legal/business-model content, also apply `pizza-hips-franchise-knowledge` when available. This brand skill controls Pizza Hip'S identity, page/channel direction, visual system, wording consistency, watermark, and hashtag conventions.
+- `facebook-fanpage-baseline-rules`
+- `pizza-hips-franchise-knowledge`
+- `pizza-hips-visual-content-profile` when image direction matters
+
+## Brand Role
+
+This skill controls Pizza Hip'S page identity. It does not own all franchise reasoning and it does not decide visual mode by itself.
+
+Use it for:
+
+- brand naming
+- footer
+- hashtag pool
+- fixed page audience direction
+- colors and typography
+- watermark safe zones
+- on-image consistency
 
 ## Brand Basics
 
-- Brand name: Pizza Hip'S.
-- Main visual tone: orange, blue, and black.
-- On-image title/headline font direction for creative briefs: SVN - Bango.
-- On-image body/supporting text font direction for creative briefs: SVN - Avo.
-- Keep visual tone consistent within the same post or album.
-- Do not use two unrelated background colors/styles in one image set.
+- Brand name: `Pizza Hip'S`
+- Main page direction here: `Pizza Hip'S Kiosk`
+- Main visual color system: orange, blue, black
+- Headline font direction for on-image text: `SVN - Bango`
+- Supporting text direction for on-image text: `SVN - Avo`
 
-These font directions apply only to text rendered inside images/videos/creative assets. Facebook caption text remains plain text and cannot use custom brand fonts.
+Do not write the brand in mixed forms such as `Pizza Hips`, `Pizza Hips Kiosk`, or `PizzaHip's` unless the user explicitly asks for a variant.
 
-## Brand Font Assets
+## Page Objective
 
-Use these files when exact on-image typography must be rendered or verified:
+The Pizza Hip'S Kiosk page should be treated as a franchise and F&B business page, not as a generic food page.
 
-- Headline/title/display text:
-  - Font: SVN - Bango.
-  - Font file: `{baseDir}/assets/fonts/SVN-Bango.otf`.
-  - Runtime fallback pattern: `<skills.file_path>/assets/fonts/SVN-Bango.otf`, where `skills.file_path` is the active version directory in the skills database.
-  - SHA256: `0C72A0D3D2A61E550E24A35FBF41F0DE3517026F09526F5D8CAF1BBF963FA5D9`.
+Primary objectives:
 
-If `{baseDir}` is not resolved by the current tool/agent context, query the active skill metadata and use `<skills.file_path>/assets/fonts/SVN-Bango.otf`. Do not guess a hardcoded version number. Do not search parent directories with `../` to find this font. If the font path cannot be read, report the exact path access error instead of switching to a fallback font.
+- build awareness for Pizza Hip'S franchise models
+- attract people interested in compact F&B business opportunities
+- educate audiences around F&B market movement and store-format decisions
+- turn attention into inbox, comment, consultation, or hotline actions
 
-- Body/supporting text:
-  - Font direction: SVN - Avo.
-  - Exact font file is not provided yet. Do not claim exact SVN - Avo rendering until the font file is available.
+Food and product content is allowed, but it should still support trust, model understanding, or lead generation.
 
-If a final creative must be confirmed as brand-font accurate, do not rely on AI image generation prompts alone. Use the actual font file above in a render/edit tool, or require editable source confirmation from the designer.
-
-Exact font workflow:
-
-- When the user asks for exact SVN - Bango on-image text, use `render_creative` or an equivalent deterministic font-render tool with the real `SVN-Bango.otf` file path.
-- Before rendering final on-image text, get the current page watermark config when an `fb_get_watermark_config` tool is available.
-- Pass the current watermark config into `render_creative.watermark` so text avoids the real configured watermark position. If the config cannot be fetched, use the fallback Pizza Hip'S safe zones below and state that exact runtime watermark config was unavailable.
-- Do not claim exact SVN - Bango if the image was produced only by `create_image` or an AI image prompt.
-- If the render tool cannot read the font path, report the tool/path access error clearly. Do not silently switch to "near SVN - Bango" or "similar display rounded font".
-- After rendering, keep the returned `font_path` and `font_sha256` metadata so the user can verify the exact font file used.
-
-## Channel Objective
-
-For Pizza Hip'S franchise/F&B business pages, the channel objective is:
-
-- Increase Pizza Hip'S brand awareness.
-- Build an audience interested in F&B business, compact store models, and franchise opportunities.
-- Educate and nurture people who are considering F&B entrepreneurship.
-- Route qualified interest toward Pizza Hip'S franchise/business-model consultation.
-- Generate leads and support conversion.
-
-Do not treat franchise pages as generic food/menu pages. Food/product content can be used, but it should support trust, model understanding, demand proof, or lead generation when the page objective is franchise/business.
-
-## Target Audience
+## Audience
 
 Primary audience:
 
-- People aged roughly 22-55 across Vietnam who are interested in F&B business.
-- People with capital but too many options and no clear model to choose.
-- People who want to start but lack experience, direction, setup knowledge, and operating guidance.
-- People who already have premises but do not know what business model to run.
-- Small cafes or small local business models that may want to convert or add a new model.
+- people interested in opening an F&B business
+- people with small premises who need a compact business model
+- people who have capital but are still comparing options
+- people with or without prior F&B experience
+- existing beverage shops or play-area operators who may want a kiosk add-on
 
-Audience psychology:
+Audience mindset:
 
-- They want to start an F&B business but do not know where to begin.
-- They are looking for a suitable business model or product.
-- They need practical orientation, operational clarity, and confidence that the model is not vague or overly complex.
+- they want a practical model, not abstract motivation
+- they worry about store size, operating complexity, staffing, and fit
+- they respond better to clarity and real scenarios than to vague hype
 
-## Franchise Page Content Pillars
+## Typography Guidance
 
-Use these content routes when the brief is for the Pizza Hip'S franchise/F&B business page:
+- `SVN - Bango` is still the preferred headline direction for on-image text.
+- `SVN - Avo` is still the preferred supporting-text direction for on-image text.
+- Treat these as brand-style directions, not as a required team package dependency.
+- Do not promise exact font-file rendering unless the user explicitly provides or confirms a working render workflow outside this skill package.
 
-- General market news that relates to or affects F&B: economy, consumer behavior, rental costs, ingredient costs, food safety, spending trends, and local business shifts.
-- F&B industry news: food safety, closures, store model changes, hot food trends, consumer demand, restaurant models, franchise models, operating challenges, and business opportunities.
-- Trend-based posts: adapt timely social or market trends into useful F&B business angles.
-- Model-focused posts: Pizza Hip'S store model, Hip'S Resto, compact/mobile/kiosk model, product standardization, operating efficiency, and practical setup/operation points.
-- Product proof posts: pizza, fried chicken, spicy noodles, combos, menu logic, product appeal, and how product quality supports the business model.
+## Footer
 
-When using market or legal/current-news claims, include source notes for the user to verify unless the final copy is purely brand/opinion content.
-
-## Franchise Page Voice
-
-Use a voice that is:
-
-- Easy to read and practical.
-- Not overly academic.
-- Clear, direct, and focused on the question raised by the title.
-- Natural like a real Facebook page admin, not like a formal business essay or generic AI marketing copy.
-- Connected to current events, market movements, or recognizable F&B situations when relevant.
-- Connected to local area, weather, season, or daily context when it helps the post feel timely and grounded.
-- Concise; avoid rambling or broad essays.
-
-Avoid:
-
-- Dense textbook explanations.
-- Vague entrepreneurship motivation with no concrete F&B relevance.
-- Unsupported certainty about profit, payback, safety, or guaranteed success.
-
-## Franchise Post Format
-
-For franchise/business posts:
-
-- Title: uppercase, short, strong, pain-point driven, and relevant to what the audience cares about.
-- Title should usually start with one relevant icon. It may use punctuation such as quotation marks, exclamation marks, or question marks when natural.
-- Opening: 1-2 readable, creative sentences that pull the reader into the issue.
-- Body: answer the exact question or promise from the title. If the title asks why compact F&B models are a trend, the body must give direct reasons and analysis.
-- Use punctuation and icons only when they improve emphasis and scanability.
-- Use icon bullets for key points when the post needs fast mobile scanning.
-- Keep the full publish copy under 400 words unless the user explicitly asks for a long-form post.
-- Use short paragraphs and short sentence blocks.
-- Keep the first 2-3 lines sharp enough to work above the Facebook "see more" fold.
-- Do not show labels like "Problem", "Solution", "CTA", "AIDA", or "PAS" in publish-ready copy.
-- Avoid over-formatting: no excessive icons, no decorative separators, no repeated all-caps sections after the title, and no filler slogans.
-- Include relevant local area/region context when the post targets a place, market, store area, or event.
-- Include weather/season/local timing context when it strengthens the hook or product angle and the data is provided or verified. Do not invent current weather.
-- Closing: summarize the main idea in 1-2 sentences.
-- CTA: make the lead action specific.
-- End with one provocative or open-ended question that encourages comment, inbox, or self-reflection when it fits the objective.
-
-Recommended CTA patterns:
-
-- "Chấm để được tư vấn chi tiết."
-- "Comment \"ib\" để được gửi báo giá."
-- "Muốn tìm giải pháp kinh doanh F&B tinh gọn, liên hệ hotline để được tư vấn chi tiết về mô hình."
-
-Use this fixed Pizza Hip'S Kiosk footer by default unless the user provides a campaign-specific replacement:
+Use this fixed footer by default unless the user provides an updated campaign-specific footer:
 
 ```text
 📍 Nhượng quyền Pizza Hip'S Kiosk
@@ -143,152 +84,85 @@ Use this fixed Pizza Hip'S Kiosk footer by default unless the user provides a ca
 🌐 Website: https://pizzahips.com/
 ```
 
-Do not invent alternate phone numbers, websites, addresses, or page names. If the user provides updated footer details, use the latest user-provided version exactly.
+Do not invent another hotline, address, or website.
 
-## Copywriting Formulas
+## Hashtag Rules
 
-Choose the formula based on the post objective:
-
-- AIDA for selling, ads, lead posts, and offer-led content: Attention, Interest, Desire, Action.
-- PAS for advisory/lead-magnet posts: Problem, Agitate, Solution.
-- BAB for transformation posts: Before, After, Bridge.
-- 4C for educational or credibility-driven posts: Clear, Concise, Compelling, Credible.
-- Mini-storytelling for emotional or brand-voice posts: a short 30-120 word situation with conflict, resolution, and CTA.
-
-Use the formula as structure, not as visible labels in the publish copy unless the user asks for a breakdown.
-
-## Priority Keywords
-
-Use these keywords naturally when relevant:
-
-- Nhượng quyền tinh gọn.
-- Nhượng quyền tối ưu.
-- Xe/quầy bán hàng lưu động.
-- Tối ưu vận hành.
-- Sản phẩm chuẩn hóa.
-- Chất lượng đồng nhất.
-- Nhượng quyền vốn ít.
-
-## Content Direction
-
-Write for Facebook audiences interested in:
-
-- Pizza, fried chicken, spicy noodles, fast food, casual dining, and food delivery.
-- F&B business and franchise opportunities when the page/content route is about franchise.
-- Local store awareness, offers, new products, and customer service.
-
-Prioritize:
-
-- Clear customer benefit.
-- Appetite appeal.
-- Practical reasons to order, visit, or inquire.
-- Franchise potential only when the brief is about business or investment.
-
-Avoid:
-
-- Generic food copy with no Pizza Hip'S identity.
-- Unsupported business promises.
-- Wrong F&B/franchise terms.
-- Overclaiming health, profit, or guaranteed results.
-
-## Required Post Elements
-
-Every Pizza Hip'S Facebook post should include:
-
-- Short hook/title.
-- Clear body with short paragraphs.
-- Local area/region context when relevant to the brief.
-- Weather, season, or timing context when relevant and verified/provided.
-- Icon scan points when the body uses a list.
-- CTA.
-- One final provocative or open-ended question when suitable.
-- Fixed Pizza Hip'S Kiosk footer unless the user provides a replacement.
-- 3-5 accurate hashtags, separated from footer by one blank line.
-
-Do not invent footer details. Use the fixed footer above unless the user asks to omit or replace it.
-
-## Hashtags
-
-Use at most 5 hashtags by default unless the user asks for a larger hashtag block.
-
-Choose the 3-5 most accurate hashtags for the post. Do not add weak generic hashtags just to increase count.
+Use at most 5 hashtags by default.
 
 The first hashtag should be:
 
 `#pizzahips`
 
-Fixed Pizza Hip'S hashtag pool:
+Core brand pool:
 
 `#pizzahips #hipsresto #nhuongquyen #pizzatime #pizzakieuY #garan #mycay #fastfood #foodanddrink #pizzahealthy #franchise #hipskiosk`
 
-Market/franchise hashtag pool:
+Business and market pool:
 
-`#kinhdoanh #kinhdoanhfnb #fnbvietnam #congdongfnbvietnam #kinhdoanhfnb`
+`#kinhdoanh #kinhdoanhfnb #fnbvietnam #congdongfnbvietnam`
 
 Selection guidance:
 
-- Food/product post: choose up to 5 from `#pizzahips`, `#hipsresto`, `#pizzatime`, `#garan`, `#mycay`, `#fastfood`, `#foodanddrink`.
-- Franchise/business post: choose up to 5 from `#pizzahips`, `#nhuongquyen`, `#franchise`, `#hipskiosk`, `#kinhdoanhfnb`, `#fnbvietnam`, `#kinhdoanh`.
-- Do not use all hashtags unless the user explicitly asks for a full hashtag bank.
+- franchise or model post: prioritize `#pizzahips`, `#nhuongquyen`, `#franchise`, `#hipskiosk`, `#kinhdoanhfnb`
+- product-led post: prioritize `#pizzahips`, `#pizzatime`, `#garan`, `#mycay`, `#fastfood`
+- trend or market post: combine one brand hashtag with relevant F&B or business tags
 
-## Image Rules For Pizza Hip'S
+## Voice
 
-For Pizza Hip'S image prompts, briefs, or QA:
+Write and review with a voice that is:
 
-- Use orange, blue, and black as the brand color system.
-- For text rendered inside the image, use SVN - Bango direction for headline/title text and SVN - Avo direction for supporting/body text when typography is requested.
-- Watermark is handled by the existing system/tooling. Do not instruct the agent to add, move, resize, or modify watermark assets.
-- Use the current watermark config as the source of truth when available. In a two-step `create_image` then `render_creative` workflow, pass that config into `render_creative.watermark`.
-- If current watermark config is unavailable, use these fallback safe zones for existing watermark overlays:
-  - Top center is reserved for the Pizza Hip'S logo/brand watermark; keep it visually clean.
-  - Bottom right is reserved for hotline/contact/CTA watermark; keep it visually clean.
-- Do not place important content in those reserved zones: headline text, prices, CTA, product hero details, faces, QR codes, legal notes, or small readable text.
-- When creating image prompts, explicitly leave clean negative space around the configured watermark area; if config is unavailable, leave top center and bottom right clear.
-- On-image text must never be clipped by the canvas edge. Keep at least 5% padding and rerender if any letter is cut off.
-- On-image text must not touch or overlap watermark overlays. Treat configured watermark zones as hard no-text areas.
-- Create and return one final image by default. Do not generate multiple visual variants unless the Lead explicitly asks for comparison variants.
-- If using `create_image` only to generate a textless background before `render_creative`, call `create_image` with `deliver=false` and attach only the final flattened image.
-- Minimum 1 image, maximum 10 images for a Facebook post set.
-- Prefer realistic product imagery: pizza, fried chicken, spicy noodles, combo meals, store/customer scenes, or kiosk/franchise visuals depending on the brief.
-- Do not include logos from other food brands.
-- Keep text readable and avoid cutting off product, logo, price, CTA, or hotline.
-- For product posts, 1080x1080 px is the preferred square format.
+- practical
+- direct
+- easy to read
+- business-aware
+- natural like a real page admin
 
-## Suggested Content Patterns
+Avoid:
 
-### Product / Menu Post
+- vague motivational copy
+- textbook language
+- over-polished "AI marketing" tone
+- unsupported certainty
 
-Use this structure:
+## Watermark And Safe Zones
 
-1. Hook about taste, craving, combo, occasion, or offer.
-2. Short benefit-focused description.
-3. CTA to order, inbox, or visit.
-4. Footer if available.
-5. Hashtags.
+Watermark is handled by system tooling. Do not tell agents to add or move watermark assets manually.
 
-### Promotion Post
+Use the current watermark config when available. If unavailable, use these fallback zones:
 
-Use this structure:
+- top center reserved for brand or logo watermark
+- bottom right reserved for hotline or contact watermark
 
-1. Offer-led hook.
-2. What customers receive.
-3. Time/location/condition if provided.
-4. CTA.
-5. Footer.
-6. Hashtags.
+Do not place these inside watermark zones:
 
-### Franchise Post
+- headline text
+- prices
+- CTA
+- product hero details
+- legal notes
+- QR codes
+- small readable copy
 
-For franchise posts, use this skill only for brand identity, hashtags, watermark, footer, and visual tone. Use `pizza-hips-franchise-knowledge` for business-model content, legal cautions, and franchise-specific argument structure.
+## On-Image Brand Rules
 
-## Final Self-Check
+- Keep one coherent visual direction per post set.
+- Do not mix unrelated background styles in one asset.
+- Keep text readable at feed size.
+- Keep at least 5% padding from edges unless the brief explicitly asks otherwise.
+- Prefer realistic food, store, kiosk, menu, or business scenes over vague brand-colored backgrounds.
 
-Before returning Pizza Hip'S content, verify:
+## Required Post Elements
 
-- Brand name is written consistently as Pizza Hip'S.
-- CTA exists.
-- Hashtag block starts with `#pizzahips`.
-- Hashtags fit the content route: food/product or franchise/business.
-- Fixed Pizza Hip'S Kiosk footer is used unless the user asks to omit or replace it.
-- Image brief uses orange/blue/black and reserves empty/safe space based on the current watermark config, with top center and bottom right only as fallback zones.
-- No claim is exaggerated beyond the user's brief.
+For publish-ready Pizza Hip'S page posts, verify:
+
+- brand name is written as `Pizza Hip'S`
+- the CTA exists
+- the footer is correct unless intentionally omitted
+- the hashtag block starts with `#pizzahips`
+- the content route matches the page objective
+- image direction preserves watermark safe zones
+
+## Final Rule
+
+This skill protects Pizza Hip'S identity. Franchise logic belongs in the franchise skill, and image mode selection belongs in the visual content profile.

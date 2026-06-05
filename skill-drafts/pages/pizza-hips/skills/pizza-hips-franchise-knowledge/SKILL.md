@@ -1,222 +1,226 @@
 ---
 name: Pizza Hips Franchise Knowledge
 slug: pizza-hips-franchise-knowledge
-description: Tri thức chuyên sâu cho agent khi viết, phân tích hoặc kiểm tra nội dung về mô hình nhượng quyền Pizza Hip'S, nhượng quyền F&B quốc tế và các lưu ý pháp lý liên quan.
+description: Page-specific franchise and business-model knowledge for Pizza Hip'S Kiosk, including the Kiosk and Resto models, core offer framing, content routes, and caution areas around sensitive investment or payback claims.
 ---
 
 # Pizza Hip'S Franchise Knowledge
 
-Use this skill when the task involves Pizza Hip'S franchise content, franchise education, F&B investment posts, business-model explanations, franchise lead generation, legal-risk wording, or comparison of franchise models.
+Use this skill for Pizza Hip'S franchise posts, business-model explainers, lead-generation content, content review, and QA related to the Pizza Hip'S Kiosk page.
 
-Also apply:
+Apply this together with:
 
-- `facebook-fanpage-content-guidelines` for Facebook post structure.
-- `brand-pizza-hips-guidelines` for Pizza Hip'S brand identity, hashtags, footer, and watermark.
+- `brand-pizza-hips-guidelines`
+- `fanpage-brand-qa-claim-safety-guidelines` when claims are sensitive
+- `pizza-hips-visual-content-profile` when the output needs image direction
 
-## Important Legal Boundary
+## Role
 
-This skill provides general content and business framing, not legal advice.
+This skill defines what the page is actually selling and educating around.
 
-When discussing laws, contracts, disclosure, fees, trademarks, tax, employment, food safety, advertising, or country-specific regulations:
+It covers:
 
-- State that legal details must be verified with current local law and qualified counsel.
-- Do not present legal statements as final advice.
-- Do not claim compliance unless the user provides verified legal basis.
-- Do not guarantee profit, payback period, revenue, ROI, store success, or approval.
-- Avoid phrases like "cam ket loi nhuan", "chac chan hoan von", "khong rui ro", "bao dam thanh cong".
+- the franchise models the page should talk about
+- audience-relevant business framing
+- official page direction and content pillars
+- how to discuss support, menu, and model fit
+- where claim caution is required
 
-## Franchise Models To Know
+## Core Franchise Models
 
-Use these models when explaining franchise options or creating educational content.
+### 1. Pizza Hip'S Kiosk
 
-### Single-Unit Franchise
+Definition:
 
-One franchisee operates one location.
+- mobile sales cart or compact sales counter
+- can be combined with beverage stores or play areas
+- intended for small locations under `40m2`
 
-Best angle:
+Best use angles:
 
-- Suitable for first-time operators.
-- Easier to control quality and daily operations.
-- Lower expansion complexity.
+- suitable for small premises
+- easier entry for compact F&B deployment
+- useful for mixed-use points such as beverage shops or entertainment spots
+- good for audiences comparing lighter-format business models
 
-Risk/caution:
+Operating themes:
 
-- Growth is slower.
-- Operator capability strongly affects performance.
+- compact footprint
+- simpler setup logic than a full-size restaurant
+- focus on suitable menu selection, workflow, and product consistency
 
-### Multi-Unit Franchise
+### 2. Pizza Hip'S Resto
 
-One franchisee operates multiple locations under one brand.
+Definition:
 
-Best angle:
+- standard-scale franchise store
+- area over `80m2`
+- full menu
+- full service
 
-- Suitable for experienced operators or investors.
-- Can scale faster in one region.
-- Can share management, training, and procurement systems.
+Best use angles:
 
-Risk/caution:
+- suitable for a larger standard store model
+- stronger full-experience positioning
+- broader menu and service delivery
 
-- Requires stronger capital, team, and operational discipline.
+Operating themes:
 
-### Area Development
+- dine-in experience
+- full-service operation
+- larger-format store planning and service flow
 
-A developer receives rights to open a defined number of locations in a defined territory and timeline.
+## Official Business Framing
 
-Best angle:
+Use these points as the page's core offer framing:
 
-- Good for planned regional expansion.
-- Creates roadmap and accountability.
+- Pizza Hip'S has multiple franchise formats with flexible investment levels.
+- The system is positioned as having a complete and methodical process.
+- The brand supports partners whether they already have F&B experience or do not yet have F&B experience.
+- The menu direction includes pizza, fried chicken, spicy noodles, and spaghetti-style items.
+- The brand emphasizes product and raw-material consistency.
 
-Risk/caution:
+If exact numbers, fees, package tiers, or rollout timelines are not provided, do not invent them.
 
-- Timeline and territory terms need careful contract review.
+## Cooperation Benefits
 
-### Master Franchise
+These are official page-direction points and may be used carefully in content:
 
-A master franchisee receives rights to develop, operate, and sometimes sub-franchise in a country or large territory.
+- diverse franchise forms with different capital levels
+- trend-friendly menu mix
+- consistent raw material and product quality
+- support through setup and operation stages
 
-Best angle:
+### Sensitive Official Claim
 
-- Common for international expansion.
-- Local partner can handle market adaptation, recruitment, and support.
+The page direction also includes:
 
-Risk/caution:
+- `Cam kết hoàn vốn từ 6 - 8 tháng`
 
-- Complex legal, training, brand-control, and reporting requirements.
+Treat this as a sensitive official claim, not as a casual line to repeat everywhere.
 
-### Conversion Franchise
+Rules:
 
-An existing independent business converts to the franchise brand/system.
+- do not strengthen it further
+- do not convert it into guaranteed profit wording
+- do not pair it with "không rủi ro", "chắc chắn thành công", or similar certainty claims
+- prefer QA review before publishing any post that includes it
+- when the user or Manager wants a safer mode, reframe toward a reference expectation or consultation-based explanation
 
-Best angle:
+## Content Routes For The Page
 
-- Uses existing location, staff, and customer base.
-- Can upgrade operations and brand recognition.
+This page should focus on these routes:
 
-Risk/caution:
+### 1. General Market News Affecting F&B
 
-- Rebranding and standardization can be difficult.
+Examples:
 
-### FOFO
+- rent pressure
+- ingredient price movement
+- market behavior
+- food safety concerns
+- spending patterns
+- operating pressure in the F&B market
 
-Franchise Owned, Franchise Operated.
+Purpose:
 
-Best angle:
+- make the page feel current
+- connect market changes to business decisions
+- create educational entry points for consultation
 
-- Franchisee invests and operates.
-- Brand provides system, standards, training, and support.
+### 2. F&B Industry News
 
-Risk/caution:
+Examples:
 
-- Franchisee execution quality is critical.
+- food safety
+- mass closures
+- rent and raw-material changes
+- food trends
+- hot dishes
+- restaurant models
+- franchise models
+- consumer behavior
+- business movement
 
-### FOCO
+Purpose:
 
-Franchise Owned, Company Operated.
+- position the page as market-aware
+- turn news into business interpretation
+- support audience trust and conversation
 
-Best angle:
+### 3. Trend-Based Posts
 
-- Franchisee invests; brand/company operates.
-- More central control over service and standards.
+Examples:
 
-Risk/caution:
+- adapting viral formats
+- using social trends to open a business question
+- using a trend to compare store models or menu appeal
 
-- Requires clear operating fee, responsibility, and performance terms.
+Purpose:
 
-### COCO
+- keep the page socially current
+- use familiar trend language to pull new audiences in
 
-Company Owned, Company Operated.
+### 4. Model-Focused Posts
 
-Best angle:
+Examples:
 
-- Brand controls full operation.
-- Useful for flagship stores, training stores, or market proof.
+- Pizza Hip'S Kiosk
+- Pizza Hip'S Resto
+- store format comparison
+- store suitability by area size
+- product system and menu logic
 
-Risk/caution:
+Purpose:
 
-- Requires brand-side capital and management capacity.
+- explain what the page actually offers
+- create direct lead-generation opportunities
 
-### Kiosk / Mini Store Franchise
+### 5. Product And Menu Support Posts
 
-Smaller-format franchise such as kiosk, pickup point, delivery-first unit, or compact F&B store.
+Examples:
 
-Best angle:
+- pizza
+- fried chicken
+- spicy noodles
+- menu combinations
+- how products support store appeal
 
-- Lower footprint.
-- Easier to place in dense urban areas, food courts, campuses, or high-traffic points.
-- Good for testing market demand.
+Purpose:
 
-Risk/caution:
+- support trust in the model through food appeal
+- avoid turning the page into a generic food fanpage
 
-- Menu, workflow, storage, delivery, and peak-hour capacity must be designed carefully.
+## Writing Guidance
 
-### Licensing
+- keep explanations practical
+- connect business ideas to real situations such as store size, staffing, or operational fit
+- avoid heavy legal or textbook wording
+- use educational framing before strong sales pressure when the topic is complex
+- separate the model explanation from the CTA clearly
 
-A brand or IP owner licenses assets, formula, trademark, product, or know-how without the full franchise operating system.
+## Claim And Safety Cautions
 
-Best angle:
+Be especially careful with:
 
-- Flexible and lighter than full franchise.
+- payback claims
+- profit claims
+- revenue claims
+- "no experience needed" language that sounds too easy
+- "A-Z" or "lifetime support" wording that sounds unlimited or unconditional
 
-Risk/caution:
+Safer framing examples:
 
-- Lower operating control; may not fit if brand consistency is critical.
-
-## Legal Topics To Treat Carefully
-
-Mention these as areas to verify, not as definitive advice:
-
-- Franchise disclosure requirements.
-- Commercial contract and franchise agreement terms.
-- Trademark, logo, trade dress, and IP usage.
-- Territory exclusivity and non-compete clauses.
-- Initial fee, royalty, marketing fee, training fee, renewal fee.
-- Food safety, hygiene, labeling, licensing, and local permits.
-- Employment, labor, insurance, tax, accounting, and invoicing.
-- Advertising claims and consumer protection.
-- Data/privacy rules if online ordering, CRM, loyalty, or delivery data is involved.
-
-## Content Angles For Pizza Hip'S Franchise Page
-
-Use these angles for posts, scripts, or image briefs:
-
-- Why F&B franchise can reduce first-time business setup friction.
-- Difference between owning a store and owning an operating system.
-- How menu standardization supports quality control.
-- Why brand identity matters in local F&B.
-- Kiosk/compact model as an accessible entry point.
-- What investors should ask before joining a franchise.
-- Comparing FOFO, FOCO, COCO, kiosk, master franchise, and area development.
-- Common mistakes: only looking at product taste, ignoring operations, location, staff, supply chain, and contract terms.
-- Education-first posts: explain terms simply before asking customers to inbox.
-
-## Writing Rules For Franchise Content
-
-- Use cautious, credible language.
-- Prefer "co the", "phu thuoc vao", "can danh gia", "nen kiem tra", "can tu van phap ly" for uncertain claims.
-- Do not make absolute claims without data.
-- Separate education, brand benefit, and CTA clearly.
-- If the user gives numbers, label them as user-provided unless verified.
-- If the topic is country-specific or current law-specific, recommend verification with current local sources.
-
-## Franchise Post Structure
-
-Use this structure for Facebook posts:
-
-1. Hook: business pain point, opportunity, or misconception.
-2. Explain one concept clearly.
-3. Relate it to Pizza Hip'S only if the brief gives enough basis.
-4. Add caution or decision checklist when relevant.
-5. CTA: inbox/call for consultation, request model details, or book a discussion.
-6. Footer from brand/project rules.
-7. Franchise-focused hashtags from brand rules.
+- "được hỗ trợ trong quá trình triển khai và vận hành"
+- "phù hợp để tìm hiểu thêm nếu đang cân nhắc mô hình F&B tinh gọn"
+- "cần đánh giá theo mặt bằng, khu vực và cách vận hành thực tế"
 
 ## Final Self-Check
 
-Before returning franchise content, verify:
+Before returning franchise-related work, verify:
 
-- No guaranteed profit, ROI, payback, or success claim.
-- Legal statements are framed as general information.
-- The correct franchise model term is used.
-- Pizza Hip'S brand identity is preserved through the brand skill.
-- Facebook structure and CTA are preserved through the fanpage skill.
+- the model used is either `Pizza Hip'S Kiosk` or `Pizza Hip'S Resto` when the brief is page-specific
+- the post route matches one of the defined content routes
+- no unsupported business detail was invented
+- sensitive claims are either preserved carefully or flagged for QA
+- the content still sounds like a practical F&B page, not a generic investment pitch

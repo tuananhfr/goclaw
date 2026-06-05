@@ -1,188 +1,278 @@
 ---
 name: Duculaba Baking Supply Knowledge
-description: Domain guidance for Duculaba baking ingredient content about wheat flour, flour lines, premixes, additives, butter/oil substitutes, cacao, matcha, starches, flavoring, product applications, simple recipe support, baking tips, storage, wholesale/retail sales, and safe food-content claims.
+description: Domain guidance for Duculaba sales content about baking ingredients, drink ingredients, product applications, recipe-support content, troubleshooting, ingredient knowledge, storage basics, and safe claims.
 ---
 
 # Duculaba Baking Supply Knowledge
 
-Use this skill when the task involves Duculaba content about baking flour, baking ingredients, flour selection, additives, premixes, cacao, matcha, flavoring, starches, ingredient applications, simple baking tips, product comparison, wholesale/retail buyer advice, or recipe-support content.
+Use this skill when the task involves Duculaba content about baking ingredients, drink ingredients, flour selection, yeast, butter, cream, milk, cheese, chocolate, topping, premixes, additives, product application, recipe support, tips, troubleshooting, storage basics, or buyer advice.
 
 Also apply:
 
-- `facebook-fanpage-content-guidelines` for Facebook post structure.
-- `brand-duculaba-guidelines` for Duculaba tone, footer, hashtag, watermark, and sales positioning.
-- `fanpage-grounded-content-guidelines` when posts need real buyer situations, season/weather, market context, or verifiable examples.
-- `fanpage-internet-research-guidelines` when technical food-safety, regulation, current market, ingredient standard, or nutrition claims need sources.
+- `facebook-fanpage-content-guidelines` for Facebook structure and baseline hygiene.
+- `brand-duculaba-guidelines` for tone, footer, hashtags, watermark, and sales-first positioning.
+- `duculaba-visual-content-profile` when image direction or image QA matters.
+- `fanpage-grounded-content-guidelines` when the post needs believable buyer context.
+- `fanpage-internet-research-guidelines` when technical food-safety, regulation, nutrition, or current market claims need sources.
 
-## Important Food And Recipe Boundary
+## Role
 
-This skill supports marketing, basic product education, and practical baking guidance. It does not replace food-safety certification, nutrition advice, professional bakery R&D, or regulatory review.
+This skill exists to help Duculaba sell more effectively through practical product understanding.
 
-When discussing ingredients, additives, allergens, food safety, nutrition, storage, shelf life, or health claims:
+It does not treat recipes, tips, or ingredient knowledge as separate educational missions.
+Those routes exist to help customers:
 
-- Use cautious wording.
-- Do not invent regulatory limits, nutrition values, shelf life, or allergen-free claims.
-- Mention allergen/storage cautions when relevant.
-- Do not say a recipe will be 100% successful.
-- Do not claim a product is safe for everyone, healthy, diet-friendly, or suitable for medical conditions without verified basis.
+- understand the product
+- choose the right product
+- use the product more confidently
+- develop buying intent
 
-## Product Focus
+## Important Food And Product Boundary
 
-Based on current page signals, Duculaba primarily sells:
+This skill supports marketing, product education, and practical usage guidance.
+It does not replace food-safety certification, nutrition advice, regulatory review, or professional R&D.
 
-- Wheat flour and flour lines.
-- Baking ingredients.
-- Premix or mixed powder groups where provided.
-- Additives and baking support ingredients.
-- Butter/oil substitute or related bakery fat ingredient where provided.
-- Cacao, matcha, chocolate flavoring, corn starch, and similar application ingredients.
+When discussing ingredients, additives, allergens, food safety, storage, shelf life, or health claims:
 
-Current/high-frequency product names observed from page context:
+- use cautious wording
+- do not invent regulatory limits, nutrition values, shelf life, allergen-free claims, or dosage
+- do not promise guaranteed results
+- do not claim a product is safe for everyone or suitable for medical conditions without verified basis
 
-- Địa Cầu 999.
-- Địa Cầu 888.
-- Hoàn Kim.
-- Uni Dai Cao số 2.
-- Hi-pro.
-- Cây Tre.
-- Kim Ngưu.
-- Bột bánh mì Việt Nam.
+## Product Scope
 
-Only claim specific product properties when provided by the user, product label, supplier information, or verified source.
+Possible product groups may include:
+
+- flour
+- yeast
+- butter
+- cream
+- milk
+- cheese
+- chocolate
+- topping
+- baking ingredients
+- drink ingredients
+- drink-support ingredients
+- related tools or materials only when confirmed by the user
+
+Current or previously observed names may include:
+
+- Dia Cau 999
+- Dia Cau 888
+- Hoan Kim
+- Uni Dai Cao so 2
+- Hi-pro
+- Cay Tre
+- Kim Nguu
+
+Only claim exact product properties when the user, product label, supplier data, or verified source provides them.
 
 ## Audience Understanding
 
 Write for:
 
-- Small bakeries.
-- Home-based baking businesses.
-- Bakery workshops.
-- Cake shops.
-- Cafes or drink shops that use baking/ingredient add-ons.
-- Wholesale ingredient buyers.
-- Serious home bakers.
+- home bakers
+- beginners
+- online cake sellers
+- small bakery owners
+- drink-shop owners
+- home drink makers
+- wholesale or retail buyers
+- people who need clear ingredient advice
 
-Buyer concerns usually include:
+Common concerns:
 
-- Product fit for their cake/bread/drink item.
-- Price and stock availability.
-- Stable supply.
-- Sỉ/lẻ quantity.
-- Practical application.
-- Storage and handling.
-- Reducing waste or wrong ingredient choice.
+- not knowing which ingredient to choose
+- unstable results
+- common baking or drink-making mistakes
+- not knowing how to use the product correctly
+- not knowing how to store ingredients
+- needing ingredients that fit a small shop or home workflow
 
-## Ingredient Content Angles
+## Core Content Routes
 
-### Flour Selection
+### 1. Product Sales Content
 
-Use for posts about bột mì, bột bánh mì, bột bánh ngọt, and specific flour lines.
+This is the strongest route and should be treated as the default business direction.
+
+Use for:
+
+- product introductions
+- product-group recommendations
+- combo suggestions
+- stock or inquiry-led posts
+
+Writing pattern:
+
+- start from need, confusion, or a common failure
+- introduce the product as a practical option
+- explain what it can support
+- explain who it fits
+- close with a clear consultation or order CTA
+
+### 2. Recipe Support Content
+
+Use recipes to support product sales naturally.
+
+Goal:
+
+- show what the product can be used for
+- help customers imagine the result
+- create demand for ingredients
+
+Rules:
+
+- do not post disconnected recipes with no product link
+- every recipe should connect to at least one Duculaba product or product group
+- if the exact product is unknown, say product confirmation is needed instead of inventing it
+
+Suggested format:
+
+- dish or drink name
+- why it is worth trying
+- main ingredients
+- simple steps
+- one small tip
+- which Duculaba product or product group can support it
+- CTA to ask about product or recipe support
+
+### 3. Tips And Troubleshooting Content
+
+Use for:
+
+- why cake is dry
+- why dough does not rise
+- how to choose yeast
+- how to choose flour for bread, cake, or cookies
+- how to handle separated cream
+- how to choose topping for drinks
+- why a drink tastes weak or lacks richness
+
+Execution:
+
+- name the problem clearly
+- explain the likely cause simply
+- suggest a handling direction
+- connect naturally to a product or product group
+
+### 4. Ingredient Knowledge Content
+
+Use for:
+
+- ingredient differences
+- selection basics
+- storage basics
+- signs of wrong ingredient choice
+- beginner-friendly ingredient recommendations
+- ingredients suited for small shops or online sellers
+
+Do not invent technical specs, ingredients lists, origin, certification, or exact storage detail without source data.
+
+### 5. Lifestyle / Soft Usage Context
+
+Use lightly for:
+
+- small kitchen moments
+- weekend baking
+- testing a recipe batch
+- preparing ingredients for a new menu
+- making a homemade drink
+
+Rule:
+
+- lifestyle should still connect back to products, ingredient use, or real buyer situations
+- do not turn the page into a pure inspiration blog
+
+## Product And Ingredient Angles
+
+### Flour
 
 Good angles:
 
-- Choosing flour by product type: bread, sweet bread, sponge cake, cookies, buns, fried dough, or bakery production.
-- Difference between high-protein and lower-protein flour when relevant.
-- Why workshops should not choose flour only by price.
-- How stable flour supply helps small shops plan production.
+- which flour fits which product type
+- choosing flour for bread, sweet cakes, cookies, or shop production
+- why using the right flour reduces avoidable failure
 
 Caution:
 
-- Do not invent exact protein percentage, absorption, ash content, or technical spec unless provided or sourced.
+- do not invent protein percentage or technical flour specs
 
-### Premixes / Bột Trộn Sẵn
+### Yeast
 
 Good angles:
 
-- Saves prep steps for repeated production.
-- Helps new staff reduce measuring mistakes.
-- Useful for shops that need consistent output.
+- which yeast suits which type of dough
+- common usage mistakes
+- how wrong handling can affect rising
 
 Caution:
 
-- Do not guarantee identical results in all ovens/kitchens.
-- Mention that water ratio, mixing, resting, baking temperature, and equipment still affect outcome.
+- do not invent dosage or guarantee stable rise in all conditions
 
-### Additives / Phụ Gia
+### Butter / Cream / Cheese / Chocolate / Topping
 
 Good angles:
 
-- Explain purpose in simple buyer language: texture, stability, softness, volume, handling, or shelf-life support only when accurate.
-- Help shops understand that additives must be used đúng liều lượng and đúng mục đích.
+- what kind of dish or drink each group supports
+- how the ingredient changes aroma, richness, texture, or appearance
+- which ingredient group helps beginners or small shops work more easily
 
 Caution:
 
-- Do not give dosage or regulatory claims unless provided by product instruction or verified source.
-- Do not imply unrestricted use.
+- do not overclaim quality level without evidence
 
-### Cacao / Matcha / Flavoring
+### Drink Ingredients
 
 Good angles:
 
-- Product application in drinks, cakes, cookies, cream, filling, or topping.
-- Color, aroma, and cost fit for shop menu.
-- Stock planning for seasonal menu items.
+- topping choice for drinks
+- ingredients that help a drink feel richer or more attractive
+- simple add-on ideas for small drink shops
 
 Caution:
 
-- Do not claim pure/authentic/premium grade unless verified.
+- do not invent menu performance, margin, or profit outcomes
 
-### Storage And Handling
+### Storage Basics
 
 Good angles:
 
-- Keep flour and powders dry, sealed, away from moisture and strong odors.
-- Hot/humid weather can affect powder storage and clumping risk.
-- Shops should rotate stock and check packaging/date.
+- keep powders dry and sealed
+- avoid moisture and strong odors
+- rotate stock
+- check packaging and dates
 
 Caution:
 
-- Do not invent shelf life. Use product label or supplier information.
+- do not invent exact shelf life or exact storage temperature unless provided
 
-## Recipe And Application Rules
+## Recipe And Detail Rules
 
 If writing a recipe-style post:
 
-- Only give exact gram/ml, temperature, baking time, and yield when provided or verified.
-- If not provided, write it as an application idea or simple usage suggestion, not a complete formula.
-- Include storage, allergen, and failure-point notes when relevant.
-- Mention that oven, mixer, flour absorption, weather, and technique can affect results.
-
-Do not present generic internet recipes as Duculaba-exclusive unless the user confirms they are proprietary.
+- only give exact gram/ml, temperature, time, or yield when provided or verified
+- if exact details are not available, present it as a recipe idea or usage suggestion, not a full tested formula
+- mention that final results depend on ingredients, equipment, temperature, timing, and technique
 
 ## Sales Content Pattern
 
-Use this structure for sales-led product posts:
+Use this structure for sales-led posts:
 
-1. Real buyer situation: tiệm cần ổn định mẻ bánh, xưởng cần hàng đều, khách làm bánh mì/bánh ngọt, mùa nóng cần bảo quản kỹ, hoặc hàng về kho.
-2. Product introduction: name, category, and basic use.
-3. Practical application: what product it can support.
-4. Buying reason: sỉ/lẻ, stock, contact for price, or fit for production.
-5. CTA, footer, and hashtags from the brand skill.
-
-Example direction:
-
-- Weak: "Bột mì Địa Cầu 999 chất lượng cao, giá tốt."
-- Stronger: "Với tiệm làm bánh mì mỗi ngày, điều quan trọng không chỉ là giá bột mà còn là nguồn hàng ổn định để không bị đứt mẻ sản xuất. Địa Cầu 999 là một trong những dòng bột nhà Duculaba đang đẩy cho nhóm khách cần bột mì số lượng sỉ/lẻ."
-
-## Content Pillars
-
-Use these routes:
-
-- Product sales: flour and ingredient introduction.
-- Product application: which ingredient fits which baking/drink item.
-- Buyer advice: choose flour/additive by use case.
-- Tips and common mistakes: dough too dry, bread not rising, cake collapsed, cream unstable, powder clumping, wrong flour choice.
-- Light comparison: bột bánh mì vs bột bánh ngọt, premix vs self-mixing, cacao vs flavoring, butter/oil substitute use cases.
-- Stock and ordering: hàng về, giá hôm nay, sỉ/lẻ, quantity, contact.
-- Seasonal/trend use: holidays, hot weather storage, busy bakery season, menu trend, or "mỗi ngày làm một món ngon" ideas.
+1. customer need, failure point, or situation
+2. product or product-group introduction
+3. practical application
+4. why this matters for the buyer
+5. CTA, footer, and hashtags from the brand skill
 
 ## Final Self-Check
 
 Before returning content, verify:
 
-- Product category and use case are clear.
-- Claims are practical and safe.
-- No technical spec, dosage, nutrition, allergen-free, shelf-life, or guaranteed result is invented.
-- Recipe details are only exact when provided or verified.
-- Sales CTA is clear.
-- Brand skill handles footer, hashtags, tone, and watermark.
+- the post supports Duculaba as a sales page
+- useful information still leads back to product understanding or demand
+- product category and use case are clear
+- no unsupported claim, spec, or guarantee was invented
+- recipe detail is only exact when provided or verified
+- CTA is present when appropriate
+- footer, hashtags, watermark, and final brand behavior come from the brand skill
