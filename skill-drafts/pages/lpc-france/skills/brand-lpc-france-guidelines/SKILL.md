@@ -7,7 +7,7 @@ description: Brand, bilingual French-first content, visual, hashtag, watermark, 
 
 Use this skill for any task involving LPC France, French-market outsourcing, bilingual French/English fanpage content, BIM/design/drafting services, or construction technical content published under the LPC France page.
 
-Also apply the general `facebook-fanpage-content-guidelines` skill when available. For BIM, design, drafting, UBoot Beton, flat slab, green construction, ESG, or lead-generation topics, also apply `lpc-france-outsourcing-knowledge` when available.
+Also apply the general `facebook-fanpage-baseline-rules` skill when available. For BIM, design, drafting, UBoot Beton, flat slab, green construction, ESG, or lead-generation topics, also apply `lpc-france-outsourcing-knowledge` when available.
 
 This brand skill controls LPC France positioning, bilingual format, page voice, watermark safe zone, visual direction, hashtags, and publishing checks.
 

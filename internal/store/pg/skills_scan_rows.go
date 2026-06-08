@@ -16,6 +16,7 @@ type skillInfoRow struct {
 	ID         uuid.UUID      `db:"id"`
 	Name       string         `db:"name"`
 	Slug       string         `db:"slug"`
+	Folder     *string        `db:"folder"`
 	Desc       *string        `db:"description"`
 	Visibility string         `db:"visibility"`
 	Tags       pq.StringArray `db:"tags"`
@@ -36,6 +37,9 @@ type skillInfoRowWithFrontmatter struct {
 // toSkillInfo converts a skillInfoRow to store.SkillInfo, resolving computed fields from baseDir.
 func (r *skillInfoRow) toSkillInfo(baseDir string) store.SkillInfo {
 	info := buildSkillInfo(r.ID.String(), r.Name, r.Slug, r.Desc, r.Version, baseDir, r.FilePath)
+	if r.Folder != nil {
+		info.Folder = *r.Folder
+	}
 	info.Visibility = r.Visibility
 	info.Tags = []string(r.Tags)
 	info.IsSystem = r.IsSystem
@@ -76,6 +80,7 @@ type customSkillExportRow struct {
 	ID          uuid.UUID      `db:"id"`
 	Name        string         `db:"name"`
 	Slug        string         `db:"slug"`
+	Folder      string         `db:"folder"`
 	Description *string        `db:"description"`
 	Visibility  string         `db:"visibility"`
 	Version     int            `db:"version"`
@@ -91,6 +96,7 @@ func (r *customSkillExportRow) toCustomSkillExport() CustomSkillExport {
 		ID:          r.ID.String(),
 		Name:        r.Name,
 		Slug:        r.Slug,
+		Folder:      r.Folder,
 		Description: r.Description,
 		Visibility:  r.Visibility,
 		Version:     r.Version,

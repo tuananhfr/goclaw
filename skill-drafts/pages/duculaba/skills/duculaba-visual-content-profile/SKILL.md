@@ -258,7 +258,7 @@ Follow the brand skill and current watermark config.
 
 Fallback rule:
 
-- keep the top-left zone clean for the watermark
+- keep the top-left and bottom-centre zones clean for the watermark
 
 Do not place these in the top-left watermark zone:
 
@@ -269,6 +269,15 @@ Do not place these in the top-left watermark zone:
 - small readable detail
 - key packaging information
 
+Do not place these in the bottom-centre watermark zone:
+
+- CTA
+- hotline
+- footer-like text
+- product name
+- QR code
+- small readable detail
+
 ## Quality Filters
 
 Before approving a Duculaba visual, verify:
@@ -278,7 +287,7 @@ Before approving a Duculaba visual, verify:
 - specific-product sales posts use real product visuals whenever possible
 - the text amount fits the route
 - the image is easy to read on mobile
-- the top-left watermark zone remains clean
+- the top-left and bottom-centre watermark zones remain clean
 - no false packaging, false labels, or unsupported claims are implied visually
 
 ## Final Rule

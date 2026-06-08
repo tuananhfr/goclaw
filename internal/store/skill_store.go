@@ -11,6 +11,7 @@ type SkillInfo struct {
 	ID          string   `json:"id,omitempty" db:"id"` // DB UUID
 	Name        string   `json:"name" db:"name"`
 	Slug        string   `json:"slug" db:"slug"`
+	Folder      string   `json:"folder,omitempty" db:"folder"`
 	Path        string   `json:"path" db:"path"`
 	BaseDir     string   `json:"baseDir" db:"-"`
 	Source      string   `json:"source" db:"-"`
@@ -67,6 +68,7 @@ type EmbeddingSkillSearcher interface {
 type SkillCreateParams struct {
 	Name        string
 	Slug        string
+	Folder      string
 	Description *string
 	OwnerID     string
 	Visibility  string
@@ -84,6 +86,7 @@ type SkillWithGrantStatus struct {
 	ID          uuid.UUID `json:"id" db:"id"`
 	Name        string    `json:"name" db:"name"`
 	Slug        string    `json:"slug" db:"slug"`
+	Folder      string    `json:"folder,omitempty" db:"folder"`
 	Description string    `json:"description" db:"description"`
 	Visibility  string    `json:"visibility" db:"visibility"`
 	Version     int       `json:"version" db:"version"`

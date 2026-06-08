@@ -228,6 +228,7 @@ func (h *SkillsHandler) handleUpload(w http.ResponseWriter, r *http.Request) {
 	skill := store.SkillCreateParams{
 		Name:        name,
 		Slug:        slug,
+		Folder:      normalizeSkillFolder(frontmatter["folder"]),
 		Description: &desc,
 		OwnerID:     userID,
 		Visibility:  "internal",

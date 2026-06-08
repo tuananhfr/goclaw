@@ -8,12 +8,12 @@ This folder keeps editable skill source folders, page-specific brand kits, and u
 skill-drafts/
   shared/
     drive-reference-search-guidelines/
-    facebook-fanpage-content-guidelines/
-    fanpage-content-creator-guidelines/
-    fanpage-design-guidelines/
-    fanpage-grounded-content-guidelines/
-    fanpage-internet-research-guidelines/
-    fanpage-lead-orchestration-guidelines/
+    facebook-fanpage-baseline-rules/
+    fanpage-content-writer-guidelines/
+    fanpage-visual-creative-guidelines/
+    fanpage-grounded-content-rules/
+    fanpage-research-agent-guidelines/
+    fanpage-page-manager-orchestration-guidelines/
     gpt-image-2-pro-max/
     packages/
 
@@ -78,27 +78,27 @@ skill-drafts/
 Use these across fanpage teams:
 
 ```text
-shared/facebook-fanpage-content-guidelines/
+shared/facebook-fanpage-baseline-rules/
 shared/drive-reference-search-guidelines/
-shared/fanpage-content-creator-guidelines/
-shared/fanpage-design-guidelines/
-shared/fanpage-grounded-content-guidelines/
-shared/fanpage-internet-research-guidelines/
-shared/fanpage-lead-orchestration-guidelines/
+shared/fanpage-content-writer-guidelines/
+shared/fanpage-visual-creative-guidelines/
+shared/fanpage-grounded-content-rules/
+shared/fanpage-research-agent-guidelines/
+shared/fanpage-page-manager-orchestration-guidelines/
 shared/gpt-image-2-pro-max/
 ```
 
 Upload packages:
 
 ```text
-shared/packages/facebook-fanpage-content-guidelines.zip
+shared/packages/facebook-fanpage-baseline-rules.zip
 shared/packages/drive-reference-search-guidelines.zip
 shared/packages/fanpage-brand-qa-claim-safety-guidelines.zip
-shared/packages/fanpage-content-creator-guidelines.zip
-shared/packages/fanpage-design-guidelines.zip
-shared/packages/fanpage-grounded-content-guidelines.zip
-shared/packages/fanpage-internet-research-guidelines.zip
-shared/packages/fanpage-lead-orchestration-guidelines.zip
+shared/packages/fanpage-content-writer-guidelines.zip
+shared/packages/fanpage-visual-creative-guidelines.zip
+shared/packages/fanpage-grounded-content-rules.zip
+shared/packages/fanpage-research-agent-guidelines.zip
+shared/packages/fanpage-page-manager-orchestration-guidelines.zip
 shared/packages/fanpage-sales-angle-guidelines.zip
 shared/packages/gpt-image-2-pro-max.zip
 shared/packages/gpt-image-2-pro-max.tar.gz
@@ -241,22 +241,22 @@ pages/ki-su-san-phang/brand-kits/ki-su-san-phang/assets/fonts/BeVietnamPro-Extra
 Research agent:
 
 ```text
-shared/packages/fanpage-internet-research-guidelines.zip
+shared/packages/fanpage-research-agent-guidelines.zip
 ```
 
 Content agent:
 
 ```text
-shared/packages/facebook-fanpage-content-guidelines.zip
-shared/packages/fanpage-content-creator-guidelines.zip
-shared/packages/fanpage-grounded-content-guidelines.zip
+shared/packages/facebook-fanpage-baseline-rules.zip
+shared/packages/fanpage-content-writer-guidelines.zip
+shared/packages/fanpage-grounded-content-rules.zip
 ```
 
 Design agent:
 
 ```text
-shared/packages/facebook-fanpage-content-guidelines.zip
-shared/packages/fanpage-design-guidelines.zip
+shared/packages/facebook-fanpage-baseline-rules.zip
+shared/packages/fanpage-visual-creative-guidelines.zip
 shared/packages/drive-reference-search-guidelines.zip
 ```
 
@@ -265,9 +265,9 @@ shared/packages/drive-reference-search-guidelines.zip
 Pizza Hip'S Lead:
 
 ```text
-shared/packages/fanpage-lead-orchestration-guidelines.zip
-shared/packages/facebook-fanpage-content-guidelines.zip
-shared/packages/fanpage-grounded-content-guidelines.zip
+shared/packages/fanpage-page-manager-orchestration-guidelines.zip
+shared/packages/facebook-fanpage-baseline-rules.zip
+shared/packages/fanpage-grounded-content-rules.zip
 pages/pizza-hips/packages/brand-pizza-hips-guidelines.zip
 pages/pizza-hips/packages/pizza-hips-franchise-knowledge.zip
 ```
@@ -275,9 +275,9 @@ pages/pizza-hips/packages/pizza-hips-franchise-knowledge.zip
 LPC France Lead:
 
 ```text
-shared/packages/fanpage-lead-orchestration-guidelines.zip
-shared/packages/facebook-fanpage-content-guidelines.zip
-shared/packages/fanpage-grounded-content-guidelines.zip
+shared/packages/fanpage-page-manager-orchestration-guidelines.zip
+shared/packages/facebook-fanpage-baseline-rules.zip
+shared/packages/fanpage-grounded-content-rules.zip
 pages/lpc-france/packages/brand-lpc-france-guidelines.zip
 pages/lpc-france/packages/lpc-france-outsourcing-knowledge.zip
 ```
@@ -285,9 +285,9 @@ pages/lpc-france/packages/lpc-france-outsourcing-knowledge.zip
 UBOT Vietnam Lead:
 
 ```text
-shared/packages/fanpage-lead-orchestration-guidelines.zip
-shared/packages/facebook-fanpage-content-guidelines.zip
-shared/packages/fanpage-grounded-content-guidelines.zip
+shared/packages/fanpage-page-manager-orchestration-guidelines.zip
+shared/packages/facebook-fanpage-baseline-rules.zip
+shared/packages/fanpage-grounded-content-rules.zip
 pages/ubot-vietnam/packages/brand-ubot-vietnam-guidelines.zip
 pages/ubot-vietnam/packages/ubot-vietnam-floor-system-knowledge.zip
 ```
@@ -295,9 +295,9 @@ pages/ubot-vietnam/packages/ubot-vietnam-floor-system-knowledge.zip
 Duculaba Lead:
 
 ```text
-shared/packages/fanpage-lead-orchestration-guidelines.zip
-shared/packages/facebook-fanpage-content-guidelines.zip
-shared/packages/fanpage-grounded-content-guidelines.zip
+shared/packages/fanpage-page-manager-orchestration-guidelines.zip
+shared/packages/facebook-fanpage-baseline-rules.zip
+shared/packages/fanpage-grounded-content-rules.zip
 pages/duculaba/packages/brand-duculaba-guidelines.zip
 pages/duculaba/packages/duculaba-baking-supply-knowledge.zip
 ```
@@ -305,9 +305,9 @@ pages/duculaba/packages/duculaba-baking-supply-knowledge.zip
 BakeTek Lead:
 
 ```text
-shared/packages/fanpage-lead-orchestration-guidelines.zip
-shared/packages/facebook-fanpage-content-guidelines.zip
-shared/packages/fanpage-grounded-content-guidelines.zip
+shared/packages/fanpage-page-manager-orchestration-guidelines.zip
+shared/packages/facebook-fanpage-baseline-rules.zip
+shared/packages/fanpage-grounded-content-rules.zip
 pages/baketek/packages/brand-baketek-guidelines.zip
 pages/baketek/packages/baketek-recipe-culture-knowledge.zip
 ```
@@ -315,9 +315,9 @@ pages/baketek/packages/baketek-recipe-culture-knowledge.zip
 Ki Su San Phang Lead:
 
 ```text
-shared/packages/fanpage-lead-orchestration-guidelines.zip
-shared/packages/facebook-fanpage-content-guidelines.zip
-shared/packages/fanpage-grounded-content-guidelines.zip
+shared/packages/fanpage-page-manager-orchestration-guidelines.zip
+shared/packages/facebook-fanpage-baseline-rules.zip
+shared/packages/fanpage-grounded-content-rules.zip
 pages/ki-su-san-phang/packages/brand-ki-su-san-phang-guidelines.zip
 pages/ki-su-san-phang/packages/ki-su-san-phang-structural-knowledge.zip
 ```
@@ -330,8 +330,8 @@ Shared skill example:
 
 ```powershell
 tar -a -cf `
-  skill-drafts\shared\packages\facebook-fanpage-content-guidelines.zip `
-  -C skill-drafts\shared\facebook-fanpage-content-guidelines .
+  skill-drafts\shared\packages\facebook-fanpage-baseline-rules.zip `
+  -C skill-drafts\shared\facebook-fanpage-baseline-rules .
 ```
 
 Page skill example:

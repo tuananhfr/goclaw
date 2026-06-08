@@ -31,6 +31,7 @@ interface SkillEditDialogProps {
 export function SkillEditDialog({ skill, onClose, onSave }: SkillEditDialogProps) {
   const { t } = useTranslation("skills");
   const [name, setName] = useState(skill.name);
+  const [folder, setFolder] = useState(skill.folder ?? "");
   const [description, setDescription] = useState(skill.description);
   const [visibility, setVisibility] = useState(skill.visibility ?? "private");
   const [tags, setTags] = useState<string[]>(skill.tags ?? []);
@@ -39,6 +40,7 @@ export function SkillEditDialog({ skill, onClose, onSave }: SkillEditDialogProps
 
   useEffect(() => {
     setName(skill.name);
+    setFolder(skill.folder ?? "");
     setDescription(skill.description);
     setVisibility(skill.visibility ?? "private");
     setTags(skill.tags ?? []);
@@ -60,7 +62,7 @@ export function SkillEditDialog({ skill, onClose, onSave }: SkillEditDialogProps
     if (!skill.id) return;
     setLoading(true);
     try {
-      await onSave(skill.id, { name, description, visibility, tags });
+      await onSave(skill.id, { name, folder, description, visibility, tags });
       onClose();
     } catch {
       // toast shown by hook — keep dialog open
@@ -93,6 +95,16 @@ export function SkillEditDialog({ skill, onClose, onSave }: SkillEditDialogProps
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="skill-folder">{t("edit.folder", { defaultValue: "Folder" })}</Label>
+            <Input
+              id="skill-folder"
+              value={folder}
+              onChange={(e) => setFolder(e.target.value)}
+              placeholder={t("edit.folderPlaceholder", { defaultValue: "shared/content or brands/pizza-hips" })}
             />
           </div>
 

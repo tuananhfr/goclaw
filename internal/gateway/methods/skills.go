@@ -52,6 +52,9 @@ func (m *SkillsMethods) handleList(ctx context.Context, client *gateway.Client, 
 		if s.ID != "" {
 			entry["id"] = s.ID
 		}
+		if s.Folder != "" {
+			entry["folder"] = s.Folder
+		}
 		if s.Visibility != "" {
 			entry["visibility"] = s.Visibility
 		}
@@ -128,6 +131,9 @@ func (m *SkillsMethods) handleGet(ctx context.Context, client *gateway.Client, r
 	}
 	if info.ID != "" {
 		resp["id"] = info.ID
+	}
+	if info.Folder != "" {
+		resp["folder"] = info.Folder
 	}
 	if info.Visibility != "" {
 		resp["visibility"] = info.Visibility

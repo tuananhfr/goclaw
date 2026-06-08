@@ -9,8 +9,8 @@ Use this skill for any task involving UBOT VIỆT NAM - Sàn phẳng không dầ
 
 Also apply:
 
-- `facebook-fanpage-content-guidelines` for Facebook structure.
-- `fanpage-grounded-content-guidelines` for real cases, real project situations, evidence, and non-generic content.
+- `facebook-fanpage-baseline-rules` for Facebook structure.
+- `fanpage-grounded-content-rules` for real cases, real project situations, evidence, and non-generic content.
 - `ubot-vietnam-floor-system-knowledge` for technical floor-system knowledge and claim safety.
 
 ## Page Basics

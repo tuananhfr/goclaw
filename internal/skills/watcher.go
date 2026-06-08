@@ -71,6 +71,19 @@ func (w *Watcher) Start(ctx context.Context) error {
 			if err := w.fsw.Add(subDir); err == nil {
 				watched++
 			}
+			nested, err := os.ReadDir(subDir)
+			if err != nil {
+				continue
+			}
+			for _, child := range nested {
+				if !child.IsDir() {
+					continue
+				}
+				childDir := filepath.Join(subDir, child.Name())
+				if err := w.fsw.Add(childDir); err == nil {
+					watched++
+				}
+			}
 		}
 	}
 
@@ -128,6 +141,14 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 	if event.Has(fsnotify.Create) {
 		if info, err := os.Stat(path); err == nil && info.IsDir() {
 			_ = w.fsw.Add(path)
+			if children, readErr := os.ReadDir(path); readErr == nil {
+				for _, child := range children {
+					if !child.IsDir() {
+						continue
+					}
+					_ = w.fsw.Add(filepath.Join(path, child.Name()))
+				}
+			}
 			slog.Debug("skills watcher: watching new dir", "path", path)
 		}
 	}

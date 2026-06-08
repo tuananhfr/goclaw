@@ -214,14 +214,14 @@ func (s *PGSkillStore) ListWithGrantStatus(ctx context.Context, agentID uuid.UUI
 		tenantCond = fmt.Sprintf(" AND (s.is_system = true OR s.tenant_id = $%d)", 2)
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT s.id, s.name, s.slug, COALESCE(s.description, ''), s.visibility, s.version,
+		`SELECT s.id, s.name, s.slug, COALESCE(s.folder, ''), COALESCE(s.description, ''), s.visibility, s.version,
 		        (sag.id IS NOT NULL) AS granted,
 		        sag.pinned_version,
 		        s.is_system
 		 FROM skills s
 		 LEFT JOIN skill_agent_grants sag ON s.id = sag.skill_id AND sag.agent_id = $1
 		 WHERE s.status = 'active'`+tenantCond+`
-		 ORDER BY s.name`, append([]any{agentID}, tcArgs...)...)
+		 ORDER BY COALESCE(s.folder, ''), s.name`, append([]any{agentID}, tcArgs...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +230,7 @@ func (s *PGSkillStore) ListWithGrantStatus(ctx context.Context, agentID uuid.UUI
 	var result []store.SkillWithGrantStatus
 	for rows.Next() {
 		var r store.SkillWithGrantStatus
-		if err := rows.Scan(&r.ID, &r.Name, &r.Slug, &r.Description, &r.Visibility, &r.Version, &r.Granted, &r.PinnedVer, &r.IsSystem); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.Slug, &r.Folder, &r.Description, &r.Visibility, &r.Version, &r.Granted, &r.PinnedVer, &r.IsSystem); err != nil {
 			slog.Warn("skill_grants: scan error in ListWithGrantStatus", "error", err)
 			continue
 		}

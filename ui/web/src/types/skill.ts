@@ -2,6 +2,7 @@ export interface SkillInfo {
   id?: string;
   name: string;
   slug?: string;
+  folder?: string;
   description: string;
   source: string;
   visibility?: string;
@@ -31,6 +32,7 @@ export interface SkillWithGrant {
   id: string;
   name: string;
   slug: string;
+  folder?: string;
   description: string;
   visibility: string;
   version: number;

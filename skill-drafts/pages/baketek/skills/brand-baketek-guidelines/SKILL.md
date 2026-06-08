@@ -9,8 +9,8 @@ Use this skill for any task involving BakeTek - Công nghệ và Nguyên liệu 
 
 Also apply:
 
-- `facebook-fanpage-content-guidelines` for Facebook post structure.
-- `fanpage-grounded-content-guidelines` for real situations, seasonal hooks, customer scenes, and non-generic content.
+- `facebook-fanpage-baseline-rules` for Facebook post structure.
+- `fanpage-grounded-content-rules` for real situations, seasonal hooks, customer scenes, and non-generic content.
 - `baketek-recipe-culture-knowledge` for recipe detail, baking technique, ingredient use, trend/culture angles, and food-claim safety.
 
 ## Page Basics

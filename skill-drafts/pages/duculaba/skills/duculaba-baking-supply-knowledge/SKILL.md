@@ -9,11 +9,11 @@ Use this skill when the task involves Duculaba content about baking ingredients,
 
 Also apply:
 
-- `facebook-fanpage-content-guidelines` for Facebook structure and baseline hygiene.
+- `facebook-fanpage-baseline-rules` for Facebook structure and baseline hygiene.
 - `brand-duculaba-guidelines` for tone, footer, hashtags, watermark, and sales-first positioning.
 - `duculaba-visual-content-profile` when image direction or image QA matters.
-- `fanpage-grounded-content-guidelines` when the post needs believable buyer context.
-- `fanpage-internet-research-guidelines` when technical food-safety, regulation, nutrition, or current market claims need sources.
+- `fanpage-grounded-content-rules` when the post needs believable buyer context.
+- `fanpage-research-agent-guidelines` when technical food-safety, regulation, nutrition, or current market claims need sources.
 
 ## Role
 

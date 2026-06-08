@@ -9,8 +9,8 @@ Use this skill for any Facebook work related to `Sỉ Pizza nướng lửa Hip'S
 
 Also apply:
 
-- `facebook-fanpage-content-guidelines`
-- `fanpage-grounded-content-guidelines`
+- `facebook-fanpage-baseline-rules`
+- `fanpage-grounded-content-rules`
 - `si-pizza-nuong-lua-hips-product-business-knowledge`
 - `si-pizza-nuong-lua-hips-visual-content-profile` when image direction matters
 

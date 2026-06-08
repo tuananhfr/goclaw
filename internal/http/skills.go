@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -27,6 +28,10 @@ var (
 	aggregateInstallDeps = skills.AggregateMissingDeps
 	installManagedDeps   = skills.InstallDeps
 )
+
+var skillAllowedFields = map[string]bool{
+	"name": true, "description": true, "visibility": true, "tags": true, "folder": true,
+}
 
 // SkillsHandler handles skill management HTTP endpoints.
 type SkillsHandler struct {
@@ -208,12 +213,16 @@ func (h *SkillsHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	if !bindJSON(w, r, locale, &updates) {
 		return
 	}
+	updates = filterAllowedKeys(updates, skillAllowedFields)
 	// Prevent changing sensitive fields (use /toggle endpoint for enabled)
 	delete(updates, "id")
 	delete(updates, "owner_id")
 	delete(updates, "file_path")
 	delete(updates, "is_system")
 	delete(updates, "enabled")
+	if folder, ok := updates["folder"]; ok {
+		updates["folder"] = normalizeSkillFolder(asString(folder))
+	}
 
 	if err := h.skills.UpdateSkill(r.Context(), id, updates); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -224,6 +233,32 @@ func (h *SkillsHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	h.emitCacheInvalidate(bus.CacheKindSkills, idStr, uuid.Nil)
 	emitAudit(h.msgBus, r, "skill.updated", "skill", idStr)
 	writeJSON(w, http.StatusOK, map[string]string{"ok": "true"})
+}
+
+func asString(v any) string {
+	switch typed := v.(type) {
+	case string:
+		return typed
+	default:
+		return ""
+	}
+}
+
+func normalizeSkillFolder(raw string) string {
+	trimmed := strings.TrimSpace(strings.ReplaceAll(raw, "\\", "/"))
+	if trimmed == "" {
+		return ""
+	}
+	parts := strings.Split(trimmed, "/")
+	clean := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" || part == "." || part == ".." {
+			continue
+		}
+		clean = append(clean, part)
+	}
+	return strings.Join(clean, "/")
 }
 
 func (h *SkillsHandler) handleDelete(w http.ResponseWriter, r *http.Request) {

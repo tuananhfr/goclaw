@@ -86,12 +86,13 @@ func (s *SQLiteSkillStore) BuildSummary(ctx context.Context, allowList []string)
 func (s *SQLiteSkillStore) GetSkill(ctx context.Context, name string) (*store.SkillInfo, bool) {
 	var id uuid.UUID
 	var skillName, slug, visibility string
+	var folder *string
 	var desc *string
 	var tagsJSON []byte
 	var version int
 	var isSystem bool
 	var filePath *string
-	q := "SELECT id, name, slug, description, visibility, tags, version, is_system, file_path FROM skills WHERE slug = ? AND status = 'active'"
+	q := "SELECT id, name, slug, folder, description, visibility, tags, version, is_system, file_path FROM skills WHERE slug = ? AND status = 'active'"
 	args := []any{name}
 	if !store.IsCrossTenant(ctx) {
 		tid := store.TenantIDFromContext(ctx)
@@ -101,10 +102,13 @@ func (s *SQLiteSkillStore) GetSkill(ctx context.Context, name string) (*store.Sk
 		q += " AND (is_system = 1 OR tenant_id = ?)"
 		args = append(args, tid)
 	}
-	if err := s.db.QueryRowContext(ctx, q, args...).Scan(&id, &skillName, &slug, &desc, &visibility, &tagsJSON, &version, &isSystem, &filePath); err != nil {
+	if err := s.db.QueryRowContext(ctx, q, args...).Scan(&id, &skillName, &slug, &folder, &desc, &visibility, &tagsJSON, &version, &isSystem, &filePath); err != nil {
 		return nil, false
 	}
 	info := buildSkillInfo(id.String(), skillName, slug, desc, version, s.baseDir, filePath)
+	if folder != nil {
+		info.Folder = *folder
+	}
 	info.Visibility = visibility
 	scanJSONStringArray(tagsJSON, &info.Tags)
 	info.IsSystem = isSystem
@@ -140,12 +144,13 @@ func (s *SQLiteSkillStore) FilterSkills(ctx context.Context, allowList []string)
 // GetSkillByID returns a SkillInfo for any skill by UUID regardless of status.
 func (s *SQLiteSkillStore) GetSkillByID(ctx context.Context, id uuid.UUID) (store.SkillInfo, bool) {
 	var name, slug, visibility, status string
+	var folder *string
 	var desc *string
 	var tagsJSON, depsRaw []byte
 	var version int
 	var isSystem, enabled bool
 	var filePath *string
-	q := `SELECT name, slug, description, visibility, tags, version, is_system, status, enabled, deps, file_path
+	q := `SELECT name, slug, folder, description, visibility, tags, version, is_system, status, enabled, deps, file_path
 		 FROM skills WHERE id = ?`
 	args := []any{id}
 	if !store.IsCrossTenant(ctx) {
@@ -156,11 +161,14 @@ func (s *SQLiteSkillStore) GetSkillByID(ctx context.Context, id uuid.UUID) (stor
 		q += " AND (is_system = 1 OR tenant_id = ?)"
 		args = append(args, tid)
 	}
-	if err := s.db.QueryRowContext(ctx, q, args...).Scan(&name, &slug, &desc, &visibility, &tagsJSON,
+	if err := s.db.QueryRowContext(ctx, q, args...).Scan(&name, &slug, &folder, &desc, &visibility, &tagsJSON,
 		&version, &isSystem, &status, &enabled, &depsRaw, &filePath); err != nil {
 		return store.SkillInfo{}, false
 	}
 	info := buildSkillInfo(id.String(), name, slug, desc, version, s.baseDir, filePath)
+	if folder != nil {
+		info.Folder = *folder
+	}
 	info.Visibility = visibility
 	scanJSONStringArray(tagsJSON, &info.Tags)
 	info.IsSystem = isSystem
@@ -229,11 +237,11 @@ func (s *SQLiteSkillStore) UpsertSystemSkill(ctx context.Context, p store.SkillC
 		}
 		fmJSON := marshalFrontmatter(p.Frontmatter)
 		_, err = s.db.ExecContext(ctx,
-			`UPDATE skills SET name = ?, description = ?, version = ?, frontmatter = ?,
+			`UPDATE skills SET name = ?, folder = ?, description = ?, version = ?, frontmatter = ?,
 			 file_path = ?, file_size = ?, file_hash = ?, is_system = 1,
 			 visibility = 'public', status = ?, updated_at = ?
 			 WHERE id = ?`,
-			p.Name, p.Description, p.Version, fmJSON,
+			p.Name, p.Folder, p.Description, p.Version, fmJSON,
 			p.FilePath, p.FileSize, p.FileHash, p.Status, time.Now().UTC(), existingID,
 		)
 		if err != nil {
@@ -247,10 +255,10 @@ func (s *SQLiteSkillStore) UpsertSystemSkill(ctx context.Context, p store.SkillC
 	fmJSON := marshalFrontmatter(p.Frontmatter)
 	now := time.Now().UTC()
 	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO skills (id, name, slug, description, owner_id, visibility, version, status,
+		`INSERT INTO skills (id, name, slug, folder, description, owner_id, visibility, version, status,
 		 is_system, frontmatter, file_path, file_size, file_hash, tenant_id, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, 'system', 'public', ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`,
-		id, p.Name, p.Slug, p.Description, p.Version, p.Status,
+		 VALUES (?, ?, ?, ?, ?, 'system', 'public', ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`,
+		id, p.Name, p.Slug, p.Folder, p.Description, p.Version, p.Status,
 		fmJSON, p.FilePath, p.FileSize, p.FileHash, store.MasterTenantID, now, now,
 	)
 	if err != nil {

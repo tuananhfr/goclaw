@@ -16,8 +16,8 @@ func (s *SQLiteSkillStore) CreateSkill(name, slug string, description *string, o
 	id := store.GenNewID()
 	now := time.Now().UTC()
 	_, err := s.db.Exec(
-		`INSERT INTO skills (id, name, slug, description, owner_id, visibility, version, status, file_path, file_size, file_hash, tenant_id, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO skills (id, name, slug, folder, description, owner_id, visibility, version, status, file_path, file_size, file_hash, tenant_id, created_at, updated_at)
+		 VALUES (?, ?, ?, '', ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)`,
 		id, name, slug, description, ownerID, visibility, version, filePath, fileSize, fileHash, store.MasterTenantID, now, now,
 	)
 	if err == nil {
@@ -138,11 +138,11 @@ func (s *SQLiteSkillStore) CreateSkillManaged(ctx context.Context, p store.Skill
 	if err == nil {
 		// Update existing.
 		_, err = tx.ExecContext(ctx,
-			`UPDATE skills SET name = ?, description = ?, version = ?, frontmatter = ?,
+			`UPDATE skills SET name = ?, folder = ?, description = ?, version = ?, frontmatter = ?,
 			 file_path = ?, file_size = ?, file_hash = ?, deps = ?,
 			 visibility = CASE WHEN status IN ('archived', 'deleted') THEN 'private' ELSE visibility END,
 			 status = ?, updated_at = ? WHERE id = ?`,
-			p.Name, p.Description, version, fmJSON,
+			p.Name, p.Folder, p.Description, version, fmJSON,
 			p.FilePath, p.FileSize, p.FileHash, depsJSON, status, now, existingID,
 		)
 		if err != nil {
@@ -153,9 +153,9 @@ func (s *SQLiteSkillStore) CreateSkillManaged(ctx context.Context, p store.Skill
 		// Insert new.
 		newID := store.GenNewID()
 		_, err = tx.ExecContext(ctx,
-			`INSERT INTO skills (id, name, slug, description, owner_id, tenant_id, visibility, version, status, deps, frontmatter, file_path, file_size, file_hash, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			newID, p.Name, p.Slug, p.Description, p.OwnerID, tenantID, p.Visibility, version,
+			`INSERT INTO skills (id, name, slug, folder, description, owner_id, tenant_id, visibility, version, status, deps, frontmatter, file_path, file_size, file_hash, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			newID, p.Name, p.Slug, p.Folder, p.Description, p.OwnerID, tenantID, p.Visibility, version,
 			status, depsJSON, fmJSON, p.FilePath, p.FileSize, p.FileHash, now, now,
 		)
 		if err != nil {

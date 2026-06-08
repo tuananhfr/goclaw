@@ -31,6 +31,13 @@ type seededSkill struct {
 	baseDir string // managed dir path for ScanSkillDeps
 }
 
+type bundledSkillCandidate struct {
+	slug     string
+	group    string
+	skillDir string
+	skillFile string
+}
+
 // Seeder seeds system/bundled skills into the database.
 type Seeder struct {
 	bundledDir string           // source: /app/bundled-skills/ or skills/ (dev)
@@ -51,25 +58,15 @@ func NewSeeder(bundledDir, managedDir string, store SystemSkillStore) *Seeder {
 // Does NOT check dependencies (non-blocking). Call CheckDepsAsync after startup.
 // All skills are seeded as status="active" initially; async check may archive some.
 func (s *Seeder) Seed(ctx context.Context) (seeded int, skipped int, skills []seededSkill, err error) {
-	entries, err := os.ReadDir(s.bundledDir)
+	candidates, err := s.discoverBundledSkillCandidates()
 	if err != nil {
 		return 0, 0, nil, fmt.Errorf("read bundled dir: %w", err)
 	}
 
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		slug := e.Name()
-
-		// Skip _shared/ directories (not skills, just shared code)
-		if strings.HasPrefix(slug, "_") {
-			s.copySharedDir(slug)
-			continue
-		}
-
-		skillDir := filepath.Join(s.bundledDir, slug)
-		skillFile := filepath.Join(skillDir, "SKILL.md")
+	for _, candidate := range candidates {
+		slug := candidate.slug
+		skillDir := candidate.skillDir
+		skillFile := candidate.skillFile
 
 		data, err := os.ReadFile(skillFile)
 		if err != nil {
@@ -106,6 +103,7 @@ func (s *Seeder) Seed(ctx context.Context) (seeded int, skipped int, skills []se
 		p := store.SkillCreateParams{
 			Name:        name,
 			Slug:        slug,
+			Folder:      coalesceSeedSkillFolder(fmMap["folder"], candidate.group),
 			Description: &desc,
 			OwnerID:     "system",
 			Visibility:  "public",
@@ -154,6 +152,63 @@ func (s *Seeder) Seed(ctx context.Context) (seeded int, skipped int, skills []se
 		s.store.BumpVersion()
 	}
 	return seeded, skipped, skills, nil
+}
+
+func (s *Seeder) discoverBundledSkillCandidates() ([]bundledSkillCandidate, error) {
+	entries, err := os.ReadDir(s.bundledDir)
+	if err != nil {
+		return nil, err
+	}
+
+	var out []bundledSkillCandidate
+	seen := make(map[string]bool)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasPrefix(name, "_") {
+			s.copySharedDir(name)
+			continue
+		}
+
+		directDir := filepath.Join(s.bundledDir, name)
+		directSkill := filepath.Join(directDir, "SKILL.md")
+		if _, err := os.Stat(directSkill); err == nil {
+			if !seen[name] {
+				out = append(out, bundledSkillCandidate{
+					slug:      name,
+					skillDir:  directDir,
+					skillFile: directSkill,
+				})
+				seen[name] = true
+			}
+			continue
+		}
+
+		children, err := os.ReadDir(directDir)
+		if err != nil {
+			continue
+		}
+		for _, child := range children {
+			if !child.IsDir() || strings.HasPrefix(child.Name(), "_") || seen[child.Name()] {
+				continue
+			}
+			childDir := filepath.Join(directDir, child.Name())
+			childSkill := filepath.Join(childDir, "SKILL.md")
+			if _, err := os.Stat(childSkill); err != nil {
+				continue
+			}
+			out = append(out, bundledSkillCandidate{
+				slug:      child.Name(),
+				group:     name,
+				skillDir:  childDir,
+				skillFile: childSkill,
+			})
+			seen[child.Name()] = true
+		}
+	}
+	return out, nil
 }
 
 // CheckDepsAsync checks dependencies for seeded skills in a background goroutine.
@@ -296,4 +351,28 @@ func needsReCopy(bundledDir, managedDir string) bool {
 		return true // dst scripts dir missing
 	}
 	return len(dstEntries) < len(srcEntries)
+}
+
+func normalizeSeedSkillFolder(raw string) string {
+	trimmed := strings.TrimSpace(strings.ReplaceAll(raw, "\\", "/"))
+	if trimmed == "" {
+		return ""
+	}
+	parts := strings.Split(trimmed, "/")
+	clean := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" || part == "." || part == ".." {
+			continue
+		}
+		clean = append(clean, part)
+	}
+	return strings.Join(clean, "/")
+}
+
+func coalesceSeedSkillFolder(raw, fallback string) string {
+	if normalized := normalizeSeedSkillFolder(raw); normalized != "" {
+		return normalized
+	}
+	return normalizeSeedSkillFolder(fallback)
 }

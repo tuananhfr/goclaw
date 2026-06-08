@@ -13,6 +13,7 @@ type CustomSkillExport struct {
 	ID          string          `json:"id" db:"-"` // UUID string — used as key for grant references within archive
 	Name        string          `json:"name" db:"name"`
 	Slug        string          `json:"slug" db:"slug"`
+	Folder      string          `json:"folder,omitempty" db:"folder"`
 	Description *string         `json:"description,omitempty" db:"description"`
 	Visibility  string          `json:"visibility" db:"visibility"`
 	Version     int             `json:"version" db:"version"`
@@ -42,9 +43,9 @@ func ExportCustomSkills(ctx context.Context, db *sql.DB) ([]CustomSkillExport, e
 	}
 	var scanned []customSkillExportRow
 	if err := pkgSqlxDB.SelectContext(ctx, &scanned,
-		"SELECT id, name, slug, description, visibility, version, frontmatter, tags, deps, file_path"+
+		"SELECT id, name, slug, COALESCE(folder, '') AS folder, description, visibility, version, frontmatter, tags, deps, file_path"+
 			" FROM skills WHERE is_system = false"+tc+
-			" ORDER BY name",
+			" ORDER BY COALESCE(folder, ''), name",
 		tcArgs...,
 	); err != nil {
 		return nil, err

@@ -119,6 +119,7 @@ func (h *SkillsHandler) writeSkillsExportArchive(ctx context.Context, w io.Write
 			ID          string   `json:"id"`
 			Name        string   `json:"name"`
 			Slug        string   `json:"slug"`
+			Folder      string   `json:"folder,omitempty"`
 			Description *string  `json:"description,omitempty"`
 			Visibility  string   `json:"visibility"`
 			Version     int      `json:"version"`
@@ -128,6 +129,7 @@ func (h *SkillsHandler) writeSkillsExportArchive(ctx context.Context, w io.Write
 			ID:          sk.ID,
 			Name:        sk.Name,
 			Slug:        sk.Slug,
+			Folder:      sk.Folder,
 			Description: sk.Description,
 			Visibility:  sk.Visibility,
 			Version:     sk.Version,

@@ -139,6 +139,7 @@ func (t *PublishSkillTool) Execute(ctx context.Context, args map[string]any) *Re
 	params := store.SkillCreateParams{
 		Name:        name,
 		Slug:        slug,
+		Folder:      normalizeToolSkillFolder(frontmatter["folder"]),
 		Description: &desc,
 		OwnerID:     ownerID,
 		Visibility:  "private",
@@ -267,4 +268,21 @@ func dirSize(path string) (int64, error) {
 		return nil
 	})
 	return total, err
+}
+
+func normalizeToolSkillFolder(raw string) string {
+	trimmed := strings.TrimSpace(strings.ReplaceAll(raw, "\\", "/"))
+	if trimmed == "" {
+		return ""
+	}
+	parts := strings.Split(trimmed, "/")
+	clean := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" || part == "." || part == ".." {
+			continue
+		}
+		clean = append(clean, part)
+	}
+	return strings.Join(clean, "/")
 }

@@ -371,6 +371,7 @@ CREATE TABLE IF NOT EXISTS skills (
     id          TEXT NOT NULL PRIMARY KEY,
     name        VARCHAR(255) NOT NULL,
     slug        VARCHAR(255) NOT NULL,
+    folder      TEXT NOT NULL DEFAULT '',
     description TEXT,
     owner_id    VARCHAR(255) NOT NULL,
     visibility  VARCHAR(10) NOT NULL DEFAULT 'private',
@@ -393,6 +394,7 @@ CREATE TABLE IF NOT EXISTS skills (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_skills_tenant_slug ON skills(tenant_id, slug);
 CREATE INDEX IF NOT EXISTS idx_skills_owner ON skills(owner_id);
 CREATE INDEX IF NOT EXISTS idx_skills_visibility ON skills(visibility) WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_skills_folder ON skills(folder);
 CREATE INDEX IF NOT EXISTS idx_skills_system ON skills(is_system) WHERE is_system = 1;
 CREATE INDEX IF NOT EXISTS idx_skills_enabled ON skills(enabled) WHERE enabled = 0;
 CREATE INDEX IF NOT EXISTS idx_skills_tenant ON skills(tenant_id);

@@ -9,10 +9,10 @@ Use this skill for any task involving `Duculaba - The gioi do lam banh`, Vietnam
 
 Also apply:
 
-- `facebook-fanpage-content-guidelines` for Facebook caption hygiene, CTA, footer, hashtag, and mobile readability.
+- `facebook-fanpage-baseline-rules` for Facebook caption hygiene, CTA, footer, hashtag, and mobile readability.
 - `duculaba-baking-supply-knowledge` for product/application logic, recipe-support content, common mistakes, storage, and safe claims.
 - `duculaba-visual-content-profile` when image direction, image QA, or on-image text structure matters.
-- `fanpage-grounded-content-guidelines` when the post needs believable buyer situations or practical real-life context.
+- `fanpage-grounded-content-rules` when the post needs believable buyer situations or practical real-life context.
 
 ## Page Basics
 
@@ -20,7 +20,7 @@ Also apply:
 - Language: Vietnamese.
 - Page type: sales-first page.
 - Main business: selling ingredients and related products for baking, drinks, and nearby kitchen use cases.
-- Watermark safe zone: top left.
+- Watermark safe zones: top left and bottom centre.
 
 Possible product groups may include:
 
@@ -278,8 +278,9 @@ Detailed image direction belongs in `duculaba-visual-content-profile`.
 
 This brand skill only keeps page-level visual boundaries:
 
-- watermark safe zone stays top left
+- watermark safe zones stay top left and bottom centre
 - do not place headline, product name, CTA, QR code, price, or small critical text in the top-left watermark zone
+- do not place CTA, hotline, footer-like text, QR code, product name, or small critical text in the bottom-centre watermark zone
 - image execution must still feel practical, trustworthy, and sales-capable for Duculaba
 
 ## Claim Safety
@@ -325,5 +326,5 @@ Before returning Duculaba content, verify:
 - the CTA suits the route
 - the fixed footer is present unless intentionally omitted by the user
 - hashtags start with `#duculaba` when used
-- the top-left watermark safe zone remains clear in image briefs
+- the top-left and bottom-centre watermark safe zones remain clear in image briefs
 - no unsupported claim is introduced

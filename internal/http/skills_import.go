@@ -149,6 +149,7 @@ func (h *SkillsHandler) doSkillsImport(ctx context.Context, r io.Reader, userID 
 		var meta struct {
 			Name        string   `json:"name"`
 			Slug        string   `json:"slug"`
+			Folder      string   `json:"folder,omitempty"`
 			Description *string  `json:"description,omitempty"`
 			Visibility  string   `json:"visibility"`
 			Version     int      `json:"version"`
@@ -201,10 +202,10 @@ func (h *SkillsHandler) doSkillsImport(ctx context.Context, r io.Reader, userID 
 				version = 1
 			}
 			_, err := h.db.ExecContext(ctx,
-				`INSERT INTO skills (id, name, slug, description, owner_id, visibility, version, status,
+				`INSERT INTO skills (id, name, slug, folder, description, owner_id, visibility, version, status,
 				 is_system, file_path, file_size, tenant_id, created_at, updated_at)
-				 VALUES ($1,$2,$3,$4,$5,$6,$7,'active',false,$8,0,$9,NOW(),NOW())`,
-				skillID, meta.Name, slug, meta.Description,
+				 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active',false,$9,0,$10,NOW(),NOW())`,
+				skillID, meta.Name, slug, normalizeSkillFolder(meta.Folder), meta.Description,
 				userID, visibility, version, skillFilePath, tid,
 			)
 			if err != nil {

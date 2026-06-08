@@ -9,9 +9,9 @@ Use this skill when the task involves LPC France outsourcing content, BIM servic
 
 Also apply:
 
-- `facebook-fanpage-content-guidelines` for Facebook post structure.
+- `facebook-fanpage-baseline-rules` for Facebook post structure.
 - `brand-lpc-france-guidelines` for LPC France bilingual format, tone, watermark, CTA, and hashtag rules.
-- `fanpage-internet-research-guidelines` when market, legal, technical, regulatory, pricing, or current claims need sources.
+- `fanpage-research-agent-guidelines` when market, legal, technical, regulatory, pricing, or current claims need sources.
 
 ## Important Technical Boundary
 

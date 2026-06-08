@@ -7,7 +7,7 @@ description: Brand, Vietnamese content, visual, hashtag, footer, watermark, and 
 
 Use this skill for any task involving the Kĩ sư sàn phẳng page, Vietnamese technical construction content, flat slab knowledge, UBoot Beton, structural engineering experience, or construction-standard comparison content published under this page.
 
-Also apply the general `facebook-fanpage-content-guidelines` skill when available. For technical topics, also apply `ki-su-san-phang-structural-knowledge` when available.
+Also apply the general `facebook-fanpage-baseline-rules` skill when available. For technical topics, also apply `ki-su-san-phang-structural-knowledge` when available.
 
 This brand skill controls page positioning, Vietnamese voice, footer, watermark safe zone, hashtag selection, visual direction, and publishing checks.
 

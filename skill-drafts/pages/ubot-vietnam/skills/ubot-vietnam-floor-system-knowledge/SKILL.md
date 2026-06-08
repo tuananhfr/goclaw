@@ -10,8 +10,8 @@ Use this skill when the task involves UBOT VIỆT NAM content about Ubot/U-Bot B
 Also apply:
 
 - `brand-ubot-vietnam-guidelines` for page tone, footer, CTA, hashtags, and watermark.
-- `fanpage-grounded-content-guidelines` for real cases, examples, and evidence.
-- `fanpage-internet-research-guidelines` when current standards, public projects, regulations, technical sources, ESG claims, or market data need verification.
+- `fanpage-grounded-content-rules` for real cases, examples, and evidence.
+- `fanpage-research-agent-guidelines` when current standards, public projects, regulations, technical sources, ESG claims, or market data need verification.
 
 ## Important Technical Boundary
 

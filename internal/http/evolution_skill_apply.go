@@ -74,6 +74,7 @@ func (h *EvolutionHandler) applySkillDraft(ctx context.Context, sg store.Evoluti
 	id, err := h.skillStore.CreateSkillManaged(ctx, store.SkillCreateParams{
 		Name:        name,
 		Slug:        slug,
+		Folder:      normalizeSkillFolder(frontmatter["folder"]),
 		Description: &desc,
 		OwnerID:     reviewedBy,
 		Visibility:  "private",

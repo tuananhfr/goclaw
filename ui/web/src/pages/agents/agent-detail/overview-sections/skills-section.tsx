@@ -24,16 +24,23 @@ export function SkillsSection({ agentId }: SkillsSectionProps) {
   const { skills, loading, grantSkill, revokeSkill } = useAgentSkills(agentId);
   const [search, setSearch] = useState("");
   const [toggling, setToggling] = useState<string | null>(null);
+  const getGroupLabel = (skill: { folder?: string; is_system?: boolean; granted?: boolean }) => {
+    if (skill.is_system) return t("skills.groupSystem", { defaultValue: "System" });
+    const folder = skill.folder?.trim();
+    return folder || t("skills.groupUngrouped", { defaultValue: "Ungrouped" });
+  };
 
   const filtered = skills
     .filter((s) =>
       s.name.toLowerCase().includes(search.toLowerCase()) ||
       s.slug.toLowerCase().includes(search.toLowerCase()) ||
-      s.description.toLowerCase().includes(search.toLowerCase()),
+      s.description.toLowerCase().includes(search.toLowerCase()) ||
+      (s.folder ?? "").toLowerCase().includes(search.toLowerCase()),
     )
     .sort((a, b) => {
-      const rank = (s: typeof a) => s.granted ? 2 : s.is_system ? 1 : 0;
-      return rank(a) - rank(b);
+      const rank = (s: typeof a) => s.granted ? 0 : s.is_system ? 1 : 2;
+      if (rank(a) !== rank(b)) return rank(a) - rank(b);
+      return getGroupLabel(a).localeCompare(getGroupLabel(b)) || a.name.localeCompare(b.name);
     });
 
   const handleToggle = async (skillId: string, granted: boolean) => {
@@ -72,37 +79,54 @@ export function SkillsSection({ agentId }: SkillsSectionProps) {
         <p className="text-xs text-muted-foreground italic px-1">{t("skills.noSkillsAvailable")}</p>
       ) : (
         <div className="divide-y rounded-lg border max-h-[300px] overflow-y-auto overscroll-contain">
-          {filtered.map((skill) => (
-            <div key={skill.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-medium truncate">{skill.name}</span>
-                  <Badge variant={visibilityVariant(skill.visibility)} className="text-2xs shrink-0">
-                    {skill.visibility}
-                  </Badge>
-                  {skill.is_system && (
-                    <Badge variant="outline" className="border-blue-500 text-blue-600 text-2xs shrink-0">
-                      {t("skills.system")}
-                    </Badge>
+          {filtered.map((skill, index) => {
+            const group = getGroupLabel(skill);
+            const prevSkill = index > 0 ? filtered[index - 1] : null;
+            const prevGroup = prevSkill ? getGroupLabel(prevSkill) : null;
+            return (
+              <div key={skill.id}>
+                {group !== prevGroup && (
+                  <div className="px-3 py-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground bg-muted/30">
+                    {group}
+                  </div>
+                )}
+                <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-medium truncate">{skill.name}</span>
+                      <Badge variant={visibilityVariant(skill.visibility)} className="text-2xs shrink-0">
+                        {skill.visibility}
+                      </Badge>
+                      {skill.granted && !skill.is_system && (
+                        <Badge variant="outline" className="text-2xs shrink-0">
+                          {t("skills.groupAssigned", { defaultValue: "Assigned" })}
+                        </Badge>
+                      )}
+                      {skill.is_system && (
+                        <Badge variant="outline" className="border-blue-500 text-blue-600 text-2xs shrink-0">
+                          {t("skills.system")}
+                        </Badge>
+                      )}
+                    </div>
+                    {skill.description && (
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{skill.description}</p>
+                    )}
+                  </div>
+                  {skill.is_system ? (
+                    <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                      {t("skills.alwaysAvailable")}
+                    </span>
+                  ) : (
+                    <Switch
+                      checked={skill.granted}
+                      disabled={toggling === skill.id}
+                      onCheckedChange={() => handleToggle(skill.id, skill.granted)}
+                    />
                   )}
                 </div>
-                {skill.description && (
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{skill.description}</p>
-                )}
               </div>
-              {skill.is_system ? (
-                <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
-                  {t("skills.alwaysAvailable")}
-                </span>
-              ) : (
-                <Switch
-                  checked={skill.granted}
-                  disabled={toggling === skill.id}
-                  onCheckedChange={() => handleToggle(skill.id, skill.granted)}
-                />
-              )}
-            </div>
-          ))}
+            );
+          })}
           {filtered.length === 0 && (
             <div className="px-3 py-6 text-center text-xs text-muted-foreground">
               {t("skills.noSkillsMatch")}

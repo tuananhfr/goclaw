@@ -18,6 +18,8 @@ interface SkillTableRowProps {
   tab: "core" | "custom";
   hasTenantScope: boolean;
   toggling: string | null;
+  selected?: boolean;
+  onSelectChange?: (skill: SkillInfo, checked: boolean) => void;
   onView: (name: string, initialTab?: "content" | "files") => void;
   onEdit: (skill: SkillInfo) => void;
   onDelete: (skill: SkillInfo) => void;
@@ -30,6 +32,7 @@ interface SkillTableRowProps {
 /** Single row in the skills table with inline status, visibility, and action controls. */
 export function SkillTableRow({
   skill, tab, hasTenantScope, toggling,
+  selected = false, onSelectChange,
   onView, onEdit, onDelete, onToggle, onCycleVisibility,
   onSetTenantConfig, onDeleteTenantConfig,
 }: SkillTableRowProps) {
@@ -41,6 +44,17 @@ export function SkillTableRow({
 
   return (
     <tr className={cn("border-b last:border-0 hover:bg-muted/30", (isArchived || isDisabled) && "opacity-60")}>
+      {tab === "custom" && (
+        <td className="px-4 py-3 w-10">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={(e) => onSelectChange?.(skill, e.target.checked)}
+            className="accent-primary"
+            aria-label={t("actions.selectSkill", { defaultValue: "Select skill" })}
+          />
+        </td>
+      )}
       <td className="px-4 py-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Zap className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -54,6 +68,11 @@ export function SkillTableRow({
           {skill.is_system && (
             <Badge variant="outline" className="border-blue-500 text-blue-600 text-2xs">
               {t("system")}
+            </Badge>
+          )}
+          {tab === "custom" && skill.folder && (
+            <Badge variant="secondary" className="text-2xs">
+              {skill.folder}
             </Badge>
           )}
           {skill.version && <span className="text-xs text-muted-foreground">v{skill.version}</span>}

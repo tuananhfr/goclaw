@@ -157,6 +157,32 @@ func TestLoader_ListSkills_BuiltinSkills(t *testing.T) {
 	}
 }
 
+func TestLoader_ListSkills_GroupedSkillDirs(t *testing.T) {
+	ws := t.TempDir()
+	groupDir := filepath.Join(ws, "skills", "brands")
+	makeSkillDir(t, groupDir, "pizza-hips", "---\nname: Pizza Hips\n---\n")
+	makeSkillDir(t, filepath.Join(ws, "skills"), "shared-rules", "---\nname: Shared Rules\n---\n")
+
+	l := NewLoader(ws, "", "")
+	skills := l.ListSkills(context.Background())
+
+	if len(skills) != 2 {
+		t.Fatalf("expected 2 skills, got %d", len(skills))
+	}
+	var foundGrouped bool
+	for _, skill := range skills {
+		if skill.Slug == "pizza-hips" {
+			foundGrouped = true
+			if !strings.Contains(skill.Path, filepath.Join("brands", "pizza-hips", "SKILL.md")) {
+				t.Errorf("expected grouped path, got %q", skill.Path)
+			}
+		}
+	}
+	if !foundGrouped {
+		t.Fatal("expected grouped skill to be discovered")
+	}
+}
+
 // --- LoadSkill ---
 
 func TestLoader_LoadSkill_Found(t *testing.T) {
@@ -202,6 +228,22 @@ func TestLoader_LoadSkill_BaseDirPlaceholder(t *testing.T) {
 	}
 	if !strings.Contains(content, skillDir) {
 		t.Errorf("expected skill dir %q in content, got %q", skillDir, content)
+	}
+}
+
+func TestLoader_LoadSkill_GroupedDir(t *testing.T) {
+	ws := t.TempDir()
+	groupRoot := filepath.Join(ws, "skills", "pages")
+	skillDir := makeSkillDir(t, groupRoot, "duculaba-guidelines",
+		"---\nname: Duculaba Guidelines\n---\nBase: {baseDir}")
+
+	l := NewLoader(ws, "", "")
+	content, ok := l.LoadSkill(context.Background(), "duculaba-guidelines")
+	if !ok {
+		t.Fatal("expected grouped skill to be found")
+	}
+	if !strings.Contains(content, skillDir) {
+		t.Errorf("expected grouped baseDir %q in content, got %q", skillDir, content)
 	}
 }
 

@@ -9,9 +9,9 @@ Use this skill when the task involves Vietnamese technical content about structu
 
 Also apply:
 
-- `facebook-fanpage-content-guidelines` for Facebook post structure.
+- `facebook-fanpage-baseline-rules` for Facebook post structure.
 - `brand-ki-su-san-phang-guidelines` for page voice, footer, hashtags, and watermark rules.
-- `fanpage-internet-research-guidelines` when current standards, legal/regulatory details, code clauses, market data, ESG claims, or statistics require source verification.
+- `fanpage-research-agent-guidelines` when current standards, legal/regulatory details, code clauses, market data, ESG claims, or statistics require source verification.
 
 ## Important Technical Boundary
 

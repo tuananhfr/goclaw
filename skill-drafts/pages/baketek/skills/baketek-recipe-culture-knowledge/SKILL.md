@@ -10,8 +10,8 @@ Use this skill when the task involves BakeTek content about baking recipes, new 
 Also apply:
 
 - `brand-baketek-guidelines` for tone, footer, CTA, hashtags, and watermark.
-- `fanpage-grounded-content-guidelines` for real situations, seasonal hooks, user-provided examples, and non-generic content.
-- `fanpage-internet-research-guidelines` when food safety, nutrition, health, regulation, market trend, or current claims need sources.
+- `fanpage-grounded-content-rules` for real situations, seasonal hooks, user-provided examples, and non-generic content.
+- `fanpage-research-agent-guidelines` when food safety, nutrition, health, regulation, market trend, or current claims need sources.
 
 ## Important Food Boundary
 

@@ -181,6 +181,7 @@ func (t *SkillManageTool) executeCreate(ctx context.Context, args map[string]any
 	id, err := t.skills.CreateSkillManaged(ctx, store.SkillCreateParams{
 		Name:        name,
 		Slug:        slug,
+		Folder:      normalizeManagedSkillFolder(frontmatter["folder"]),
 		Description: &desc,
 		OwnerID:     ownerID,
 		Visibility:  "private",
@@ -441,4 +442,21 @@ func copyOtherFiles(srcDir, dstDir string) error {
 		_, err = io.Copy(dst, src)
 		return err
 	})
+}
+
+func normalizeManagedSkillFolder(raw string) string {
+	trimmed := strings.TrimSpace(strings.ReplaceAll(raw, "\\", "/"))
+	if trimmed == "" {
+		return ""
+	}
+	parts := strings.Split(trimmed, "/")
+	clean := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" || part == "." || part == ".." {
+			continue
+		}
+		clean = append(clean, part)
+	}
+	return strings.Join(clean, "/")
 }

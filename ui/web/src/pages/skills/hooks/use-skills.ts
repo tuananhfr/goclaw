@@ -149,6 +149,20 @@ export function useSkills() {
     [http, invalidate],
   );
 
+  const bulkUpdateSkills = useCallback(
+    async (updates: Array<{ id: string; changes: Record<string, unknown> }>) => {
+      try {
+        await Promise.all(updates.map((item) => http.put<{ ok: string }>(`/v1/skills/${item.id}`, item.changes)));
+        await invalidate();
+        toast.success(i18next.t("skills:toast.updated"));
+      } catch (err) {
+        toast.error(i18next.t("skills:toast.updateFailed"), userFriendlyError(err));
+        throw err;
+      }
+    },
+    [http, invalidate],
+  );
+
   const rescanDeps = useCallback(
     async () => {
       try {
@@ -237,7 +251,7 @@ export function useSkills() {
 
   return {
     skills, loading, refresh: invalidate, getSkill,
-    uploadSkill, updateSkill, deleteSkill,
+    uploadSkill, updateSkill, bulkUpdateSkills, deleteSkill,
     getSkillVersions, getSkillFiles, getSkillFileContent, updateSkillFileContent, rescanDeps, installDeps, installSingleDep, toggleSkill,
     setTenantConfig, deleteTenantConfig,
   };

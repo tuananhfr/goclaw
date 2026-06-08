@@ -10,8 +10,8 @@ Use this skill when the task involves product explanation, product comparison, p
 Also apply:
 
 - `brand-si-pizza-nuong-lua-hips-guidelines`
-- `fanpage-grounded-content-guidelines`
-- `fanpage-internet-research-guidelines` when current market, food safety, or regulation claims need sources
+- `fanpage-grounded-content-rules`
+- `fanpage-research-agent-guidelines` when current market, food safety, or regulation claims need sources
 
 ## Role
 

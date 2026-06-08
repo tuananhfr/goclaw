@@ -63,6 +63,12 @@ type Loader struct {
 	version atomic.Int64
 }
 
+type discoveredSkillDir struct {
+	slug     string
+	skillDir string
+	skillFile string
+}
+
 // NewLoader creates a skills loader.
 // workspace: project workspace root (skills dir is workspace/skills/)
 // globalSkills: global skills directory (e.g. ~/.goclaw/skills)
@@ -124,35 +130,26 @@ func (l *Loader) ListSkills(_ context.Context) []Info {
 		if src.dir == "" {
 			continue
 		}
-		dirs, err := os.ReadDir(src.dir)
-		if err != nil {
-			continue
-		}
-		for _, d := range dirs {
-			if !d.IsDir() || seen[d.Name()] {
+		for _, d := range discoverSkillDirs(src.dir) {
+			if seen[d.slug] {
 				continue
 			}
-			skillFile := filepath.Join(src.dir, d.Name(), "SKILL.md")
-			if _, err := os.Stat(skillFile); err != nil {
-				continue
-			}
-
 			info := Info{
-				Name:    d.Name(),
-				Slug:    d.Name(),
-				Path:    skillFile,
-				BaseDir: filepath.Join(src.dir, d.Name()),
+				Name:    d.slug,
+				Slug:    d.slug,
+				Path:    d.skillFile,
+				BaseDir: d.skillDir,
 				Source:  src.source,
 			}
-			if meta := parseMetadata(skillFile); meta != nil {
+			if meta := parseMetadata(d.skillFile); meta != nil {
 				info.Description = meta.Description
 				if meta.Name != "" {
 					info.Name = meta.Name
 				}
 			}
 			skills = append(skills, info)
-			seen[d.Name()] = true
-			l.cache[d.Name()] = &info
+			seen[d.slug] = true
+			l.cache[d.slug] = &info
 		}
 	}
 
@@ -170,33 +167,26 @@ func (l *Loader) ListSkills(_ context.Context) []Info {
 
 	// Builtin (raw bundled files) — lowest priority fallback.
 	if l.builtinSkills != "" {
-		dirs, err := os.ReadDir(l.builtinSkills)
-		if err == nil {
-			for _, d := range dirs {
-				if !d.IsDir() || seen[d.Name()] {
-					continue
-				}
-				skillFile := filepath.Join(l.builtinSkills, d.Name(), "SKILL.md")
-				if _, err := os.Stat(skillFile); err != nil {
-					continue
-				}
+		for _, d := range discoverSkillDirs(l.builtinSkills) {
+			if seen[d.slug] {
+				continue
+			}
 				info := Info{
-					Name:    d.Name(),
-					Slug:    d.Name(),
-					Path:    skillFile,
-					BaseDir: filepath.Join(l.builtinSkills, d.Name()),
+					Name:    d.slug,
+					Slug:    d.slug,
+					Path:    d.skillFile,
+					BaseDir: d.skillDir,
 					Source:  "builtin",
 				}
-				if meta := parseMetadata(skillFile); meta != nil {
+				if meta := parseMetadata(d.skillFile); meta != nil {
 					info.Description = meta.Description
 					if meta.Name != "" {
 						info.Name = meta.Name
 					}
 				}
 				skills = append(skills, info)
-				seen[d.Name()] = true
-				l.cache[d.Name()] = &info
-			}
+				seen[d.slug] = true
+				l.cache[d.slug] = &info
 		}
 	}
 
@@ -286,14 +276,18 @@ func (l *Loader) LoadSkill(_ context.Context, name string) (string, bool) {
 		if dir == "" {
 			continue
 		}
-		path := filepath.Join(dir, name, "SKILL.md")
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
+		for _, candidate := range discoverSkillDirs(dir) {
+			if candidate.slug != name {
+				continue
+			}
+			data, err := os.ReadFile(candidate.skillFile)
+			if err != nil {
+				continue
+			}
+			content := stripFrontmatter(string(data))
+			content = strings.ReplaceAll(content, "{baseDir}", candidate.skillDir)
+			return content, true
 		}
-		content := stripFrontmatter(string(data))
-		content = strings.ReplaceAll(content, "{baseDir}", filepath.Join(dir, name))
-		return content, true
 	}
 
 	// Managed skills (DB-seeded, versioned) take priority over raw builtin files.
@@ -312,16 +306,70 @@ func (l *Loader) LoadSkill(_ context.Context, name string) (string, bool) {
 
 	// Builtin fallback (only if not in managed)
 	if l.builtinSkills != "" {
-		path := filepath.Join(l.builtinSkills, name, "SKILL.md")
-		data, err := os.ReadFile(path)
-		if err == nil {
-			content := stripFrontmatter(string(data))
-			content = strings.ReplaceAll(content, "{baseDir}", filepath.Join(l.builtinSkills, name))
-			return content, true
+		for _, candidate := range discoverSkillDirs(l.builtinSkills) {
+			if candidate.slug != name {
+				continue
+			}
+			data, err := os.ReadFile(candidate.skillFile)
+			if err == nil {
+				content := stripFrontmatter(string(data))
+				content = strings.ReplaceAll(content, "{baseDir}", candidate.skillDir)
+				return content, true
+			}
 		}
 	}
 
 	return "", false
+}
+
+func discoverSkillDirs(root string) []discoveredSkillDir {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+
+	var skills []discoveredSkillDir
+	seen := make(map[string]bool)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		directDir := filepath.Join(root, entry.Name())
+		directSkill := filepath.Join(directDir, "SKILL.md")
+		if _, err := os.Stat(directSkill); err == nil {
+			if !seen[entry.Name()] {
+				skills = append(skills, discoveredSkillDir{
+					slug:      entry.Name(),
+					skillDir:  directDir,
+					skillFile: directSkill,
+				})
+				seen[entry.Name()] = true
+			}
+			continue
+		}
+
+		children, err := os.ReadDir(directDir)
+		if err != nil {
+			continue
+		}
+		for _, child := range children {
+			if !child.IsDir() || seen[child.Name()] {
+				continue
+			}
+			childDir := filepath.Join(directDir, child.Name())
+			childSkill := filepath.Join(childDir, "SKILL.md")
+			if _, err := os.Stat(childSkill); err != nil {
+				continue
+			}
+			skills = append(skills, discoveredSkillDir{
+				slug:      child.Name(),
+				skillDir:  childDir,
+				skillFile: childSkill,
+			})
+			seen[child.Name()] = true
+		}
+	}
+	return skills
 }
 
 // LoadForContext loads multiple skills and formats them for system prompt injection.

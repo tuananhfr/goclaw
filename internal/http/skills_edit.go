@@ -128,6 +128,7 @@ func (h *SkillsHandler) handleUpdateSkillMD(w http.ResponseWriter, r *http.Reque
 	skill := store.SkillCreateParams{
 		Name:        name,
 		Slug:        slug,
+		Folder:      normalizeSkillFolder(frontmatter["folder"]),
 		Description: &desc,
 		OwnerID:     userID,
 		Visibility:  info.Visibility,

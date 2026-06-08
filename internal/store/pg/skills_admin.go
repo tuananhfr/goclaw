@@ -38,11 +38,11 @@ func (s *PGSkillStore) UpsertSystemSkill(ctx context.Context, p store.SkillCreat
 		// Hash genuinely changed — full update with new version
 		fmJSON := marshalFrontmatter(p.Frontmatter)
 		_, err = s.db.ExecContext(ctx,
-			`UPDATE skills SET name = $1, description = $2, version = $3, frontmatter = $4,
-			 file_path = $5, file_size = $6, file_hash = $7, is_system = true,
-			 visibility = 'public', status = $8, updated_at = NOW()
-			 WHERE id = $9`,
-			p.Name, p.Description, p.Version, fmJSON,
+			`UPDATE skills SET name = $1, folder = $2, description = $3, version = $4, frontmatter = $5,
+			 file_path = $6, file_size = $7, file_hash = $8, is_system = true,
+			 visibility = 'public', status = $9, updated_at = NOW()
+			 WHERE id = $10`,
+			p.Name, p.Folder, p.Description, p.Version, fmJSON,
 			p.FilePath, p.FileSize, p.FileHash, p.Status, existingID,
 		)
 		if err != nil {
@@ -56,10 +56,10 @@ func (s *PGSkillStore) UpsertSystemSkill(ctx context.Context, p store.SkillCreat
 	id := store.GenNewID()
 	fmJSON := marshalFrontmatter(p.Frontmatter)
 	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO skills (id, name, slug, description, owner_id, visibility, version, status,
+		`INSERT INTO skills (id, name, slug, folder, description, owner_id, visibility, version, status,
 		 is_system, frontmatter, file_path, file_size, file_hash, tenant_id, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, 'system', 'public', $5, $6, true, $7, $8, $9, $10, $11, NOW(), NOW())`,
-		id, p.Name, p.Slug, p.Description, p.Version, p.Status,
+		 VALUES ($1, $2, $3, $4, $5, 'system', 'public', $6, $7, true, $8, $9, $10, $11, $12, NOW(), NOW())`,
+		id, p.Name, p.Slug, p.Folder, p.Description, p.Version, p.Status,
 		fmJSON, p.FilePath, p.FileSize, p.FileHash, store.MasterTenantID,
 	)
 	if err != nil {
