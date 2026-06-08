@@ -1,167 +1,277 @@
 ---
 name: BakeTek Recipe Culture Knowledge
-description: Domain guidance for BakeTek content about detailed baking recipes, new cake trends, baking culture and habits, unusual cake ideas, flour, Bakers Choice, mooncake baking, baking additives, ingredient applications, storage, troubleshooting, and safe food/healthy claims.
+description: Domain guidance for BakeTek sales content about baking ingredients, drink ingredients, product applications, recipe-support content, troubleshooting, ingredient knowledge, storage basics, and safe claims.
 ---
 
 # BakeTek Recipe Culture Knowledge
 
-Use this skill when the task involves BakeTek content about baking recipes, new cakes, baking trends, baking culture, unusual cake ideas, flour, Bakers Choice, Địa Cầu 999, Bông Hồng Xanh, mooncake recipes, baking powder, additives, ingredient application, storage, troubleshooting, or ingredient-linked sales content.
+Use this skill when the task involves BakeTek content about baking ingredients, drink ingredients, flour selection, yeast, butter, cream, milk, cheese, chocolate, topping, premixes, additives, product application, recipe support, tips, troubleshooting, storage basics, or buyer advice.
 
 Also apply:
 
-- `brand-baketek-guidelines` for tone, footer, CTA, hashtags, and watermark.
-- `fanpage-grounded-content-rules` for real situations, seasonal hooks, user-provided examples, and non-generic content.
-- `fanpage-research-agent-guidelines` when food safety, nutrition, health, regulation, market trend, or current claims need sources.
+- `facebook-fanpage-baseline-rules` for Facebook structure and baseline hygiene.
+- `brand-baketek-guidelines` for tone, footer, hashtags, watermark, and sales-first positioning.
+- `baketek-visual-content-profile` when image direction or image QA matters.
+- `fanpage-grounded-content-rules` when the post needs believable buyer context.
+- `fanpage-research-agent-guidelines` when technical food-safety, regulation, nutrition, or current market claims need sources.
 
-## Important Food Boundary
+## Role
 
-This skill supports recipe writing, practical baking guidance, ingredient education, and marketing. It does not replace food-safety certification, nutrition advice, medical advice, or professional product R&D.
+This skill exists to help BakeTek sell more effectively through practical product understanding.
 
-When discussing storage, shelf life, allergens, additives, nutrition, healthy diets, or ingredient safety:
+It does not treat recipes, tips, or ingredient knowledge as separate educational missions.
+Those routes exist to help customers:
 
-- Use cautious wording.
-- Do not invent shelf life, nutrition values, dosage, legal limits, or allergen-free claims.
-- Mention that real results depend on ingredients, oven, humidity, technique, and storage.
-- Do not guarantee a recipe is 100% successful.
-- Do not call a food healthy in a medical or weight-loss sense unless the claim is supported.
+- understand the product
+- choose the right product
+- use the product more confidently
+- develop buying intent
 
-## Product And Ingredient Focus
+## Important Food And Product Boundary
 
-Use these product groups when relevant:
+This skill supports marketing, product education, and practical usage guidance.
+It does not replace food-safety certification, nutrition advice, regulatory review, or professional R&D.
 
-- Bakers Choice nguyên cám.
-- Bakers Choice số 8 and số 11.
-- Hoa Ngọc Lan số 11.
-- Địa Cầu 999.
-- Bông Hồng Xanh.
-- Bột mì and baking flour lines.
-- Bột nổi Mauri nhãn đỏ.
-- Bột nổi Tower nhãn xanh.
-- Baking additives and premixes.
-- Mooncake ingredients.
-- Oatmeal/banana/healthy recipe ingredients.
+When discussing ingredients, additives, allergens, food safety, storage, shelf life, or health claims:
 
-Only claim exact product specs, protein levels, dosage, or supplier details when provided by the user, label, or verified source.
+- use cautious wording
+- do not invent regulatory limits, nutrition values, shelf life, allergen-free claims, or dosage
+- do not promise guaranteed results
+- do not claim a product is safe for everyone or suitable for medical conditions without verified basis
 
-## Recipe Requirements
+## Product Scope
 
-When writing a recipe, include:
+Possible product groups may include:
 
-- Yield: how many pieces/servings if known or estimated cautiously.
-- Ingredients: gram/ml details.
-- Method: clear ordered steps.
-- Temperature and baking time where relevant.
-- Texture/color target: what the baker should look for.
-- Storage: room temperature/refrigerated/freezer guidance only when safe and not over-specific without basis.
-- Common mistakes: what can go wrong and why.
-- Ingredient substitution note when helpful.
-- Allergen note when ingredients commonly contain gluten, dairy, egg, nuts, soy, or other sensitive ingredients.
+- flour
+- yeast
+- butter
+- cream
+- milk
+- cheese
+- chocolate
+- topping
+- baking ingredients
+- drink ingredients
+- drink-support ingredients
+- related tools or materials only when confirmed by the user
 
-If the user does not provide exact recipe data, create a reasonable general recipe only when the topic is common and low-risk, and avoid claiming it is proprietary or guaranteed. For commercial production, recommend testing a small batch first.
+Current or previously observed names may include:
 
-## Main Content Angles
+- Bakers Choice
+- Dia Cau 999
+- Bong Hong Xanh
+- Hoa Ngoc Lan
+- Mauri
+- Tower
 
-### Detailed Recipes
+Only claim exact product properties when the user, product label, supplier data, or verified source provides them.
 
-Examples:
+## Audience Understanding
 
-- Bánh chuối yến mạch with Bakers Choice nguyên cám.
-- Complete baked mooncake recipe.
-- Mooncake crust color and baking technique.
-- Cafe-friendly cake/menu item.
-- Healthy-style snack for the week.
+Write for:
 
-Tie recipe content back to ingredients that BakeTek can supply when appropriate.
+- home bakers
+- beginners
+- online cake sellers
+- small bakery owners
+- drink-shop owners
+- home drink makers
+- wholesale or retail buyers
+- people who need clear ingredient advice
 
-### New Cake / Trend Content
+Common concerns:
 
-Use for:
+- not knowing which ingredient to choose
+- unstable results
+- common baking or drink-making mistakes
+- not knowing how to use the product correctly
+- not knowing how to store ingredients
+- needing ingredients that fit a small shop or home workflow
 
-- New cake ideas.
-- Viral or seasonal baking trends.
-- Holiday baking, especially Trung thu.
-- Unusual combinations or playful cake culture.
-- "Mỗi ngày làm một món ngon" style posts.
+## Core Content Routes
 
-When a trend is current or named, verify if needed or frame as an idea rather than a fact.
+### 1. Product Sales Content
 
-### Baking Culture And Habits
-
-Use for:
-
-- Why families bake snacks for the week.
-- Trung thu baking habits.
-- Home baking as weekend activity.
-- Cafe owners adding simple cake items to menus.
-- Small bakery workflow and seasonal preparation.
-
-Ground these posts in real situations, not abstract lifestyle copy.
-
-### Ingredient Education
+This is the strongest route and should be treated as the default business direction.
 
 Use for:
 
-- Which flour fits mooncake crust.
-- Bakers Choice số 8/11 or Hoa Ngọc Lan số 11 for mooncake.
-- What baking powder does.
-- How additives should be used carefully.
-- Difference between flour choices by application.
+- product introductions
+- product-group recommendations
+- combo suggestions
+- stock or inquiry-led posts
 
-Do not invent technical specs.
+Writing pattern:
 
-### Troubleshooting
+- start from need, confusion, or a common failure
+- introduce the product as a practical option
+- explain what it can support
+- explain who it fits
+- close with a clear consultation or order CTA
+
+### 2. Recipe Support Content
+
+Use recipes to support product sales naturally.
+
+Goal:
+
+- show what the product can be used for
+- help customers imagine the result
+- create demand for ingredients
+
+Rules:
+
+- do not post disconnected recipes with no product link
+- every recipe should connect to at least one BakeTek product or product group
+- if the exact product is unknown, say product confirmation is needed instead of inventing it
+
+Suggested format:
+
+- dish or drink name
+- why it is worth trying
+- main ingredients
+- simple steps
+- one small tip
+- which BakeTek product or product group can support it
+- CTA to ask about product or recipe support
+
+### 3. Tips And Troubleshooting Content
 
 Use for:
 
-- Mooncake crust burns or color is uneven.
-- Cake collapses.
-- Bread/dough does not rise.
-- Dough is dry/sticky.
-- Cake is dense or crumbly.
-- Finished cake stores poorly.
+- why cake is dry
+- why dough does not rise
+- how to choose yeast
+- how to choose flour for bread, cake, or cookies
+- how to handle separated cream
+- how to choose topping for drinks
+- why a drink tastes weak or lacks richness
 
-Explain likely causes and practical checks. Do not overpromise one fix works every time.
+Execution:
 
-## Mooncake Guidance
+- name the problem clearly
+- explain the likely cause simply
+- suggest a handling direction
+- connect naturally to a product or product group
 
-For mooncake posts, include when relevant:
+### 4. Ingredient Knowledge Content
 
-- Flour choice: Bakers Choice số 8/11, Hoa Ngọc Lan số 11 only as suggested options if the brief asks.
-- Dough resting.
-- Egg wash/layering if relevant.
-- Baking temperature and staged baking when writing a recipe.
-- Color target: bền màu, không cháy xém, không quá sậm.
-- Storage and quality caution.
+Use for:
 
-Do not invent shelf life or preservative guidance. If shelf life matters commercially, recommend checking formula, packaging, storage condition, and food-safety requirements.
+- ingredient differences
+- selection basics
+- storage basics
+- signs of wrong ingredient choice
+- beginner-friendly ingredient recommendations
+- ingredients suited for small shops or online sellers
 
-## Healthy-Style Content
+Do not invent technical specs, ingredients lists, origin, certification, or exact storage detail without source data.
 
-For posts such as banana oatmeal cake or whole wheat content:
+### 5. Lifestyle / Soft Usage Context
 
-- Use `healthy-style`, `thực đơn nhẹ`, or `gợi ý cân bằng hơn` wording.
-- Mention that "healthy" depends on total recipe, sugar/fat level, portion size, and user needs.
-- Avoid medical, weight loss, diabetes, cholesterol, or disease-related claims.
+Use lightly for:
 
-## Sales Integration
+- small kitchen moments
+- weekend baking
+- testing a recipe batch
+- preparing ingredients for a new menu
+- making a homemade drink
 
-BakeTek content should connect recipes and ingredients naturally:
+Rule:
 
-1. Start from a cake idea, season, trend, or baker problem.
-2. Explain the recipe or technique.
-3. Mention ingredient choice and why it matters.
-4. Offer BakeTek as the place to ask for suitable ingredients.
-5. Add CTA, footer, and hashtags from brand skill.
+- lifestyle should still connect back to products, ingredient use, or real buyer situations
+- do not turn the page into a pure inspiration blog
 
-Avoid turning every recipe into a hard-sell. The product mention should help the baker choose ingredients.
+## Product And Ingredient Angles
+
+### Flour
+
+Good angles:
+
+- which flour fits which product type
+- choosing flour for bread, sweet cakes, cookies, or shop production
+- why using the right flour reduces avoidable failure
+
+Caution:
+
+- do not invent protein percentage or technical flour specs
+
+### Yeast
+
+Good angles:
+
+- which yeast suits which type of dough
+- common usage mistakes
+- how wrong handling can affect rising
+
+Caution:
+
+- do not invent dosage or guarantee stable rise in all conditions
+
+### Butter / Cream / Cheese / Chocolate / Topping
+
+Good angles:
+
+- what kind of dish or drink each group supports
+- how the ingredient changes aroma, richness, texture, or appearance
+- which ingredient group helps beginners or small shops work more easily
+
+Caution:
+
+- do not overclaim quality level without evidence
+
+### Drink Ingredients
+
+Good angles:
+
+- topping choice for drinks
+- ingredients that help a drink feel richer or more attractive
+- simple add-on ideas for small drink shops
+
+Caution:
+
+- do not invent menu performance, margin, or profit outcomes
+
+### Storage Basics
+
+Good angles:
+
+- keep powders dry and sealed
+- avoid moisture and strong odors
+- rotate stock
+- check packaging and dates
+
+Caution:
+
+- do not invent exact shelf life or exact storage temperature unless provided
+
+## Recipe And Detail Rules
+
+If writing a recipe-style post:
+
+- only give exact gram/ml, temperature, time, or yield when provided or verified
+- if exact details are not available, present it as a recipe idea or usage suggestion, not a full tested formula
+- mention that final results depend on ingredients, equipment, temperature, timing, and technique
+
+## Sales Content Pattern
+
+Use this structure for sales-led posts:
+
+1. customer need, failure point, or situation
+2. product or product-group introduction
+3. practical application
+4. why this matters for the buyer
+5. CTA, footer, and hashtags from the brand skill
 
 ## Final Self-Check
 
 Before returning content, verify:
 
-- Recipe details are complete enough for the requested format.
-- Ingredient suggestions match the cake/use case.
-- Healthy, storage, shelf-life, additive, and nutrition claims are cautious.
-- Product specs are not invented.
-- Content has a real occasion, baker situation, trend, or cultural hook when possible.
-- Brand skill handles footer, CTA, hashtags, and watermark.
+- the post supports BakeTek as a sales page
+- useful information still leads back to product understanding or demand
+- product category and use case are clear
+- no unsupported claim, spec, or guarantee was invented
+- recipe detail is only exact when provided or verified
+- CTA is present when appropriate
+- footer, hashtags, watermark, and final brand behavior come from the brand skill

@@ -117,7 +117,10 @@ func (t *BridgeTool) Execute(ctx context.Context, args map[string]any) *tools.Re
 	// Recheck grant before execution — defense against revoked grants
 	if t.grantChecker != nil {
 		agentID := store.AgentIDFromContext(ctx)
-		userID := store.UserIDFromContext(ctx)
+		// Reuse the resolved credential identity so group-channel turns
+		// (Discord guilds, Telegram groups, etc.) recheck grants against the
+		// same tenant user identity used for MCP credentials.
+		userID := store.CredentialUserIDFromContext(ctx)
 		if !t.grantChecker.IsAllowed(ctx, agentID, userID, t.serverID, t.toolName) {
 			return tools.ErrorResult(fmt.Sprintf("MCP tool %q: grant revoked", t.registeredName))
 		}
