@@ -15,7 +15,7 @@ const embeddingBatchSize = 2048
 
 // ExpectedEmbeddingDim is the pgvector column dimension used across the system.
 // All embedding providers must return vectors of this dimension.
-const ExpectedEmbeddingDim = 1536
+const ExpectedEmbeddingDim = 1024
 
 // OpenAIEmbeddingProvider implements store.EmbeddingProvider for OpenAI-compatible APIs.
 type OpenAIEmbeddingProvider struct {
@@ -33,7 +33,7 @@ func NewOpenAIEmbeddingProvider(apiKey, apiBase, model string) *OpenAIEmbeddingP
 		apiBase = "https://api.openai.com/v1"
 	}
 	if model == "" {
-		model = "text-embedding-3-small" // 1536 dimensions, matches pgvector column
+		model = "bge-m3" // 1024 dimensions, matches pgvector column
 	}
 	return &OpenAIEmbeddingProvider{
 		providerName: "openai",

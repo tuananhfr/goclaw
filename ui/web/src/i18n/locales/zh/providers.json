@@ -302,14 +302,14 @@
     "enableDesc": "允许此Provider为记忆、技能和知识图谱生成文本嵌入",
     "model": "Embedding模型",
     "dimensions": "输出维度",
-    "dimensionsHint": "GoClaw memory 当前以 vector(1536) 存储 embedding。若模型本身输出 1536 维则留空；若 provider 支持从更高原生维度截断，则只能设置为 1536。",
-    "dimensionsInvalid": "GoClaw memory 当前只支持精确的 1536 维。",
+    "dimensionsHint": "GoClaw memory 当前以 vector(1024) 存储 embedding。推荐本地优先模型 BGE-M3 或其他原生 1024d 模型；provider 支持 dimensions 时设置为 1024。",
+    "dimensionsInvalid": "GoClaw memory 当前只支持精确的 1024 维。",
     "apiBase": "Embedding API地址",
     "apiBasePlaceholder": "(与Provider相同)",
     "apiBaseHint": "如果Embedding端点与Provider的主API地址不同，可在此覆盖",
     "verify": "验证Embedding",
     "verifyFailed": "Embedding验证失败",
-    "dimensionsMismatch": "{{count}}维 — 不符合要求的1536"
+    "dimensionsMismatch": "{{count}}维 - 不符合要求的1024"
   },
   "reasoning": {
     "off": "Off",

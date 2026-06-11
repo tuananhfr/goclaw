@@ -1,5 +1,6 @@
 ---
 name: Si Pizza Nuong Lua Hips Product Business Knowledge
+slug: si-pizza-nuong-lua-hips-product-business-knowledge
 description: Product, process, menu-fit, and B2B operating guidance for Sỉ Pizza nướng lửa Hip'S content. Use for wholesale pizza lines, spaghetti, production-process posts, store-fit content, and practical posts about selling frozen pizza in small kitchens or food businesses.
 ---
 
@@ -25,15 +26,37 @@ It covers:
 - practical operating questions from buyers
 - safe framing for B2B sales content
 
+## Known Facts And Unknown Facts
+
+Known page-approved facts include only the product lines, flavors, and process points listed in this skill.
+
+Do not invent or assume:
+
+- price list
+- minimum order quantity
+- delivery area
+- shipping method
+- storage temperature
+- shelf life
+- reheating or baking instructions
+- packaging specs
+- wholesale policy
+- reseller margin
+- certificates or inspection documents
+- production capacity
+- exact ingredient percentages
+
+If the content needs any of these details, either avoid the detail or mark it as needing confirmation from the Manager.
+
 ## Product Lines
 
 ### 1. Pizza Lines
 
-#### Dong Y
+#### Dòng Ý
 
 Pizza flavors:
 
-- bò băm
+- bò bằm
 - ba chỉ hun khói
 - xúc xích
 - hải sản
@@ -53,7 +76,7 @@ Use carefully:
 - If using the claims `không phụ gia` or `không chất bảo quản`, keep them as page-approved product facts only.
 - Do not turn them into health, nutrition, or regulatory superiority claims.
 
-#### Dong Viet
+#### Dòng Việt
 
 Pizza flavors:
 
@@ -78,7 +101,7 @@ Use angle:
 Current items:
 
 - mỳ Ý kem nấm
-- mỳ Ý bò băm
+- mỳ Ý bò bằm
 
 Use these items for:
 
@@ -86,6 +109,31 @@ Use these items for:
 - menu expansion
 - cross-sell with pizza
 - store menu completeness
+
+## Product Selection Logic
+
+Use Dòng Ý when the angle needs:
+
+- fire-baked crust
+- Italian-style positioning
+- natural 48h fermentation
+- flavor variety such as bò bằm, ba chỉ hun khói, xúc xích, hải sản, 4 vị phô mai
+
+Use Dòng Việt when the angle needs:
+
+- thicker base
+- Vietnamese taste adaptation
+- broader easy-selling menu fit
+- flavors such as thập cẩm, bò ngô, xúc xích ngô
+
+Use Mỳ Ý when the angle needs:
+
+- combo support
+- menu completion
+- add-on item for shops already selling pizza or drinks
+- cross-sell with pizza
+
+If the brief does not specify a line, write generally about menu-fit or ask only when the product line affects accuracy.
 
 ## Main Business Angles
 
@@ -138,7 +186,7 @@ Do not promise:
 Safer framing:
 
 - `có thể phù hợp nếu quán muốn mở rộng menu`
-- `tùy mặt bằng, thiết bị và cách vận hành`
+- `tùy mặt bằng, thiết bị, và cách vận hành`
 - `phù hợp để tìm hiểu thêm nếu bếp hiện tại còn hạn chế nhân sự hoặc không gian`
 
 ## Content Routes

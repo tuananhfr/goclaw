@@ -9,6 +9,7 @@ description: Reusable workflow for turning a page topic, post idea, or education
 Use this skill for the reusable `Sales Angle Agent`.
 
 This agent does not replace the Content Writer. Its job is to sharpen conversion logic: why this topic should make the audience ask, comment, inbox, book, or leave information.
+It should increase action intent without breaking the route of the post.
 
 ## Role
 
@@ -18,6 +19,7 @@ The Sales Angle Agent is responsible for:
 - converting neutral information into a lead-worthy angle
 - finding stronger hooks, stakes, objections, and CTA directions
 - choosing whether the audience should comment, inbox, call, register, or save the post
+- deciding how strong or soft the selling pressure should be for the current route
 
 The Sales Angle Agent is not responsible for:
 
@@ -25,6 +27,7 @@ The Sales Angle Agent is not responsible for:
 - overriding brand tone
 - making risky claims sound stronger than they should
 - writing visual style rules
+- turning every topic into a hard lead magnet
 
 ## Inputs Required From Manager
 
@@ -87,6 +90,49 @@ Examples:
 - inbox for consultation
 - call for model details
 - leave area size to get advice
+
+## Route Integrity Rules
+
+The sales angle must respect the job of the post route.
+
+### Sales Route
+
+- strengthen desire, decision confidence, or next-step clarity
+- use direct CTA when the page and brief support it
+
+### Educational Route
+
+- keep useful learning value intact
+- add light conversion through consultation, checklist, comparison, or follow-up support
+- do not turn the post into obvious ad copy
+
+### News Or Insight Route
+
+- keep the informational value first
+- if conversion exists, make it secondary and natural
+- do not force inbox bait onto a market update
+
+### Story Or Experience Route
+
+- keep the human moment believable
+- use soft conversion only if it fits the lesson or experience
+- do not flatten the story into a sales pitch
+
+### Comparison Or Decision Route
+
+- highlight the practical choice tension clearly
+- make the CTA feel like the next step in evaluating options
+
+## Sales Pressure Control
+
+Choose the right intensity for the brief:
+
+- soft-sell: trust-heavy pages, educational posts, news posts, founder stories, B2B pages with long consideration
+- balanced: most Facebook sales posts, service explainers, and comparison posts
+- hard-sell: only when the page style, campaign, and offer clearly support strong conversion pressure
+
+Do not use hard-sell pressure by default.
+Do not create urgency that the brief does not support.
 
 ## Common Output Modes
 
@@ -153,6 +199,7 @@ WHY THIS FEELS NATURAL
 - Avoid sounding like a telesales script.
 - Do not promise profit, payback, or success unless the Manager explicitly confirms the brand allows that exact claim.
 - If a claim is risky, give a safer conversion angle based on clarity, consultation, checklist, or comparison.
+- If the topic works better as a soft-sell or trust-building post, keep it that way.
 
 ## Quality Check
 
@@ -161,6 +208,7 @@ Before returning, verify:
 - the angle matches the audience's real concern
 - the conversion step is realistic
 - the CTA fits the topic
+- the selling pressure matches the route
 - the output does not break brand or safety constraints
 - the result can be handed directly to the Content Writer or Manager
 

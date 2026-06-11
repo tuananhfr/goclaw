@@ -376,7 +376,7 @@ func setupMemoryEmbeddings(
 	if pgStores.Memory != nil {
 		if embProvider := resolveEmbeddingProvider(pgStores.Providers, providerRegistry, pgStores.SystemConfigs); embProvider != nil {
 			pgStores.Memory.SetEmbeddingProvider(embProvider)
-			slog.Info("memory embeddings enabled", "provider", embProvider.Name(), "model", embProvider.Model())
+			slog.Info("memory embeddings enabled", "provider", embProvider.Name(), "model", embProvider.Model(), "required_dims", store.RequiredMemoryEmbeddingDimensions)
 
 			// Backfill embeddings for existing chunks that were stored without vectors.
 			type backfiller interface {
@@ -406,6 +406,18 @@ func setupMemoryEmbeddings(
 				}()
 			}
 
+			// Wire embedding provider into agent store for delegate target search.
+			if pgAgentStore, ok := pgStores.Agents.(*pg.PGAgentStore); ok {
+				pgAgentStore.SetEmbeddingProvider(embProvider)
+				go func() {
+					if count, err := pgAgentStore.BackfillAgentEmbeddings(context.Background()); err != nil {
+						slog.Warn("agent embeddings backfill failed", "error", err)
+					} else if count > 0 {
+						slog.Info("agent embeddings backfill complete", "agents_updated", count)
+					}
+				}()
+			}
+
 			// Wire embedding provider into KG store for entity semantic search.
 			if pgKG, ok := pgStores.KnowledgeGraph.(*pg.PGKnowledgeGraphStore); ok {
 				pgKG.SetEmbeddingProvider(embProvider)
@@ -421,13 +433,31 @@ func setupMemoryEmbeddings(
 			// Wire embedding provider into vault store for semantic document search.
 			if pgStores.Vault != nil {
 				pgStores.Vault.SetEmbeddingProvider(embProvider)
-				slog.Info("vault embeddings enabled", "provider", embProvider.Name())
+				slog.Info("vault embeddings enabled", "provider", embProvider.Name(), "required_dims", store.RequiredMemoryEmbeddingDimensions)
+				if pgVaultStore, ok := pgStores.Vault.(*pg.PGVaultStore); ok {
+					go func() {
+						if count, err := pgVaultStore.BackfillVaultEmbeddings(context.Background()); err != nil {
+							slog.Warn("vault embeddings backfill failed", "error", err)
+						} else if count > 0 {
+							slog.Info("vault embeddings backfill complete", "documents_updated", count)
+						}
+					}()
+				}
 			}
 
 			// V3: Wire embedding provider into episodic store for semantic search.
 			if pgStores.Episodic != nil {
 				pgStores.Episodic.SetEmbeddingProvider(embProvider)
-				slog.Info("episodic embeddings enabled", "provider", embProvider.Name())
+				slog.Info("episodic embeddings enabled", "provider", embProvider.Name(), "required_dims", store.RequiredMemoryEmbeddingDimensions)
+				if pgEpisodicStore, ok := pgStores.Episodic.(*pg.PGEpisodicStore); ok {
+					go func() {
+						if count, err := pgEpisodicStore.BackfillEpisodicEmbeddings(context.Background()); err != nil {
+							slog.Warn("episodic embeddings backfill failed", "error", err)
+						} else if count > 0 {
+							slog.Info("episodic embeddings backfill complete", "summaries_updated", count)
+						}
+					}()
+				}
 			}
 		} else {
 			slog.Warn("memory embeddings disabled (no API key), chunks stored without vectors")

@@ -7,11 +7,10 @@ type VoyageEmbeddingProvider struct {
 }
 
 // NewVoyageEmbeddingProvider creates an embedding provider for Voyage AI.
-// Default model: voyage-3 (1024 dim) — NOTE: must use voyage-3-large (1536 dim)
-// or text-embedding-3-small via OpenAI to match the system's pgvector(1536) column.
+// Default model: voyage-3 (1024 dim), matching the system's pgvector(1024) column.
 func NewVoyageEmbeddingProvider(apiKey, model string) *VoyageEmbeddingProvider {
 	if model == "" {
-		model = "voyage-3-large" // 1536 dimensions, matches pgvector column
+		model = "voyage-3" // 1024 dimensions, matches pgvector column
 	}
 	p := NewOpenAIEmbeddingProvider(apiKey, "https://api.voyageai.com/v1", model)
 	p.providerName = "voyage"

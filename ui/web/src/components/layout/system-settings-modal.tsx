@@ -19,6 +19,8 @@ import { SystemSettingsEmbeddingCard } from "./system-settings-embedding-card";
 import { SystemSettingsCompactionCard } from "./system-settings-compaction-card";
 import { Eye, MessageSquareText, Brain } from "lucide-react";
 
+const REQUIRED_EMBEDDING_DIMENSIONS = 1024;
+
 interface SystemSettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -163,7 +165,7 @@ export function SystemSettingsModal({ open, onOpenChange }: SystemSettingsModalP
               embMaxChunkLen={embMaxChunkLen} setEmbMaxChunkLen={setEmbMaxChunkLen}
               embChunkOverlap={embChunkOverlap} setEmbChunkOverlap={setEmbChunkOverlap}
               extraModels={embExtraModels}
-              onVerify={() => { if (selectedEmbProviderData) verifyEmbedding(selectedEmbProviderData.id, embModel.trim() || undefined, 1536); }}
+              onVerify={() => { if (selectedEmbProviderData) verifyEmbedding(selectedEmbProviderData.id, embModel.trim() || undefined, REQUIRED_EMBEDDING_DIMENSIONS); }}
               verifying={embVerifying} verifyResult={embResult}
               canVerify={!!selectedEmbProviderData && !!embModel.trim()}
             />

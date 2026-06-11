@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// Helper: create a valid 1536-dim embedding vector
+// Helper: create a valid embedding vector matching the configured pgvector dimension.
 func makeEmbedding(dim int) []float64 {
 	vec := make([]float64, dim)
 	for i := range vec {
@@ -140,7 +140,7 @@ func TestOpenAIEmbedding_BatchSplitting(t *testing.T) {
 // TestOpenAIEmbedding_DimensionMismatch tests error when API returns wrong dimension
 func TestOpenAIEmbedding_DimensionMismatch(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Return wrong dimension (512 instead of 1536)
+		// Return wrong dimension (512 instead of ExpectedEmbeddingDim)
 		data := []embeddingData{
 			{
 				Embedding: makeEmbedding(512), // Wrong!
@@ -166,8 +166,8 @@ func TestOpenAIEmbedding_DimensionMismatch(t *testing.T) {
 	if !strings.Contains(err.Error(), "returned 512") {
 		t.Fatalf("expected '512' in error, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "expected 1536") {
-		t.Fatalf("expected '1536' in error, got: %v", err)
+	if !strings.Contains(err.Error(), "expected 1024") {
+		t.Fatalf("expected '1024' in error, got: %v", err)
 	}
 }
 
@@ -264,8 +264,8 @@ func TestOpenAIEmbedding_DefaultBaseURL(t *testing.T) {
 func TestOpenAIEmbedding_DefaultModel(t *testing.T) {
 	provider := NewOpenAIEmbeddingProvider("test-key", "https://api.openai.com/v1", "")
 
-	if provider.Model() != "text-embedding-3-small" {
-		t.Fatalf("expected default model 'text-embedding-3-small', got %s", provider.Model())
+	if provider.Model() != "bge-m3" {
+		t.Fatalf("expected default model 'bge-m3', got %s", provider.Model())
 	}
 }
 
@@ -340,8 +340,8 @@ func TestVoyageEmbeddingProvider_BaseURL(t *testing.T) {
 func TestVoyageEmbeddingProvider_DefaultModel(t *testing.T) {
 	provider := NewVoyageEmbeddingProvider("test-key", "")
 
-	if provider.Model() != "voyage-3-large" {
-		t.Fatalf("expected default model 'voyage-3-large', got %s", provider.Model())
+	if provider.Model() != "voyage-3" {
+		t.Fatalf("expected default model 'voyage-3', got %s", provider.Model())
 	}
 }
 
@@ -565,8 +565,8 @@ func TestOpenAIEmbedding_RequestBody(t *testing.T) {
 // TestOpenAIEmbedding_BatchBoundary tests batch boundary conditions
 func TestOpenAIEmbedding_BatchBoundary(t *testing.T) {
 	tests := []struct {
-		name         string
-		inputCount   int
+		name          string
+		inputCount    int
 		expectedCalls int
 	}{
 		{"single", 1, 1},

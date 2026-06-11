@@ -109,7 +109,7 @@ func buildEmbeddingProvider(
 	providerReg *providers.Registry,
 ) memory.EmbeddingProvider {
 	// Resolve model: embedding settings → memCfg override → default
-	model := "text-embedding-3-small"
+	model := "bge-m3"
 	if es != nil && es.Model != "" {
 		model = es.Model
 	}
@@ -127,7 +127,7 @@ func buildEmbeddingProvider(
 	}
 
 	// Dimension truncation: default to RequiredMemoryEmbeddingDimensions to match pgvector schema.
-	// Models that natively output 1536 ignore the parameter; models with larger native dims get truncated.
+	// Native 1024d models ignore the parameter; larger native dims can be truncated by compatible providers.
 	dims := store.RequiredMemoryEmbeddingDimensions
 	if es != nil && es.Dimensions > 0 && es.Dimensions != store.RequiredMemoryEmbeddingDimensions {
 		slog.Warn("ignoring incompatible provider embedding dimensions for memory schema",

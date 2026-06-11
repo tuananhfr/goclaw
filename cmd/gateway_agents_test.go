@@ -187,10 +187,10 @@ func captureEmbeddingRequest(t *testing.T, es *store.EmbeddingSettings) map[stri
 	return requestBody
 }
 
-func TestBuildEmbeddingProviderDefaultsTo1536Dimensions(t *testing.T) {
+func TestBuildEmbeddingProviderDefaultsTo1024Dimensions(t *testing.T) {
 	requestBody := captureEmbeddingRequest(t, nil)
-	if got := requestBody["dimensions"]; got != float64(1536) {
-		t.Fatalf("dimensions = %v, want 1536", got)
+	if got := requestBody["dimensions"]; got != float64(1024) {
+		t.Fatalf("dimensions = %v, want 1024", got)
 	}
 }
 
@@ -200,7 +200,7 @@ func TestBuildEmbeddingProviderIgnoresIncompatibleStoredDimensions(t *testing.T)
 		Model:      "voyage-4-nano",
 		Dimensions: 2048,
 	})
-	if got := requestBody["dimensions"]; got != float64(1536) {
-		t.Fatalf("dimensions = %v, want fallback 1536", got)
+	if got := requestBody["dimensions"]; got != float64(1024) {
+		t.Fatalf("dimensions = %v, want fallback 1024", got)
 	}
 }

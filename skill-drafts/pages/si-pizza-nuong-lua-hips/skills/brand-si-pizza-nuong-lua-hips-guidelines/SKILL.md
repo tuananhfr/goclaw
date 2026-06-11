@@ -1,5 +1,6 @@
 ---
 name: Brand Si Pizza Nuong Lua Hips Guidelines
+slug: brand-si-pizza-nuong-lua-hips-guidelines
 description: Brand, B2B sales, content, CTA, visual, and claim-safety rules for the Sỉ Pizza nướng lửa Hip'S Facebook page. Use for wholesale pizza, frozen pizza, spaghetti, production-process, store-operations, reseller, and B2B buyer-facing Facebook posts, image briefs, and content review.
 ---
 
@@ -14,6 +15,22 @@ Also apply:
 - `si-pizza-nuong-lua-hips-product-business-knowledge`
 - `si-pizza-nuong-lua-hips-visual-content-profile` when image direction matters
 
+Page-specific rules in this skill override shared defaults when they are more specific to this page.
+
+## Page Instruction Priority
+
+When instructions conflict, follow this order:
+
+1. Safety, factual accuracy, and claim restrictions
+2. User or Page Manager's current task packet
+3. This page-specific brand guideline
+4. `si-pizza-nuong-lua-hips-product-business-knowledge`
+5. `si-pizza-nuong-lua-hips-visual-content-profile` when image direction matters
+6. Shared fanpage, content, and visual rules
+
+Do not let shared content or visual defaults override this page's B2B wholesale positioning.
+Do not write as a consumer-only pizza page unless the Manager explicitly changes the page positioning.
+
 ## Page Basics
 
 - Page name: `Sỉ Pizza nướng lửa Hip'S`
@@ -23,6 +40,19 @@ Also apply:
 - Secondary positioning: practical education page about production quality and operating frozen pizza at store level
 
 Do not reposition this page as a consumer-only pizza page, lifestyle page, or franchise page unless the user provides updated context.
+
+## Forbidden Positioning
+
+Do not position this page as:
+
+- a consumer pizza delivery brand
+- a restaurant review page
+- a franchise recruitment page
+- a guaranteed-profit business opportunity
+- a premium Italian dining lifestyle page
+- a food trend entertainment page
+
+Unless the Manager explicitly changes the page strategy.
 
 ## Sales Positioning
 
@@ -83,6 +113,48 @@ Avoid:
 - giọng quá hô khẩu hiệu
 - giọng food reviewer thay vì page bán sỉ
 
+## Page-Specific Content Behavior
+
+For this page, content should feel like a practical page admin speaking to shop owners, small-kitchen operators, and wholesale buyers.
+
+Use these defaults:
+
+- caption length: short to medium by default; go longer only when the route genuinely needs explanation
+- structure: easy to scan on mobile, usually opening + practical explanation + short CTA
+- title or opening hook: direct, buyer-aware, problem-aware, not poetic
+- icons: use lightly to separate pain points, support points, or CTA
+- emphasis: use quotes, question marks, and selective icon cues only when they help scanability
+
+Avoid:
+
+- overly long captions with repeated ideas
+- decorative icon spam
+- soft lifestyle copy that hides the B2B point
+- sounding like a consumer food review page
+- sounding like a franchise recruitment page
+
+## Caption Execution Standards
+
+For this page, content is not final-quality just because it is logically correct.
+It also needs to read like a real Facebook post in the feed.
+
+Prioritize mobile scanability, natural pacing, and an admin-post feel.
+Do not default to one long, even paragraph when the route is pain-point-led, convenience-led, scenario-led, or consumer-friendly.
+
+When suitable, the caption should use at least 2 of these execution devices:
+
+- a strong opening line
+- short line breaks
+- a short quoted line or familiar spoken phrase
+- a compact support-point block
+- selective icon or symbol emphasis
+- a CTA separated clearly from the body
+
+Icons and special characters should work as structure tools, not decorative filler.
+Use them to separate pain points, benefits, support points, or CTA only when they improve scanability.
+
+If the content is correct but feels too flat to scan, too uniform in rhythm, or too much like an explanation instead of a real feed post, it is not ready yet.
+
 ## Footer
 
 Use the current page footer exactly when the user or page context provides it.
@@ -94,9 +166,10 @@ If the footer is not provided:
 
 ## Hashtags
 
-Use 3-5 hashtags by default.
+Use only the number of hashtags the current post can support cleanly.
 
 Prefer B2B-relevant hashtags first, then category hashtags.
+For this page, fewer strong hashtags are better than a long generic block.
 
 Suggested working pool:
 
@@ -105,8 +178,8 @@ Suggested working pool:
 Selection guidance:
 
 - wholesale sales post: prioritize `#pizzaSi`, `#pizzacapdong`, `#menuquan`, `#bepnho`
-- production/process post: prioritize `#pizzanuonglua`, `#pizzacapdong`, `#pizza`
-- operations/advice post: prioritize `#menuquan`, `#bepnho`, `#kinhdoanhdoan`
+- production or process post: prioritize `#pizzanuonglua`, `#pizzacapdong`, `#pizza`
+- operations or advice post: prioritize `#menuquan`, `#bepnho`, `#kinhdoanhdoan`
 
 If the user later provides an official brand hashtag set, use that instead of this working pool.
 
@@ -115,9 +188,9 @@ If the user later provides an official brand hashtag set, use that instead of th
 Use these main routes:
 
 - product line posts: pizza and spaghetti lines
-- product difference posts: dong Y, dong Viet, de day, de mong, menu fit
+- product difference posts: dòng Ý, dòng Việt, đế dày, đế mỏng, menu fit
 - process and quality posts: 48h fermentation, fire-baked crust, handmade process, closed process, food safety
-- operating guidance posts: khong co chuyen mon pizza thi ban ra sao, bep nho co nen them pizza, frozen pizza deployment
+- operating guidance posts: không có chuyên môn pizza thì bán ra sao, bếp nhỏ có nên thêm pizza, frozen pizza deployment
 - market and buyer-context posts: food business menu expansion, convenience, small-store needs, customer demand
 
 ## CTA Guidance
@@ -127,9 +200,18 @@ Use CTAs such as:
 - `Inbox để nhận thông tin sỉ và tư vấn dòng phù hợp`
 - `Nhắn page để xem dòng pizza phù hợp với mô hình quán của anh chị`
 - `Cần thêm pizza vào menu nhưng bếp nhỏ, inbox để được gợi ý cách triển khai`
-- `Liên hệ để hỏi dòng phù hợp cho quán đồ uống, quán ăn hoặc bếp nhỏ`
+- `Liên hệ để hỏi dòng phù hợp cho quán đồ uống, quán ăn, hoặc bếp nhỏ`
 
-If pricing or policy is not provided, invite inbox/consultation instead of inventing figures.
+If pricing or policy is not provided, invite inbox or consultation instead of inventing figures.
+
+## Default Output Behavior
+
+For normal caption requests, return publish-ready Vietnamese copy first.
+
+Do not add strategy explanation unless requested.
+Do not include notes unless there is a real assumption, missing footer, missing claim proof, or publishing risk.
+
+If the task asks for variants, make each variant meaningfully different by angle, not only by wording.
 
 ## Visual Rules
 
@@ -141,6 +223,9 @@ For image briefs, prompts, or QA:
 - if the route is product-led, make the food and packaging or serving context clear
 - if the route is process-led, show process credibility without making the image look like a factory report
 - if the route is operations-led, show menu-fit, small-kitchen practicality, or store context
+- do not approve flat one-color posters with one floating CTA line and no real product or business context
+- do not let CTA become the main visual content
+- the image should usually contain one strong food or process cue and one visible business-fit cue
 
 Watermark details should come from the real page setup when available. If not provided, do not invent a watermark position.
 
@@ -169,7 +254,37 @@ Safer phrasing:
 - `có thể phù hợp`
 - `tùy mô hình quán`
 - `phù hợp để tham khảo thêm nếu muốn mở rộng menu`
-- `cần đánh giá theo mặt bằng, thiết bị và cách vận hành thực tế`
+- `cần đánh giá theo mặt bằng, thiết bị, và cách vận hành thực tế`
+
+## Good Vs Weak Direction Examples
+
+Weak:
+
+- `Pizza ngon chuẩn vị, hấp dẫn mọi khách hàng.`
+- `Cam kết giúp quán tăng doanh thu.`
+
+Better:
+
+- `Muốn thêm pizza vào menu nhưng bếp chưa có đội làm pizza riêng? Dòng pizza cấp đông có thể là hướng phù hợp để quán tham khảo khi mở rộng món bán.`
+- `Phù hợp để tham khảo nếu quán muốn thêm món dễ triển khai hơn, nhưng vẫn cần xem theo mặt bằng, thiết bị, và cách vận hành thực tế.`
+
+## Recommended Task Packet For This Page
+
+```text
+PAGE:
+ROUTE:
+AUDIENCE:
+PRODUCT LINE:
+KEY MESSAGE:
+APPROVED FACTS:
+CLAIMS TO AVOID:
+CTA:
+FOOTER:
+VISUAL ROUTE:
+ON-IMAGE TEXT:
+ASSET REFERENCES:
+NOTES:
+```
 
 ## Final Self-Check
 

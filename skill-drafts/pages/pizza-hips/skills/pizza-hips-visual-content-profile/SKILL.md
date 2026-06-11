@@ -16,6 +16,12 @@ This is mainly used by:
 - `Sales Angle Agent`
 - `Brand QA / Claim Safety Agent`
 
+Combine this skill with:
+
+- `fanpage-visual-creative-guidelines`
+- `fanpage-visual-taste-direction`
+- `brand-pizza-hips-guidelines`
+
 The Page Manager owns this profile and passes the relevant part of it into each task packet.
 This profile is a page-specific default map, not a fixed style lock for every post.
 If a campaign or brief needs a different valid execution, the Manager may override the default mapping in the task packet.
@@ -36,12 +42,21 @@ This page needs different visual modes for:
 
 - Brand colors: orange, blue, black
 - Tone: practical, commercial, modern, readable
+- Taste direction: bold but controlled, appetizing, fast-scanning, commercially confident
 - Do not make visuals look like luxury perfume ads or random AI posters
 - Do not overload every image with too much text
 - Do not turn every post into an infographic
 - Do not turn every knowledge post into a food sale poster
 - For Pizza Hip'S model or franchise explainers, avoid both extremes: not too empty like a pure hero poster, and not too dense like a heavy infographic.
 - Treat the route guidance below as defaults for this page, not as the only possible visual solution.
+
+Shared Pizza Hip'S taste defaults:
+
+- food should feel hot, real, and edible, not plastic
+- compositions should have one clear appetite cue or one clear business-context cue
+- negative space should feel shaped and useful, not dead
+- lighting should create depth and surface contrast, not flat exposure
+- the visual should still feel energetic even when safe zones are protected
 
 ## Visual Route Mapping
 
@@ -57,6 +72,13 @@ Style:
 - editorial
 - clean composition
 - one supporting visual or icon system
+
+Taste direction:
+
+- use a sharper editorial crop, not a generic centered poster
+- prefer one dominant visual cue tied to market or operating context
+- keep background energy low to medium so the headline still leads
+- use contrast that feels current, not dramatic for drama's sake
 
 Text density:
 
@@ -84,6 +106,12 @@ Style:
 - current and informative
 - commercial news feel, not newspaper replica
 - clear scanning hierarchy
+
+Taste direction:
+
+- one strong store, menu, ingredient, or market-context image cue
+- avoid lifeless corporate stock aesthetics
+- use realistic lighting and moderate contrast so the post feels grounded and current
 
 Text density:
 
@@ -114,6 +142,12 @@ Style:
 - current
 - recognizable internet rhythm
 
+Taste direction:
+
+- allow more motion, crop energy, and contrast punch than the other routes
+- keep the frame playful but still readable
+- use one recognizable visual twist, not decorative chaos
+
 Text density:
 
 - low to medium
@@ -142,6 +176,13 @@ Style:
 - practical
 - structured
 - still visually appetizing and modern
+
+Taste direction:
+
+- the image must still have a dominant hero zone, not only text blocks
+- use a visible product, kiosk, counter, or store-fit cue to keep it commercial
+- choose lighting and framing that give the frame depth, not slide-like flatness
+- explanatory text should sit beside a real focal subject, not replace it
 
 Text density:
 
@@ -182,6 +223,17 @@ Avoid:
 - giant blocks of copy
 - vague abstract backgrounds with no store-model clue
 
+Preferred visual construction:
+
+- one hero visual zone
+- one explanation support zone
+- one controlled negative-space zone for watermark and breathing room
+
+Recommended camera cues:
+
+- kiosk or cart logic: 3/4 or slightly elevated angle so compact scale is obvious
+- menu/product support: top-down or 3/4 depending on whether spread or thickness matters
+
 ### 5. Product And Menu Support Posts
 
 Use visual mode:
@@ -194,6 +246,13 @@ Style:
 - clear
 - product-forward
 - sales-capable
+
+Taste direction:
+
+- prioritize one appetite trigger: cheese pull, blistered crust, topping texture, steam, sauce gloss
+- use bright directional light with warm food highlights
+- keep props minimal and only helpful
+- background should support the food without becoming empty and dead
 
 Text density:
 
@@ -216,6 +275,12 @@ Avoid:
 
 - turning product posts into infographics
 - covering food with too much text
+
+Recommended camera cues:
+
+- top-down when ingredient spread and layout clarity matter
+- 3/4 when crust, thickness, and heat cues matter more
+- close crop when texture is the selling point
 
 ## Text Density Rules
 
@@ -259,6 +324,9 @@ Before approving a Pizza Hip'S visual, verify:
 - the text amount fits the route
 - the business goal is clear even before reading the full caption
 - the watermark zones remain clean
+- the frame still has visual energy after safe zones are protected
+- lighting and texture make the food or model feel believable
+- there is one memorable focal cue, not multiple weak ones
 - for `Model-Focused Posts`, the image includes at least 1 headline and 2 short supporting points unless the Manager explicitly requested `hero-poster mode`
 - if the Manager explicitly chose another valid style for the current post, review against that task packet instead of forcing the default route template
 

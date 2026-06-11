@@ -53,14 +53,14 @@ export function ProviderEmbeddingSection({
               id="embModel"
               value={embModel}
               onChange={(e) => setEmbModel(e.target.value)}
-              placeholder="text-embedding-3-small"
+              placeholder="bge-m3"
               className="text-base md:text-sm"
             />
           </div>
 
           <div className="space-y-2">
             <Label>{t("embedding.dimensions")}</Label>
-            <p className="text-sm text-muted-foreground">1536</p>
+            <p className="text-sm text-muted-foreground">1024</p>
             <p className="text-xs text-muted-foreground">{t("embedding.dimensionsHint")}</p>
           </div>
 

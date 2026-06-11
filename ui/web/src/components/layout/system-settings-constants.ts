@@ -1,26 +1,23 @@
-/** Curated 1536-dimension embedding models per provider type. */
+/** Curated 1024-dimension embedding models per provider type. */
 export const EMBEDDING_MODELS: Record<string, { id: string; name: string }[]> = {
   openai_compat: [
-    { id: "text-embedding-3-small", name: "text-embedding-3-small (1536d)" },
-    { id: "text-embedding-3-large", name: "text-embedding-3-large (3072d → 1536 via dimensions)" },
-    { id: "text-embedding-ada-002", name: "text-embedding-ada-002 (1536d)" },
+    { id: "bge-m3", name: "BGE-M3 (1024d, recommended local)" },
+    { id: "BAAI/bge-m3", name: "BAAI/bge-m3 (1024d)" },
   ],
   openrouter: [
-    { id: "openai/text-embedding-3-small", name: "openai/text-embedding-3-small (1536d)" },
-    { id: "openai/text-embedding-3-large", name: "openai/text-embedding-3-large (3072d → 1536)" },
-    { id: "openai/text-embedding-ada-002", name: "openai/text-embedding-ada-002 (1536d)" },
+    { id: "jina/jina-embeddings-v3", name: "jina/jina-embeddings-v3 (1024d)" },
   ],
   gemini_native: [
-    { id: "gemini-embedding-001", name: "gemini-embedding-001 (3072d → 1536 via dimensions)" },
+    { id: "gemini-embedding-001", name: "gemini-embedding-001 (3072d -> 1024 via dimensions)" },
   ],
   mistral: [
-    { id: "codestral-embed", name: "codestral-embed (1536d default)" },
+    { id: "codestral-embed", name: "codestral-embed (requires 1024 dimensions override)" },
   ],
   dashscope: [
-    { id: "text-embedding-v3", name: "text-embedding-v3 (1536 via dimensions)" },
+    { id: "text-embedding-v3", name: "text-embedding-v3 (1024 via dimensions)" },
   ],
   cohere: [
-    { id: "embed-v4", name: "embed-v4 (1536d native)" },
+    { id: "embed-v4", name: "embed-v4 (requires 1024 dimensions override)" },
   ],
 };
 

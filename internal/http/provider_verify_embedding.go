@@ -15,8 +15,8 @@ import (
 // handleVerifyEmbedding tests a provider's embedding capability with a minimal API call.
 //
 //	POST /v1/providers/{id}/verify-embedding
-//	Body: {"model": "text-embedding-3-small"}  (optional, falls back to settings.embedding.model)
-//	Response: {"valid": true, "dimensions": 1536} or {"valid": false, "error": "..."}
+//	Body: {"model": "bge-m3"}  (optional, falls back to settings.embedding.model)
+//	Response: {"valid": true, "dimensions": 1024} or {"valid": false, "error": "..."}
 func (h *ProvidersHandler) handleVerifyEmbedding(w http.ResponseWriter, r *http.Request) {
 	locale := extractLocale(r)
 	id, err := uuid.Parse(r.PathValue("id"))
@@ -55,7 +55,7 @@ func (h *ProvidersHandler) handleVerifyEmbedding(w http.ResponseWriter, r *http.
 		model = es.Model
 	}
 	if model == "" {
-		model = "text-embedding-3-small"
+		model = "bge-m3"
 	}
 
 	// Resolve API base: settings.embedding.api_base → provider api_base → resolved base
@@ -90,7 +90,7 @@ func (h *ProvidersHandler) handleVerifyEmbedding(w http.ResponseWriter, r *http.
 		dims = len(vectors[0])
 	}
 	result := map[string]any{"valid": true, "dimensions": dims}
-	if dims > 0 && dims != 1536 {
+	if dims > 0 && dims != store.RequiredMemoryEmbeddingDimensions {
 		result["dimension_mismatch"] = true
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -99,7 +99,7 @@ func (h *ProvidersHandler) handleVerifyEmbedding(w http.ResponseWriter, r *http.
 // handleEmbeddingStatus returns the current embedding system configuration.
 //
 //	GET /v1/embedding/status
-//	Response: {"configured": true, "provider": "openai", "model": "text-embedding-3-small"}
+//	Response: {"configured": true, "provider": "openai", "model": "bge-m3"}
 //	     or: {"configured": false}
 func (h *ProvidersHandler) handleEmbeddingStatus(w http.ResponseWriter, r *http.Request) {
 	// Primary: check system_configs for embedding.provider/model
@@ -108,7 +108,7 @@ func (h *ProvidersHandler) handleEmbeddingStatus(w http.ResponseWriter, r *http.
 		model, _ := h.sysConfigStore.Get(r.Context(), "embedding.model")
 		if provName != "" {
 			if model == "" {
-				model = "text-embedding-3-small"
+				model = "bge-m3"
 			}
 			writeJSON(w, http.StatusOK, map[string]any{
 				"configured":    true,
@@ -134,7 +134,7 @@ func (h *ProvidersHandler) handleEmbeddingStatus(w http.ResponseWriter, r *http.
 		if es != nil && es.Enabled {
 			model := es.Model
 			if model == "" {
-				model = "text-embedding-3-small"
+				model = "bge-m3"
 			}
 			writeJSON(w, http.StatusOK, map[string]any{
 				"configured":    true,

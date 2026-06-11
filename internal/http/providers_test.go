@@ -242,7 +242,7 @@ func TestProvidersHandlerCreateRejectsIncompatibleEmbeddingDimensions(t *testing
 			"embedding": {
 				"enabled": true,
 				"model": "voyage-4-nano",
-				"dimensions": 2048
+				"dimensions": 1536
 			}
 		}
 	}`
@@ -255,15 +255,15 @@ func TestProvidersHandlerCreateRejectsIncompatibleEmbeddingDimensions(t *testing
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status code = %d, want %d", w.Code, http.StatusBadRequest)
 	}
-	if !strings.Contains(w.Body.String(), "1536") {
-		t.Fatalf("response body = %q, want mention of 1536", w.Body.String())
+	if !strings.Contains(w.Body.String(), "1024") {
+		t.Fatalf("response body = %q, want mention of 1024", w.Body.String())
 	}
 	if len(providerStore.providers) != 0 {
 		t.Fatalf("provider store mutated on invalid create: %#v", providerStore.providers)
 	}
 }
 
-func TestProvidersHandlerCreateAllows1536EmbeddingDimensions(t *testing.T) {
+func TestProvidersHandlerCreateAllows1024EmbeddingDimensions(t *testing.T) {
 	token := setupProvidersAdminToken(t)
 	providerStore := newMockProviderStore()
 	handler := NewProvidersHandler(providerStore, newMockSecretsStore(), nil, "")
@@ -280,7 +280,7 @@ func TestProvidersHandlerCreateAllows1536EmbeddingDimensions(t *testing.T) {
 			"embedding": {
 				"enabled": true,
 				"model": "gemini-embedding-001",
-				"dimensions": 1536
+				"dimensions": 1024
 			}
 		}
 	}`
@@ -307,7 +307,7 @@ func TestProvidersHandlerUpdateRejectsIncompatibleEmbeddingDimensions(t *testing
 		ProviderType: store.ProviderOpenAICompat,
 		APIBase:      "https://api.voyageai.com/v1",
 		Enabled:      true,
-		Settings:     json.RawMessage(`{"embedding":{"enabled":true,"model":"voyage-4-nano","dimensions":1536}}`),
+		Settings:     json.RawMessage(`{"embedding":{"enabled":true,"model":"voyage-4-nano","dimensions":1024}}`),
 	}
 	if err := providerStore.CreateProvider(context.Background(), provider); err != nil {
 		t.Fatalf("CreateProvider() error = %v", err)
@@ -322,7 +322,7 @@ func TestProvidersHandlerUpdateRejectsIncompatibleEmbeddingDimensions(t *testing
 			"embedding": {
 				"enabled": true,
 				"model": "voyage-4-nano",
-				"dimensions": 2048
+				"dimensions": 1536
 			}
 		}
 	}`
@@ -340,7 +340,7 @@ func TestProvidersHandlerUpdateRejectsIncompatibleEmbeddingDimensions(t *testing
 		t.Fatalf("GetProvider() error = %v", err)
 	}
 	es := store.ParseEmbeddingSettings(current.Settings)
-	if es == nil || es.Dimensions != 1536 {
-		t.Fatalf("embedding dimensions = %+v, want 1536 preserved", es)
+	if es == nil || es.Dimensions != 1024 {
+		t.Fatalf("embedding dimensions = %+v, want 1024 preserved", es)
 	}
 }

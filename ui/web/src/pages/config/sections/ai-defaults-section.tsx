@@ -174,7 +174,7 @@ export function AiDefaultsSection({ data, onSave, saving }: Props) {
             providerTip={t("agents.memory.embeddingProviderTip")}
             modelTip={t("agents.memory.embeddingModelTip")}
             providerPlaceholder="(auto)"
-            modelPlaceholder="text-embedding-3-small"
+            modelPlaceholder="bge-m3"
             allowEmpty
           />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

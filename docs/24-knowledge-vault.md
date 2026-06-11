@@ -85,7 +85,7 @@ Document registry: metadata pointers. Content lives on filesystem; registry hold
 | `title` | TEXT | Display name |
 | `doc_type` | TEXT | context, memory, note, skill, episodic |
 | `content_hash` | TEXT | SHA-256 of file content (detects changes) |
-| `embedding` | vector(1536) | pgvector: semantic similarity |
+| `embedding` | vector(1024) | pgvector: semantic similarity |
 | `tsv` | tsvector | Generated: FTS index on title+path |
 | `metadata` | JSONB | Optional custom fields |
 | `created_at`, `updated_at` | TIMESTAMPTZ | Timestamps |

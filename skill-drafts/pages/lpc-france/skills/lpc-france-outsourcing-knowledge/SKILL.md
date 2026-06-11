@@ -1,230 +1,259 @@
 ---
 name: LPC France Outsourcing Knowledge
-description: Domain guidance for LPC France BIM, design, drafting, UBoot Beton, flat slab, green construction, ESG, and French-market construction outsourcing lead-generation content. Use when writing, researching, designing, or reviewing technical outsourcing content for LPC France.
+description: Domain guidance for LPC France B2B French-English content about BIM outsourcing, 3D modeling, structural design support, construction documentation, technical drawing production, AEC outsourcing workflow, and safe technical claims for Europe.
 ---
 
 # LPC France Outsourcing Knowledge
 
-Use this skill when the task involves LPC France outsourcing content, BIM services, design support, drafting, technical drawing, construction documentation, UBoot Beton, flat slab systems, long-span slabs, green materials, ESG, or lead generation for French-market construction clients.
+Use this skill when the task involves LPC France outsourcing content, BIM services, 3D architectural modeling, structural design support, technical drawing production, construction documentation support, outsourcing workflow, technical coordination, or B2B AEC lead-generation content for Europe.
 
 Also apply:
 
 - `facebook-fanpage-baseline-rules` for Facebook post structure.
-- `brand-lpc-france-guidelines` for LPC France bilingual format, tone, watermark, CTA, and hashtag rules.
+- `brand-lpc-france-guidelines` for bilingual format, tone, watermark, CTA, and hashtag rules.
+- `lpc-france-visual-content-profile` when image direction or image QA matters.
 - `fanpage-research-agent-guidelines` when market, legal, technical, regulatory, pricing, or current claims need sources.
+- `fanpage-grounded-content-rules` when the post needs believable team, deadline, or workflow pain points.
+
+## Role
+
+This skill defines what LPC France communicates as a professional outsourcing partner.
+
+It exists to help the page:
+
+- explain service areas clearly
+- educate the market about outsourcing in AEC
+- address real client pain points
+- build trust around process and technical support
+- create cooperation intent without exaggeration
 
 ## Important Technical Boundary
 
-This skill supports general marketing, educational, and lead-generation content. It does not replace structural engineering review, code compliance review, legal advice, or certified project documentation.
+This skill supports marketing, B2B education, and lead-generation content.
+It does not replace structural engineering review, code compliance review, legal advice, licensed design responsibility, or certified project documentation.
 
-When discussing structural systems, construction codes, material performance, ESG, sustainability, cost savings, project approvals, procurement, or country-specific standards:
+When discussing standards, regulations, structural performance, documentation quality, ESG, timelines, or project outcomes:
 
-- Use cautious wording.
-- Require verification by qualified engineers, architects, local code specialists, or legal counsel where relevant.
-- Do not claim guaranteed savings, guaranteed approval, guaranteed compliance, guaranteed performance, or universal suitability.
-- Do not invent project data, dimensions, load capacity, CO2 savings, cost savings, timelines, or certification status.
-
-Avoid phrases equivalent to:
-
-- "guaranteed cost reduction"
-- "approved in all cases"
-- "zero risk"
-- "always compliant"
-- "best solution for every project"
-- "guaranteed structural optimization"
+- use cautious wording
+- recommend verification with qualified professionals when relevant
+- do not claim guaranteed savings, guaranteed approval, guaranteed compliance, guaranteed performance, or universal suitability
+- do not invent project data, load capacity, dimensions, software, CO2 reduction, cost reduction, delivery timing, or certifications
 
 ## Service Areas
 
-Use these service areas when creating content angles or explaining LPC France capabilities. Only present a service as available when the user or brand context confirms it.
+Only present a service as available when confirmed by user input or page context.
 
-### BIM Modeling
+### 1. BIM Outsourcing
 
-Support for creating or developing BIM models from drawings, sketches, project briefs, or design input.
+Use for:
 
-Best angles:
-
-- Improve coordination between teams.
-- Convert 2D information into structured model information.
-- Support architects, engineering offices, and contractors during busy project phases.
-
-Caution:
-
-- Do not promise clash-free or permit-ready models unless QA scope and standards are defined.
-
-### Technical Drafting / Dessin Technique
-
-Production or support for plans, sections, elevations, execution drawings, shop drawings, details, and drawing updates.
+- BIM modeling support
+- model development from design inputs
+- structured model production for architecture and engineering workflows
 
 Best angles:
 
-- Reduce drawing backlog.
-- Keep revisions organized.
-- Provide clear documentation for design and construction teams.
+- support overloaded internal teams
+- improve production capacity
+- help transform 2D information into usable model output
 
-Caution:
+### 2. 3D Architectural Modeling
 
-- Avoid claiming final construction approval without local professional validation.
+Use for:
 
-### Design Support
-
-Support for design development, documentation, layout options, technical detailing, or file preparation.
-
-Best angles:
-
-- Flexible support for overloaded internal teams.
-- Helps turn design intent into clearer deliverables.
-- Useful for recurring documentation workload.
-
-Caution:
-
-- Clarify scope: support work is not the same as licensed design responsibility unless explicitly contracted.
-
-### Model / Drawing Conversion
-
-Conversion from 2D to BIM, PDF/CAD to editable drawings, or legacy files to updated project documentation.
+- design visualization support
+- architectural model development
+- production support for presentation or coordination workflows
 
 Best angles:
 
-- Restore usability of old or fragmented project data.
-- Help teams standardize files for current workflows.
+- help teams communicate design intent
+- improve visual understanding before deeper documentation
+- support project development phases
 
-Caution:
+### 3. Structural Design Support
 
-- Conversion accuracy depends on input quality and review cycles.
+Use for:
 
-### Quantity / Documentation Support
-
-If confirmed, LPC France can discuss quantity take-off, schedules, drawing lists, or project document organization.
-
-Best angles:
-
-- Better visibility over project information.
-- Supports estimation and planning workflows.
-
-Caution:
-
-- Quantity or cost output must be reviewed against project standards and local requirements.
-
-## Construction Knowledge Areas
-
-Use these topics for educational or authority-building posts.
-
-### UBoot Beton
-
-UBoot Beton is commonly discussed as a void-forming system used in reinforced concrete slabs to reduce concrete volume and support long-span or flat slab design strategies, depending on project design.
+- structural coordination support
+- structural drawing support
+- production help for technical structural workflows
 
 Best angles:
 
-- Explain the concept simply.
-- Link it to material efficiency, slab depth discussions, flexible layouts, and technical coordination.
-- Position LPC France as able to support drawing/modeling/documentation around such systems when confirmed by the brief.
+- clarify structural intent
+- improve coordination quality
+- support technical teams during busy phases
 
 Caution:
 
-- Do not claim a fixed percentage of saving or performance improvement without verified project data.
-- Do not present it as suitable for every slab or every project.
-- Structural design must be verified by qualified engineers.
+- do not imply licensed structural responsibility unless explicitly confirmed
 
-### Flat Slab / San Phang Khong Dam
+### 4. Construction Documentation Support
 
-Flat slab or beamless slab content can explain the practical value of simpler ceiling zones, layout flexibility, MEP coordination, and long-span planning.
+Use for:
+
+- documentation production
+- execution drawing support
+- technical package support
+- file organization and revision handling
 
 Best angles:
 
-- Why teams consider beamless slabs.
-- What needs coordination before selecting a slab system.
-- How BIM/detailing support helps visualize and document complex slab zones.
+- reduce drawing backlog
+- improve documentation consistency
+- help internal teams focus on higher-level design decisions
 
-Caution:
+### 5. Technical Drawing Production
 
-- Avoid overclaiming span, thickness, cost, or structural performance.
+Use for:
 
-### Long-Span Slab / San Vuot Nhip
-
-Long-span content should focus on design coordination, architectural flexibility, and early technical review.
-
-Best angles:
-
-- Larger open spaces can affect structure, MEP, cost, and construction sequencing.
-- Documentation and model coordination help teams compare options.
-
-Caution:
-
-- Do not state final feasibility without project-specific engineering analysis.
-
-### Green Materials / ESG
-
-Green construction and ESG content can connect material efficiency, waste reduction, documentation, and better project transparency.
+- plans
+- sections
+- elevations
+- details
+- drawing updates
 
 Best angles:
 
-- Material efficiency as one part of sustainability.
-- BIM data and documentation can support ESG conversations.
-- Green claims need measurable basis.
+- organized revisions
+- drawing clarity
+- production support for recurring technical workloads
 
-Caution:
+## Core Content Routes
 
-- Do not claim ESG compliance, carbon reduction, certification, or environmental benefit without source/project data.
+### 1. Service Introduction Content
 
-## French-Market Outsourcing Angles
+Goal:
 
-Use these content angles for posts, scripts, carousels, or image briefs:
+- make prospects understand what LPC France can support
+- clarify what can be outsourced
+- open the door to project discussion
 
-- Why French construction teams outsource BIM or drafting during peak workload.
-- How external BIM support can reduce documentation bottlenecks.
-- What to prepare before sending a BIM/drafting brief.
-- How to manage revisions with an outsourced technical team.
-- What makes a good drawing handoff package.
-- French-first communication for technical outsourcing.
-- When to use BIM modeling vs. 2D drafting support.
-- How UBoot/flat slab documentation benefits from clean model coordination.
-- Why green construction claims need verified technical data.
-- Common mistakes: sending incomplete files, unclear revision rules, no naming standard, no QA checklist, or no responsibility matrix.
+### 2. Outsourcing Benefit Content
 
-## Writing Rules For Technical Outsourcing Content
+Goal:
 
-- Keep the post practical and decision-oriented.
-- Start from a real project pain point: backlog, urgent revisions, overloaded internal teams, file conversion, coordination issues, or technical documentation gaps.
-- Explain one concept at a time.
-- Tie the topic back to LPC France only when the brief provides enough basis.
-- Use French technical vocabulary naturally; keep English as supporting translation.
-- Avoid dense textbook explanations.
-- Avoid unsupported numbers.
-- Include source notes when using market, legal, regulatory, ESG, or statistical claims.
-- If standards or French construction regulations are mentioned, recommend verification with current local requirements and qualified professionals.
+- educate the market
+- explain why outsourcing may help European AEC teams
+- position LPC France as a professional support partner
+
+Use for:
+
+- team overload
+- peak workloads
+- parallel projects
+- urgent deadlines
+- flexible scaling needs
+
+### 3. Professional Workflow Content
+
+Goal:
+
+- build trust
+- reduce concern about outsourcing quality
+- highlight process clarity
+
+Use for:
+
+- brief intake
+- input and output definition
+- revision flow
+- QA mindset
+- remote coordination habits
+- communication structure
+
+### 4. Technical Knowledge Content
+
+Goal:
+
+- show expertise
+- build B2B authority
+- keep the page useful to professionals
+
+Use for:
+
+- BIM model clarity
+- 3D model usefulness
+- technical drawing readability
+- structural coordination clarity
+- documentation quality
+- communication in outsourced AEC workflows
+
+### 5. Client Pain-Point Content
+
+Goal:
+
+- identify real pain points
+- create a natural bridge to outsourcing support
+
+Use for:
+
+- internal overload
+- lack of production staff
+- deadline pressure
+- parallel project workload
+- need for flexible external support
+- concern about quality control in outsourcing
+- concern about communication across time zone or language
+
+### 6. Case / Portfolio / Proof Content
+
+Use only when the user provides the proof or confirms permission.
+
+Do not invent:
+
+- client names
+- project names
+- country coverage
+- delivery time
+- quantified results
+- software stack
+
+## Writing Rules
+
+- speak to B2B AEC decision makers
+- keep one concept per post
+- connect technical content to workflow meaning
+- do not write like a legal or engineering audit report
+- keep bilingual output equivalent in meaning
+- avoid dense textbook explanation
+- use practical project situations whenever possible
+
+## Outsourcing Framing Rules
+
+Position outsourcing as:
+
+- flexible support
+- production reinforcement
+- a way to help internal teams manage workload better
+- a professional collaboration model
+
+Do not frame outsourcing as:
+
+- replacing the internal team completely
+- a universal answer to every project problem
+- a guaranteed cost-saving shortcut
 
 ## Recommended Post Structure
 
-Use this structure for LPC France Facebook posts:
+Use this structure for normal LPC France posts:
 
-1. French title: short, direct, technical, and pain-point driven.
-2. French opening: 1-2 sentences that name the project problem.
-3. French body: explain the concept, workflow, or service value.
-4. French CTA: ask the reader to send a brief, contact the page, or request consultation.
-5. English section: mirror the message clearly.
-6. Hashtags from the LPC France brand skill.
+1. French hook or title
+2. French opening with the pain point or topic
+3. French body with explanation
+4. French CTA
+5. English equivalent section
+6. English CTA
+7. Footer and hashtags from brand skill
 
-Do not show labels like "Problem", "Solution", "AIDA", or "PAS" in publish-ready copy unless the user asks for analysis.
+## Final Self-Check
 
-## Image Brief Guidance
+Before returning content, verify:
 
-For design tasks, request images that show:
-
-- BIM model, technical drawing, section/detail, plan overlay, construction coordination, slab system concept, or professional project workflow.
-- Clean B2B layout with enough negative space for bilingual headline or a short technical statement.
-- Current watermark config reserved for LPC France when available; top-left safe zone is only the fallback.
-- No confidential project data or unrelated logos.
-
-For UBoot/flat slab posts, prioritize technical clarity over dramatic construction imagery.
-
-## Lead Quality Checklist
-
-Before returning outsourcing content, verify:
-
-- The topic targets French-market construction decision makers.
-- The post explains a concrete problem or workflow.
-- LPC France is positioned as a support partner, not as a certifying engineer unless verified.
-- Technical claims are cautious and source-backed where needed.
-- French appears first when combined with the brand skill.
-- CTA asks for a clear next step: brief, consultation, sample workflow, or message.
-- Current watermark config and visual constraints are passed to design work when images are involved; fallback safe zones are used only when runtime config is unavailable.
+- the topic is relevant to European AEC outsourcing
+- the service or workflow explanation is concrete
+- the post sounds professional, international, and technically aware
+- no unsupported technical or commercial claim was invented
+- French and English stay aligned in meaning
+- the CTA invites consultation or cooperation, not casual consumer action

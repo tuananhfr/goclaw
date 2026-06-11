@@ -47,6 +47,8 @@ import {
   reasoningSignature,
 } from "./provider-overview-helpers";
 
+const REQUIRED_EMBEDDING_DIMENSIONS = 1024;
+
 interface ProviderOverviewProps {
   provider: ProviderData;
   onUpdate: (id: string, data: ProviderInput) => Promise<void>;
@@ -196,7 +198,7 @@ export function ProviderOverview({ provider, onUpdate }: ProviderOverviewProps) 
       if (submittedAPIKey) data.api_key = submittedAPIKey;
       let nextSettings = { ...((provider.settings || {}) as Record<string, unknown>) };
       if (showEmbedding) {
-        nextSettings = { ...nextSettings, embedding: embEnabled ? { enabled: true, model: embModel.trim() || undefined, api_base: embApiBase.trim() || undefined } : { enabled: false } };
+        nextSettings = { ...nextSettings, embedding: embEnabled ? { enabled: true, model: embModel.trim() || undefined, api_base: embApiBase.trim() || undefined, dimensions: REQUIRED_EMBEDDING_DIMENSIONS } : { enabled: false } };
       }
       if (isOAuth) nextSettings = buildProviderSettingsWithChatGPTOAuthRouting(nextSettings, poolRouting);
       nextSettings = buildProviderSettingsWithReasoningDefaults(nextSettings, showReasoningDefaults ? { effort: reasoningExpert ? reasoningEffort : reasoningThinkingLevel, fallback: reasoningExpert ? reasoningFallback : "downgrade" } : null);
@@ -286,7 +288,7 @@ export function ProviderOverview({ provider, onUpdate }: ProviderOverviewProps) 
       ) : null}
 
       {showEmbedding ? (
-        <ProviderEmbeddingSection embEnabled={embEnabled} setEmbEnabled={setEmbEnabled} embModel={embModel} setEmbModel={setEmbModel} embApiBase={embApiBase} setEmbApiBase={setEmbApiBase} onVerify={() => verifyEmbedding(provider.id, embModel.trim() || undefined, undefined)} verifying={embVerifying} verifyResult={embResult} />
+        <ProviderEmbeddingSection embEnabled={embEnabled} setEmbEnabled={setEmbEnabled} embModel={embModel} setEmbModel={setEmbModel} embApiBase={embApiBase} setEmbApiBase={setEmbApiBase} onVerify={() => verifyEmbedding(provider.id, embModel.trim() || undefined, REQUIRED_EMBEDDING_DIMENSIONS)} verifying={embVerifying} verifyResult={embResult} />
       ) : null}
 
       <section className="space-y-3 rounded-lg border p-3 sm:p-4 overflow-hidden">

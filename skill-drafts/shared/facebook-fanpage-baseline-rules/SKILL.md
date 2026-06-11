@@ -16,7 +16,7 @@ Before returning Facebook page work, verify:
 
 - the opening lines are clear
 - the message is understandable on mobile
-- the CTA exists when the output is publishable copy
+- the CTA exists when the output is publishable copy and the route actually needs one
 - footer details are exact when provided
 - hashtags are relevant and limited
 - image direction and caption direction support each other
@@ -24,7 +24,8 @@ Before returning Facebook page work, verify:
 
 ## Caption Baseline
 
-- Keep normal captions under 300 words unless asked otherwise.
+- Caption length should fit the route, page type, audience, and post goal.
+- Do not force one default word count across all pages.
 - Prefer short paragraphs.
 - Write naturally, not like a report.
 - Do not expose framework labels in publish-ready copy.
@@ -33,7 +34,7 @@ Before returning Facebook page work, verify:
 
 ## Hashtag Baseline
 
-- Use 3-5 relevant hashtags by default.
+- Use only the number of hashtags the page, brand, or current post style can support cleanly.
 - Put the brand hashtag first when known.
 - Separate hashtags from the footer with one blank line.
 
@@ -44,6 +45,18 @@ Before returning Facebook page work, verify:
 - Keep key content away from safe zones and edges.
 - Prefer one coherent visual direction per asset.
 - Do not use another brand's logo unless explicitly required.
+
+## Override Rule
+
+This baseline is minimum hygiene, not a style system.
+
+Never let this skill override:
+
+- page-specific brand rules
+- page-specific footer or hashtag rules
+- content-writer route logic
+- claim safety rules
+- explicit user or Manager instructions
 
 ## Final Rule
 

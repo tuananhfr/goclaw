@@ -1,44 +1,45 @@
 ---
 name: Drive Reference Search Guidelines
-description: Workflow for design agents to find the right image references inside allowed Drive/cache folders before creating new images. Use when a Designer must search brand assets, product photos, project photos, campaign folders, or Drive cache; inspect a limited number of images; select 1-3 best references; download selected images; and pass local MEDIA paths to image generation without scanning all Drive or inventing assets.
+slug: drive-reference-search-guidelines
+description: Workflow for design agents to find the right image references inside allowed Drive or cache folders before creating new images. Use when a Designer must search brand assets, product photos, project photos, campaign folders, or Drive cache; inspect a limited number of images; select 1-3 best references; download selected images; and pass local MEDIA paths into the approved image-generation workflow without scanning all Drive or inventing assets.
 ---
 
 # Drive Reference Search Guidelines
 
 Use this skill when a design agent needs to search Google Drive, Drive cache, brand folders, project folders, product folders, or shared media folders to find real reference images before creating a new image.
 
-This skill is brand-neutral. Combine it with the page/brand skill, design skill, and brief-specific constraints.
+This skill is brand-neutral. Combine it with the page or brand skill, visual skill, and brief-specific constraints.
 
 ## Core Rule
 
 Use real available references, but search narrowly.
 
-Do not scan the whole Drive. Do not read unlimited images. Do not use files outside granted folders. If no relevant reference exists, report the blocker clearly instead of inventing that a product/project image exists.
+Do not scan the whole Drive. Do not inspect unlimited images. Do not use files outside granted folders. If no relevant reference exists, report the blocker clearly instead of inventing that a product or project image exists.
 
 ## Hard Limits
 
-- Only search folders explicitly available or granted by the current tool/session.
-- Do not read all Drive.
+- Only search folders explicitly available or granted by the current tool or session.
+- Do not scan all Drive.
 - Do not list more than needed from each folder.
 - List at most 30 image candidates before selecting images to inspect.
-- Use `read_image` on at most 20 images total.
+- Inspect at most 20 images total.
 - Select 1-3 best references by default.
 - Download only selected references, not every candidate.
-- Prefer product/project-specific references over generic visuals.
+- Prefer product- or project-specific references over generic visuals.
 - If references are too weak, say so and ask for better assets or permission to use a broader folder.
 
 ## Required Inputs
 
 Expect from the Lead or user:
 
-- Page/brand.
+- Page or brand.
 - Product, service, project, or topic.
-- Asset type and size/aspect ratio.
-- Campaign/content message.
+- Asset type and size or aspect ratio.
+- Campaign or content message.
 - Required visual subject.
-- Allowed Drive/cache folders or folder IDs.
+- Allowed Drive or cache folders, folder IDs, or approved search scope.
 - Any folder naming hints, project names, product names, dates, file naming patterns, or aliases.
-- Whether final output needs reference images or only an image brief.
+- Whether final output needs references for image creation or only an image brief.
 
 If allowed folders are missing, ask for them or state that Drive reference search is blocked.
 
@@ -48,14 +49,14 @@ If allowed folders are missing, ask for them or state that Drive reference searc
 
 Extract:
 
-- Brand/page name.
-- Product or project name.
-- Asset goal.
-- Main visual subject.
-- Required mood/style.
-- Must include / must avoid.
-- Safe zones, watermark zones, and logo zones.
-- Whether references should be product, project, site, people, package, building, interior, food, construction, or technical diagram.
+- brand or page name
+- product or project name
+- asset goal
+- main visual subject
+- required mood or style
+- must include and must avoid
+- safe zones, watermark zones, and logo zones
+- whether references should be product, project, site, people, package, building, interior, food, construction, or technical diagram
 
 ### 2. Generate Search Keywords
 
@@ -65,35 +66,35 @@ Create keyword groups before searching:
 PRIMARY:
 - exact product/project/brand terms
 
-VIETNAMESE:
-- Vietnamese topic/product aliases
+LOCAL LANGUAGE:
+- local-language aliases if relevant
 
 ENGLISH:
 - English industry terms
 
 ALIASES:
-- common abbreviations, spelling variants, old product names, code names, SKU-like terms
+- abbreviations, spelling variants, old product names, code names, SKU-like terms
 
 VISUAL:
-- package, site, model, render, before-after, detail, close-up, finished product, ingredient, facade, interior, slab, kiosk, etc.
+- package, site, model, render, before-after, detail, close-up, finished product, ingredient, facade, interior, slab, kiosk
 ```
 
 Examples:
 
-- Baking: `bột mì`, `Địa Cầu 999`, `flour`, `wheat flour`, `bao bì`, `thành phẩm`, `bánh Trung thu`.
-- Construction: `sàn Ubot`, `UBoot Beton`, `flat slab`, `voided slab`, `công trình`, `thi công`, `mặt cắt`, `BIM`.
-- Franchise/F&B: `Pizza Hip'S`, `kiosk`, `combo`, `pizza`, `gà rán`, `store`, `menu`, `product`.
+- Baking: `bot mi`, `Dia Cau 999`, `flour`, `wheat flour`, `bao bi`, `thanh pham`, `banh trung thu`
+- Construction: `san Ubot`, `UBoot Beton`, `flat slab`, `voided slab`, `cong trinh`, `thi cong`, `mat cat`, `BIM`
+- Franchise or F&B: `Pizza Hip'S`, `kiosk`, `combo`, `pizza`, `ga ran`, `store`, `menu`, `product`
 
 ### 3. List Allowed Folders
 
-List only the allowed/granted root folders.
+List only the allowed or granted root folders.
 
 Evaluate folder names by:
 
-- Brand/page match.
-- Product/project/topic match.
-- Date/campaign relevance.
-- Folder type: `brand assets`, `product photos`, `project photos`, `campaign`, `creative`, `before-after`, `render`, `logo`, `raw`, `final`.
+- brand or page match
+- product, project, or topic match
+- date or campaign relevance
+- folder type such as `brand assets`, `product photos`, `project photos`, `campaign`, `creative`, `before-after`, `render`, `logo`, `raw`, `final`
 
 Do not open unrelated folders just because they are nearby.
 
@@ -101,11 +102,11 @@ Do not open unrelated folders just because they are nearby.
 
 Choose the most likely folders:
 
-- Product brief: prioritize product/photo/package folders.
-- Project/construction brief: prioritize project folder, site photos, drawings/renders, before-after folders.
-- Brand/identity brief: prioritize brand kit, logo, guideline, approved creative folders.
-- Recipe/food brief: prioritize ingredient/product photos and finished dish photos.
-- Franchise/store brief: prioritize store, kiosk, menu, product, customer scene folders.
+- Product brief: prioritize product, photo, or package folders.
+- Project or construction brief: prioritize project folders, site photos, drawings or renders, and before-after folders.
+- Brand or identity brief: prioritize brand kit, logo, guideline, and approved creative folders.
+- Recipe or food brief: prioritize ingredient, product, and finished dish photos.
+- Franchise or store brief: prioritize store, kiosk, menu, product, and customer-scene folders.
 
 If folders are organized by project, open only 1-3 project folders that best match the brief.
 
@@ -123,19 +124,19 @@ Prefer likely image formats:
 - `.tif`
 - `.tiff`
 
-Use file names, folder paths, modified dates, and thumbnails/metadata if available to rank candidates before reading images.
+Use file names, folder paths, modified dates, and thumbnails or metadata if available to rank candidates before inspecting images.
 
-### 6. Read Image Candidates
+### 6. Inspect Image Candidates
 
-Use `read_image` on at most 20 images total.
+Inspect at most 20 images total.
 
-Read in priority order:
+Inspect in priority order:
 
-1. Exact product/project match.
-2. Clear subject match.
-3. Recent or campaign-specific asset.
-4. Approved/final asset over raw asset.
-5. Higher quality and less obstructed image.
+1. exact product or project match
+2. clear subject match
+3. recent or campaign-specific asset
+4. approved or final asset over raw asset
+5. higher quality and less obstructed image
 
 Stop early when you already have 1-3 strong references.
 
@@ -151,7 +152,7 @@ AUTHENTICITY:
 - Is it a real brand/product/project image?
 
 QUALITY:
-- Is it sharp, well-lit, high enough resolution, not heavily cropped?
+- Is it sharp, well-lit, high enough resolution, and not heavily cropped?
 
 USABILITY:
 - Can it guide the new image without covering key details?
@@ -165,25 +166,25 @@ BRAND FIT:
 
 Prefer references that are:
 
-- Real product photos for product posts.
-- Real project/site photos for construction posts.
-- Real store/kiosk/menu/product photos for F&B posts.
-- Real ingredient/finished cake photos for baking posts.
-- Approved brand assets for identity-heavy posts.
+- real product photos for product posts
+- real project or site photos for construction posts
+- real store, kiosk, menu, or product photos for F&B posts
+- real ingredient or finished cake photos for baking posts
+- approved brand assets for identity-heavy posts
 
 ### 8. Select 1-3 References
 
 Choose:
 
-- 1 primary reference for exact subject.
-- 1 secondary reference for style/context if useful.
-- 1 technical/detail reference if the asset needs accuracy.
+- 1 primary reference for exact subject
+- 1 secondary reference for style or context if useful
+- 1 technical or detail reference if the asset needs accuracy
 
 Do not choose more than 3 references unless the user explicitly asks and tooling supports it.
 
 ### 9. Download Selected References
 
-Use `gdrive_download` only for selected references.
+Download only the selected references using the approved Drive or cache workflow available in the current environment.
 
 Keep:
 
@@ -192,39 +193,50 @@ Keep:
 - reason selected
 - any limitation such as low resolution or partial view
 
-Use the downloaded `MEDIA` path as the reference input for image generation, such as:
+Use the downloaded local MEDIA path as the reference input for the approved image-generation workflow.
 
-```text
-create_image.reference_image_path = [local MEDIA path]
-```
-
-If the image generation tool supports multiple references, pass the 1-3 selected local paths in priority order.
+If the image-generation tool supports multiple references, pass the 1-3 selected local paths in priority order.
 
 ### 10. Create Or Brief The Image
 
 When generating a final image:
 
 - Use the selected reference path(s).
-- Preserve brand/product/project identity.
-- Add brand-specific watermark safe zone rules.
-- Avoid asking the image model to invent exact logos/text if deterministic rendering is required.
-- If exact on-image text is required, use the brand font/render workflow where available.
+- Preserve brand, product, or project identity.
+- Add brand-specific watermark safe-zone rules.
+- Avoid asking the image model to invent exact logos or exact text if deterministic rendering is required.
+- If exact on-image text is required, use the brand font or render workflow where available.
 
 When returning only a brief:
 
 - Include selected reference paths and why each was chosen.
 - Mention limitations.
 
+## Reference Use Discipline
+
+When references are available, use them to understand:
+
+- product shape
+- environment
+- material
+- page visual taste
+- composition pattern
+- realism level
+
+Do not copy a reference blindly.
+Do not invent missing brand assets from nearby reference cues.
+If exact product or location accuracy matters, ask for the real asset or use a placeholder.
+
 ## Blocker Rules
 
 Report a blocker instead of guessing when:
 
-- No allowed folder is provided.
-- Search tools cannot access granted folders.
-- No relevant product/project image is found.
-- All candidate images are too low quality or unrelated.
-- The asset needed is outside granted folders.
-- The task requires a real product/project reference but only generic images are available.
+- no allowed folder is provided
+- search tools cannot access granted folders
+- no relevant product or project image is found
+- all candidate images are too low quality or unrelated
+- the asset needed is outside granted folders
+- the task requires a real product or project reference but only generic images are available
 
 Blocker format:
 
@@ -235,7 +247,7 @@ I could not find a usable reference image for [subject] inside the allowed folde
 SEARCHED:
 - [folder/path]
 - [keywords]
-- [candidate count/read count]
+- [candidate count/inspect count]
 
 NEEDED:
 - [specific missing asset or permission]
@@ -244,9 +256,9 @@ NEEDED:
 ## Privacy And Scope Rules
 
 - Do not expose private Drive paths unless needed for the task handoff.
-- Do not use confidential project/client images outside the requested context.
+- Do not use confidential project or client images outside the requested context.
 - Do not mention internal folder names in public-facing copy.
-- Do not use people/faces from project folders if the brief does not need people or permission is unclear.
+- Do not use people or faces from project folders if the brief does not need people or permission is unclear.
 - Do not use unrelated brand logos.
 
 ## Final Response Pattern
@@ -265,7 +277,7 @@ SEARCH SUMMARY
 - Blockers/limits:
 
 NEXT USE
-- Pass primary reference to create_image.reference_image_path.
+- Pass the selected reference path(s) into the approved image-generation workflow.
 ```
 
 For a final generated image task, do not over-explain. Return the final image and concise notes about which reference image(s) guided it.
@@ -274,10 +286,10 @@ For a final generated image task, do not over-explain. Return the final image an
 
 Before finishing, verify:
 
-- Search stayed inside allowed folders.
-- No whole-Drive scan occurred.
-- No more than 30 image candidates were listed.
-- No more than 20 images were read.
-- Selected references are real, relevant, and downloaded.
-- Local MEDIA paths are available for image generation.
-- Missing assets are reported as blockers, not invented.
+- search stayed inside allowed folders
+- no whole-Drive scan occurred
+- no more than 30 image candidates were listed
+- no more than 20 images were inspected
+- selected references are real, relevant, and downloaded
+- local MEDIA paths are available for image generation
+- missing assets are reported as blockers, not invented

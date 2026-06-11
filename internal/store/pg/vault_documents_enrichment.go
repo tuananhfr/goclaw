@@ -75,6 +75,65 @@ func (s *PGVaultStore) UpdateSummaryAndReembed(ctx context.Context, tenantID, do
 	return err
 }
 
+// BackfillVaultEmbeddings generates embeddings for existing vault documents that
+// lost vectors during an embedding-dimension migration.
+func (s *PGVaultStore) BackfillVaultEmbeddings(ctx context.Context) (int, error) {
+	if s.embProvider == nil {
+		return 0, nil
+	}
+
+	type row struct {
+		ID      string `db:"id"`
+		Title   string `db:"title"`
+		Path    string `db:"path"`
+		Summary string `db:"summary"`
+	}
+
+	const batchSize = 100
+	total := 0
+	for {
+		var pending []row
+		if err := pkgSqlxDB.SelectContext(ctx, &pending, `
+			SELECT id, COALESCE(title, '') AS title, COALESCE(path, '') AS path, COALESCE(summary, '') AS summary
+			FROM vault_documents
+			WHERE embedding IS NULL
+			ORDER BY id ASC
+			LIMIT $1`, batchSize); err != nil {
+			return total, fmt.Errorf("query vault docs without embeddings: %w", err)
+		}
+		if len(pending) == 0 {
+			return total, nil
+		}
+
+		texts := make([]string, len(pending))
+		for i, doc := range pending {
+			texts[i] = doc.Title + " " + doc.Path + " " + doc.Summary
+		}
+		embeddings, err := s.embProvider.Embed(ctx, texts)
+		if err != nil {
+			return total, fmt.Errorf("generate vault embeddings: %w", err)
+		}
+
+		updated := 0
+		for i, doc := range pending {
+			if i >= len(embeddings) || len(embeddings[i]) == 0 {
+				continue
+			}
+			if _, err := s.db.ExecContext(ctx,
+				`UPDATE vault_documents SET embedding = $1::vector, updated_at = $2 WHERE id = $3`,
+				vectorToString(embeddings[i]), time.Now().UTC(), doc.ID,
+			); err != nil {
+				return total, fmt.Errorf("update vault embedding id=%s: %w", doc.ID, err)
+			}
+			total++
+			updated++
+		}
+		if updated == 0 {
+			return total, fmt.Errorf("generate vault embeddings: provider returned no usable vectors for %d documents", len(pending))
+		}
+	}
+}
+
 // FindSimilarDocs finds documents with similar embeddings to the given docID.
 // Returns top-N neighbors excluding the source doc itself.
 // Empty agentID means no agent filter.

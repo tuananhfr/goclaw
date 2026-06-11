@@ -251,7 +251,7 @@ skills/<skill-name>/
 | `file_hash` | VARCHAR(64) | SHA-256 of SKILL.md |
 | `deps` | JSONB | `{"missing": ["pip:opencv", "python3"]}` |
 | `frontmatter` | JSONB | Parsed YAML metadata |
-| `embedding` | vector(1536) | pgvector for similarity search |
+| `embedding` | vector(1024) | pgvector for similarity search |
 
 ### skill_agent_grants table
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Brand Buildtek Guidelines"
+  short_description: "Buildtek page positioning and voice rules"
+  default_prompt: "Use this skill for Buildtek Facebook content about home renovation, turnkey house construction, architecture, interiors, CTA, footer, hashtags, watermark, and page voice."

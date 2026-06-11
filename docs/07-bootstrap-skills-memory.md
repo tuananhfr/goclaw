@@ -615,7 +615,7 @@ flowchart LR
 | `summary` | TEXT | Full conversation summary (2-4 paragraphs) |
 | `l0_abstract` | TEXT | Short abstract (~50 tokens) for auto-inject |
 | `key_topics` | TEXT[] | Extracted entity names for filtering |
-| `embedding` | vector(1536) | Vector embedding of full summary |
+| `embedding` | vector(1024) | Vector embedding of full summary |
 | `source_type` | TEXT | "session", "v2_daily", "manual" |
 | `source_id` | TEXT | Dedup key (unique per source) |
 | `turn_count` | INT | Message count in session |

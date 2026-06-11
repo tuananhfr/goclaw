@@ -714,7 +714,7 @@ GoClaw v3 Wave 2 adds composable request middleware, error classification, per-m
 
 **Model Registry** — Thread-safe forward-compat resolver. Seeds Claude, GPT, Qwen models. Each spec: context window, max tokens, reasoning/vision flags, per-1M cost. Unknown models → provider's `ForwardCompatResolver` (caches hit). Template cloning with patch overrides.
 
-**Embedding Providers** — OpenAI (text-embedding-3-small, 1536 dims, batch 2048) and Voyage AI (1024 dims, batch 1024) via `store.EmbeddingProvider`. Used by vault and episodic memory. All vectors normalized to 1536 for pgvector column.
+**Embedding Providers** — OpenAI-compatible local embeddings such as BGE-M3 (1024 dims) via `store.EmbeddingProvider`. Used by vault, episodic memory, tasks, KG, skills, and agents. GoClaw stores embeddings in a global `vector(1024)` pgvector column.
 
 ---
 

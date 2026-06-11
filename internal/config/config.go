@@ -204,7 +204,7 @@ type ContextPruningHardClear struct {
 type MemoryConfig struct {
 	Enabled           *bool   `json:"enabled,omitempty"`            // default true (nil = enabled)
 	EmbeddingProvider string  `json:"embedding_provider,omitempty"` // "openai", "gemini", "openrouter", "" (auto-select)
-	EmbeddingModel    string  `json:"embedding_model,omitempty"`    // default "text-embedding-3-small"
+	EmbeddingModel    string  `json:"embedding_model,omitempty"`    // default "bge-m3"
 	EmbeddingAPIBase  string  `json:"embedding_api_base,omitempty"` // custom endpoint URL
 	MaxResults        int     `json:"max_results,omitempty"`        // default 6
 	MaxChunkLen       int     `json:"max_chunk_len,omitempty"`      // default 1000

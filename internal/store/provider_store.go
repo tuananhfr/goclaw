@@ -27,9 +27,9 @@ const (
 	ProviderYesScale        = "yescale"
 	ProviderZai             = "zai"
 	ProviderZaiCoding       = "zai_coding"
-	ProviderOllama          = "ollama"       // local or self-hosted Ollama (no API key)
-	ProviderOllamaCloud     = "ollama_cloud" // Ollama Cloud (Bearer token required)
-	ProviderACP             = "acp"          // ACP (Agent Client Protocol) agent subprocess
+	ProviderOllama          = "ollama"          // local or self-hosted Ollama (no API key)
+	ProviderOllamaCloud     = "ollama_cloud"    // Ollama Cloud (Bearer token required)
+	ProviderACP             = "acp"             // ACP (Agent Client Protocol) agent subprocess
 	ProviderNovita          = "novita"          // Novita AI (OpenAI-compatible endpoint)
 	ProviderBytePlus        = "byteplus"        // BytePlus ModelArk (Seed 2.0 models)
 	ProviderBytePlusCoding  = "byteplus_coding" // BytePlus ModelArk Coding Plan
@@ -87,14 +87,14 @@ type LLMProviderData struct {
 
 // RequiredMemoryEmbeddingDimensions is the fixed vector size used by the pgvector memory schema.
 // All memory embeddings must match this dimensionality until the schema supports variable sizes.
-const RequiredMemoryEmbeddingDimensions = 1536
+const RequiredMemoryEmbeddingDimensions = 1024
 
 // EmbeddingSettings holds embedding-specific configuration stored in provider settings JSONB.
 type EmbeddingSettings struct {
 	Enabled    bool   `json:"enabled" db:"-"`
-	Model      string `json:"model,omitempty" db:"-"`      // e.g. "text-embedding-3-small"
+	Model      string `json:"model,omitempty" db:"-"`      // e.g. "bge-m3"
 	APIBase    string `json:"api_base,omitempty" db:"-"`   // override if embedding endpoint differs from chat
-	Dimensions int    `json:"dimensions,omitempty" db:"-"` // truncate output to N dims (e.g. 1536); 0 = model default
+	Dimensions int    `json:"dimensions,omitempty" db:"-"` // truncate output to N dims (e.g. 1024); 0 = model default
 }
 
 // ProviderReasoningConfig holds provider-owned default reasoning settings.

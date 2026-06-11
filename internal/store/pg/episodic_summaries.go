@@ -25,7 +25,7 @@ func NewPGEpisodicStore(db *sql.DB) *PGEpisodicStore {
 }
 
 func (s *PGEpisodicStore) SetEmbeddingProvider(p store.EmbeddingProvider) { s.embProvider = p }
-func (s *PGEpisodicStore) Close() error                                  { return nil }
+func (s *PGEpisodicStore) Close() error                                   { return nil }
 
 // Create inserts a new episodic summary with optional embedding.
 func (s *PGEpisodicStore) Create(ctx context.Context, ep *store.EpisodicSummary) error {
@@ -61,6 +61,63 @@ func (s *PGEpisodicStore) Create(ctx context.Context, ep *store.EpisodicSummary)
 	}
 	ep.CreatedAt = now
 	return nil
+}
+
+// BackfillEpisodicEmbeddings generates embeddings for summaries that lost
+// vectors during an embedding-dimension migration.
+func (s *PGEpisodicStore) BackfillEpisodicEmbeddings(ctx context.Context) (int, error) {
+	if s.embProvider == nil {
+		return 0, nil
+	}
+
+	type row struct {
+		ID      uuid.UUID `db:"id"`
+		Summary string    `db:"summary"`
+	}
+
+	const batchSize = 100
+	total := 0
+	for {
+		var pending []row
+		if err := pkgSqlxDB.SelectContext(ctx, &pending, `
+			SELECT id, summary
+			FROM episodic_summaries
+			WHERE embedding IS NULL AND summary != ''
+			ORDER BY id ASC
+			LIMIT $1`, batchSize); err != nil {
+			return total, fmt.Errorf("query episodic summaries without embeddings: %w", err)
+		}
+		if len(pending) == 0 {
+			return total, nil
+		}
+
+		texts := make([]string, len(pending))
+		for i, ep := range pending {
+			texts[i] = ep.Summary
+		}
+		embeddings, err := s.embProvider.Embed(ctx, texts)
+		if err != nil {
+			return total, fmt.Errorf("generate episodic embeddings: %w", err)
+		}
+
+		updated := 0
+		for i, ep := range pending {
+			if i >= len(embeddings) || len(embeddings[i]) == 0 {
+				continue
+			}
+			if _, err := s.db.ExecContext(ctx,
+				`UPDATE episodic_summaries SET embedding = $1::vector WHERE id = $2`,
+				vectorToString(embeddings[i]), ep.ID,
+			); err != nil {
+				return total, fmt.Errorf("update episodic embedding id=%s: %w", ep.ID, err)
+			}
+			total++
+			updated++
+		}
+		if updated == 0 {
+			return total, fmt.Errorf("generate episodic embeddings: provider returned no usable vectors for %d summaries", len(pending))
+		}
+	}
 }
 
 // Get retrieves an episodic summary by ID.

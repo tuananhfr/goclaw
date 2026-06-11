@@ -1,0 +1,4 @@
+interface:
+  display_name: "Buildtek Home Design Construction Knowledge"
+  short_description: "Home renovation and house-building knowledge rules"
+  default_prompt: "Use this skill for Buildtek content about renovation, turnkey construction, architecture, interiors, homeowner pain points, style comparison, process education, and practical house-building advice."

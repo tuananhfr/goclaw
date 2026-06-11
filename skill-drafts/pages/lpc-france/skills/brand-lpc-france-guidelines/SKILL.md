@@ -1,148 +1,233 @@
 ---
 name: Brand LPC France Guidelines
-description: Brand, bilingual French-first content, visual, hashtag, watermark, and positioning rules for LPC France fanpage work. Use for LPC France Facebook posts, image briefs, content calendars, ad copy, lead-generation captions, and review of bilingual French/English construction outsourcing content.
+description: Brand, bilingual French-English content, B2B outsourcing positioning, footer, hashtag, watermark, and page-direction rules for LPC France. Use for LPC France Facebook posts, image briefs, captions, calendars, and review of BIM, 3D modeling, structural design support, and AEC outsourcing content for Europe.
 ---
 
 # Brand LPC France Guidelines
 
-Use this skill for any task involving LPC France, French-market outsourcing, bilingual French/English fanpage content, BIM/design/drafting services, or construction technical content published under the LPC France page.
+Use this skill for any task involving `LPC France`, bilingual French-English Facebook content, BIM outsourcing, 3D architectural modeling, structural design support, technical drawing production, construction documentation support, or B2B AEC outsourcing communication for Europe.
 
-Also apply the general `facebook-fanpage-baseline-rules` skill when available. For BIM, design, drafting, UBoot Beton, flat slab, green construction, ESG, or lead-generation topics, also apply `lpc-france-outsourcing-knowledge` when available.
+Also apply:
 
-This brand skill controls LPC France positioning, bilingual format, page voice, watermark safe zone, visual direction, hashtags, and publishing checks.
+- `facebook-fanpage-baseline-rules` for caption hygiene, CTA, footer, hashtag, and mobile readability.
+- `lpc-france-outsourcing-knowledge` for service logic, outsourcing framing, technical caution, and content angles.
+- `lpc-france-visual-content-profile` when image direction, image QA, or on-image text structure matters.
+- `fanpage-grounded-content-rules` when the post needs believable market pain points, operating context, or real project workflow situations.
+- `fanpage-brand-qa-claim-safety-guidelines` when claims, capabilities, or project wording need an extra safety check.
 
-## Brand Basics
+## Page Basics
 
-- Brand/page name: LPC France.
-- Page direction: B2B technical authority and outsourcing lead generation for the French construction market.
+- Page name: `LPC France`.
+- Page type: B2B bilingual Facebook page.
+- Main market: Europe.
 - Primary language: French.
 - Secondary language: English.
-- Default content format: French section first, English section below.
-- Watermark safe zone: use the current page watermark config when available. Fallback: top left. Keep this area visually clean.
-- Audience: French and international construction teams, architecture studios, engineering offices, developers, contractors, and partners that may outsource BIM, design support, drafting, or technical drawing work.
-- Core trust signal: technical clarity, reliable workflow, bilingual communication, and practical construction expertise.
+- Default content format: French first, English below.
+- Main business: outsourced design production support for architecture, engineering, and construction teams.
+- Core service areas: BIM outsourcing, 3D architectural modeling, structural design support, construction documentation support, technical drawing production.
+- Watermark safe zone: use current page watermark config when available; fallback top left.
 
-Do not treat LPC France as a generic Vietnamese construction materials page. Vietnamese keywords and hashtags may be preserved for internal SEO or regional context only when the brief asks for it. For French-market posts, prefer French and English hashtags.
+Audience may include:
 
-## Channel Objective
+- architecture studios
+- engineering offices
+- construction companies
+- real estate developers
+- BIM managers
+- project managers
+- design teams needing more production capacity
+- AEC firms outsourcing part of design or technical workload
 
-Use LPC France content to:
+Do not reposition LPC France as a generic construction page, a consumer page, or a local Vietnam-facing casual brand page unless the user explicitly asks.
 
-- Build awareness for LPC France in the French construction and design market.
-- Generate qualified leads for outsourced BIM, design, drafting, and technical drawing services.
-- Show that LPC can support French/international teams with clear process, quality control, and bilingual communication.
-- Educate the market on BIM workflow, design support, drafting, UBoot Beton, flat slab systems, long-span floor solutions, green construction, and ESG-related construction topics.
-- Convert technical interest into consultation, message, call, meeting, or project brief submission.
+## Positioning
 
-## Page Voice
+LPC France is a professional outsourcing and technical support page.
+It should help European AEC teams:
 
-Write in a voice that is:
+- understand what kind of support LPC France provides
+- understand when outsourcing can help their workflow
+- feel more confident about remote collaboration
+- see LPC France as a structured, professional, bilingual support partner
 
-- Professional, technical, and clear.
-- French-first, concise, and easy to scan on Facebook/LinkedIn-like feeds.
-- Practical rather than academic.
-- Confident about capabilities, cautious about engineering/legal/compliance claims.
-- Suitable for B2B buyers, project managers, architects, engineers, and contractors.
+Main objectives:
+
+- build a professional image for LPC France
+- explain BIM / 3D / structural outsourcing capability
+- create trust with B2B European prospects
+- educate the market about production support and outsourcing in AEC
+- generate consultation and cooperation leads
 
 Avoid:
 
-- Overly casual consumer-food style copy.
-- Generic motivational business slogans.
-- Unsupported claims about guaranteed savings, structural performance, ESG compliance, approvals, or project outcomes.
-- Vietnamese-first writing unless the user asks for Vietnam-facing content.
+- generic motivational business copy
+- over-promotional lead-gen language with no technical substance
+- vague “we do everything” service positioning
+- unsupported capability claims
+
+## Content Routes
+
+Use the route requested by the user or content plan.
+If no route is specified, choose the route that best fits the objective.
+
+### 1. Service Introduction Posts
+
+Goal:
+
+- make prospects understand what LPC France can support
+- clarify what part of the workflow can be outsourced
+- create interest in project discussion
+
+Use for:
+
+- BIM modeling support
+- 3D architectural modeling
+- structural design support
+- technical drawings
+- construction documentation
+- production support for architecture and engineering teams
+
+### 2. Outsourcing Benefit Posts
+
+Goal:
+
+- educate the market
+- explain why European AEC firms may need outsourcing
+- position LPC France as a flexible production support partner
+
+Use for:
+
+- workload peaks
+- deadline pressure
+- team overload
+- flexible production scaling
+- reducing internal bottlenecks
+- remote collaboration with clear process
+
+### 3. Professional Workflow Posts
+
+Goal:
+
+- create trust
+- reduce hesitation around outsourcing
+- show process clarity and technical professionalism
+
+Use for:
+
+- brief intake
+- input and output clarity
+- revision process
+- quality control mindset
+- communication flow
+- remote coordination habits
+
+### 4. Technical Knowledge Posts
+
+Goal:
+
+- show domain knowledge
+- build B2B authority
+- stay useful for architecture and engineering audiences
+
+Use for:
+
+- BIM workflow quality
+- 3D model usefulness
+- technical drawing clarity
+- structural coordination
+- model-to-documentation handoff
+- documentation quality in project execution
+
+### 5. Client Pain-Point Posts
+
+Goal:
+
+- name the prospect's real problem
+- create a natural bridge to outsourcing support
+
+Use for:
+
+- overloaded internal teams
+- urgent deadlines
+- lack of production staff
+- parallel project pressure
+- coordination difficulty
+- need for flexible external support
+- hesitation about quality control in outsourcing
+
+### 6. Case / Portfolio / Proof Posts
+
+Use only when the user provides the project data or confirms permission.
+
+Do not invent:
+
+- project names
+- client names
+- countries served
+- software stacks
+- delivery time
+- quantifiable results
 
 ## Bilingual Format
 
-For normal publish-ready posts, use this structure:
+Default structure:
 
 ```text
-[TITLE IN FRENCH]
+[FRENCH HOOK / TITLE]
 
 [FR]
-French copy first.
+French section first.
 
-[CTA in French]
+[French CTA]
 
 [EN]
-English version below.
+English section below.
 
-[CTA in English]
+[English CTA]
+
+[Footer if provided]
 
 [Hashtags]
 ```
 
 Rules:
 
-- Keep French first and stronger than the English section.
-- English may be slightly shorter if the French section already carries the nuance.
-- Do not mix French and English inside the same sentence unless using accepted technical terms such as BIM, outsourcing, Revit, AutoCAD, design support, or shop drawings.
-- Use correct French accents in final user-facing copy when possible.
-- Use `[FR]` and `[EN]` labels for clarity unless the user asks for a cleaner publishing format.
-- If the platform or brief needs a shorter caption, use only French and add a short English summary.
+- French must appear first by default.
+- French and English must carry equivalent meaning, but do not translate word-for-word mechanically.
+- Keep the tone professional and natural in both languages.
+- Do not mix French and English in the same paragraph unless accepted technical terms make it useful.
+- If the user asks for French-only or English-only, follow that request.
 
-## Content Pillars
+## Voice
 
-Use these routes for LPC France:
+Use a tone that is:
 
-- Technical capability: BIM modeling, drafting, design support, technical drawings, execution plans, coordination support, quantity take-off, and project documentation when supported by the brief.
-- Outsourcing workflow: brief intake, file exchange, revision control, QA/QC, standards alignment, communication cadence, time zone handoff, and delivery process.
-- Construction expertise: UBoot Beton, flat slab, long-span slab, hollow slab, reduced beam systems, material efficiency, and sustainable construction topics.
-- Proof and case content: before/after drawings, model breakdowns, sample details, workflow screenshots, anonymized project notes, and quality checklists.
-- Trust and partnership: bilingual support, technical discipline, long-term support for architecture offices, engineering offices, contractors, and construction teams.
+- professional
+- clear
+- B2B-oriented
+- technically credible
+- confident without exaggeration
+- international and polished
 
-## Franchise-Style Lead Pattern Adapted For LPC France
+Brand feeling should be:
 
-For lead-generation posts, use the same discipline as Pizza Hip'S franchise content but adapt the domain:
+- trustworthy
+- technically capable
+- process-aware
+- flexible for European project workflows
+- clean, modern, and international
 
-1. Open with a technical pain point or outsourcing challenge.
-2. Explain the issue in simple professional language.
-3. Show how LPC France can support the workflow.
-4. Add a proof point, process point, or decision checklist when available.
-5. Use a specific CTA: send project brief, request sample workflow, book a consultation, or message the page.
-6. Add bilingual English section.
-7. Add relevant French/English hashtags.
+Avoid:
 
-Do not promise guaranteed cost reduction, approval, timeline, structural optimization, or ESG compliance unless the user provides verified basis.
-
-## CTA Guidance
-
-Use CTAs such as:
-
-- "Envoyez-nous votre brief pour evaluer le support BIM adapte a votre projet."
-- "Contactez LPC France pour discuter de vos besoins en dessin technique ou modelisation BIM."
-- "Partagez vos plans ou votre cahier des charges pour une premiere analyse."
-- "Send us your project brief to discuss BIM, drafting, or design support."
-- "Contact LPC France to review your technical drawing needs."
-
-If phone, website, email, address, or booking link is missing, use a placeholder or omit it. Do not invent contact details.
+- overly casual copy
+- overly emotional copy
+- consumer-style salesy tone
+- too many emoji
+- hard-sell lead language with no substance
 
 ## Footer
 
-Use this fixed LPC France footer by default unless the user provides a campaign-specific replacement.
-
-French footer:
-
-```text
-LPC France - Lam Pham Construction Co., Ltd.
-Adresse : 226 Le Trong Tan, quartier Phuong Liet, Hanoi, Vietnam
-Hotline / WhatsApp : +84 911 29 96 96
-Site web : https://lpc.vn
-Email : info@lpc.vn
-```
-
-English footer:
-
-```text
-LPC France - Lam Pham Construction Co., Ltd.
-Address: 226 Le Trong Tan, Phuong Liet Ward, Hanoi, Vietnam
-Hotline / WhatsApp: +84 911 29 96 96
-Website: https://lpc.vn
-Email: info@lpc.vn
-```
-
-For bilingual posts, place the footer after the English section and before hashtags. Use one footer block only, not duplicate French and English footers, unless the user explicitly asks for both.
-
-Default bilingual footer:
+Use this default bilingual footer unless the user provides a newer version:
 
 ```text
 LPC France - Lam Pham Construction Co., Ltd.
@@ -152,52 +237,81 @@ Site web / Website : https://lpc.vn
 Email : info@lpc.vn
 ```
 
-Do not invent alternate phone numbers, websites, emails, office names, or French addresses. If the user provides updated footer details, use the latest user-provided version exactly.
+Use one shared bilingual footer block only.
+Do not invent alternate contacts, websites, emails, offices, or French addresses.
 
 ## Hashtags
 
-Use at most 5-8 hashtags by default. Prefer relevance over volume.
+Use 4-8 hashtags by default. Prefer French and English industry relevance.
 
-Default French/English pool:
+Suggested pool:
 
-`#LPC #LPCFrance #BIM #BIMFrance #ExternalisationBIM #ModelisationBIM #DessinTechnique #DesignSupport #Construction #Ingenierie #Architecture #Revit #AutoCAD #UBootBeton #MateriauxVerts #ESG #GreenBuilding #FlatSlab #StructuralDesign #ShopDrawings`
-
-Vietnamese/internal pool provided by user:
-
-`#LPC #sanphangubot #Sanhop #UBootBeton #vatlieuxanh #ESG #hopubot #construction #Sanphangkhongdam #sanvuotnhip #vatlieuxaydung #xaydungnhadan`
+`#LPCFrance #BIM #ExternalisationBIM #Modelisation3D #DesignSupport #DessinTechnique #StructuralDesign #AEC #Architecture #Ingenierie #Construction #BIMFrance #ConstructionEurope`
 
 Selection guidance:
 
-- BIM/design outsourcing post: choose from `#LPCFrance`, `#BIM`, `#BIMFrance`, `#ExternalisationBIM`, `#DessinTechnique`, `#DesignSupport`, `#Construction`, `#Architecture`.
-- UBoot/flat slab/green material post: choose from `#LPC`, `#UBootBeton`, `#MateriauxVerts`, `#ESG`, `#GreenBuilding`, `#FlatSlab`, `#StructuralDesign`, `#Construction`.
-- Vietnam-facing or internal keyword post: include 1-3 Vietnamese hashtags only when requested or strategically useful.
-- First hashtag should usually be `#LPC` or `#LPCFrance`.
+- outsourcing/service post: prioritize `#LPCFrance #BIM #ExternalisationBIM #DesignSupport #Architecture #Ingenierie`
+- structural/technical post: prioritize `#LPCFrance #StructuralDesign #BIM #DessinTechnique #Construction`
+- workflow/process post: prioritize `#LPCFrance #BIM #AEC #DesignSupport #ConstructionEurope`
 
-## Image Rules
+## CTA Guidance
 
-For LPC France image prompts, briefs, or QA:
+French CTA examples:
 
-- Watermark is handled by the existing system/tooling. Do not instruct the agent to add, move, resize, or modify watermark assets.
-- Get the current page watermark config when an `fb_get_watermark_config` tool is available, and treat that configured overlay position as the source of truth.
-- In a two-step textless-background plus `render_creative` workflow, pass the current watermark config into `render_creative.watermark`.
-- If the watermark config cannot be fetched, use the fallback top-left safe zone and state that exact runtime watermark config was unavailable.
-- Do not place headline text, CTA, fine technical notes, important drawing details, faces, logos, QR codes, or project identifiers in the configured watermark zone.
-- Prefer realistic technical visuals: BIM model screenshots, clean architectural/engineering drawing style, construction site details, slab systems, technical overlays, coordinated plan/model comparisons, or professional team workflow scenes.
-- Use a restrained B2B visual tone: clean, technical, credible, not consumer-marketing-heavy.
-- Keep text readable on mobile. Avoid dense engineering notes inside feed images.
-- For square Facebook posts, use 1080x1080 px unless the brief specifies another size.
-- Do not include unrelated company logos or confidential project identifiers.
-- If exact project drawings are used, verify permission or anonymize sensitive details.
+- `Contactez-nous pour discuter de vos besoins BIM ou de production technique.`
+- `Envoyez-nous votre brief pour evaluer le support adapte a votre projet.`
+- `Parlons de votre prochain besoin en modelisation, dessin technique ou coordination.`
+
+English CTA examples:
+
+- `Contact us to discuss your BIM or technical production needs.`
+- `Send us your brief to review the right support for your project.`
+- `Let us discuss your next modeling, drafting, or coordination requirement.`
+
+Keep CTAs professional, specific, and not too pushy.
+
+## Visual Ownership
+
+Detailed image direction belongs in `lpc-france-visual-content-profile`.
+
+This brand skill only keeps page-level visual boundaries:
+
+- default page visuals may use 100% research AI when the task needs generated imagery
+- image direction must stay professional, modern, clean, realistic, and suitable for the European AEC market
+- protect the current watermark config when available; otherwise keep the fallback top-left zone clear
+
+## Claim Safety
+
+Do not invent:
+
+- certifications
+- standards compliance
+- software stack
+- years of experience
+- number of projects
+- client names
+- countries served
+- delivery timelines
+- pricing
+- quantified savings
+- perfect accuracy or zero-error claims
+
+Safer wording:
+
+- `can support`
+- `can help strengthen production capacity`
+- `depending on project scope and requirements`
+- `when inputs and workflow are clearly defined`
+- `a flexible support solution for AEC teams`
 
 ## Final Self-Check
 
 Before returning LPC France content, verify:
 
-- French appears before English.
-- French is the primary and most polished section.
-- CTA exists and matches the lead-generation objective.
-- The fixed LPC France footer is used unless the user provides a replacement.
-- Hashtags fit the French-market/B2B construction route.
-- Current watermark config is protected in image briefs, with top left used only as fallback.
-- Claims about engineering performance, cost, timing, ESG, compliance, or approvals are cautious and supported.
-- The output positions LPC France as a technical outsourcing partner, not a generic materials page.
+- the page is clearly positioned as a B2B outsourcing partner
+- French is first by default unless the user asked otherwise
+- French and English sections are equivalent in meaning
+- no unsupported technical, compliance, project, or commercial claim was added
+- the CTA fits consultation or cooperation intent
+- footer and hashtags are correct
+- image direction stays aligned with the European AEC market
