@@ -29,6 +29,7 @@ type Client struct {
 
 	locale string              // user's preferred locale (e.g. "en", "vi", "zh")
 	scopes []permissions.Scope // API key scopes (empty = role-based auth, no scope restriction)
+	tekshotParseSession *tekshotParseSession // short-lived scoped session for Tekshot Studio parsing
 
 	// Browser pairing state
 	pairingCode    string // 8-char code if pending approval

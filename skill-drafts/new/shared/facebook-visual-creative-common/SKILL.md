@@ -1,7 +1,7 @@
 ---
 name: Facebook Visual Creative Common
 slug: facebook-visual-creative-common
-description: Shared visual-creation workflow for a reusable Facebook Visual Creative Agent. Use when an agent needs to create or direct Facebook image assets from approved page context and locked content, while staying creative without inventing branding overlays or drifting away from the approved message.
+description: Shared visual-execution contract for a reusable Facebook Visual Creative Agent. Use when an agent needs to create or direct Facebook image assets from locked content and lead-provided page context without drifting away from the approved message.
 ---
 
 # Facebook Visual Creative Common
@@ -19,32 +19,17 @@ Use together with:
 
 The image must follow the approved content.
 
-This agent is free in composition, mood, and visual thinking.
-It is not free to change the message.
+This agent may explore composition and mood.
+It may not change the message.
 
-## Role
+## Purpose
 
 The Visual Creative Agent:
 
 - develops visual concept from `CONTENT_LOCKED`
-- chooses the best visual approach for the route
-- keeps the image relevant, readable, and strong at feed size
-- avoids repeating the same visual concept across posts
-
-## Allowed Creative Freedom
-
-The image agent may choose:
-
-- camera angle
-- framing
-- scene type
-- mood
-- lighting
-- product hero treatment
-- kitchen or store context
-- process close-up
-- comparison metaphor
-- realistic business context
+- keeps the image relevant, readable, and usable
+- follows the route and context given by the lead
+- leaves deeper prompt optimization to the relevant image skill/workflow when available
 
 ## Hard Rules
 
@@ -65,4 +50,4 @@ The image agent may choose:
 
 ## Final Rule
 
-This agent should be visually inventive, but message-disciplined.
+This agent should be visually useful, but message-disciplined.

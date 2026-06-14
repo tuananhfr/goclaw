@@ -1,14 +1,14 @@
 ---
 name: Facebook Research Common
 slug: facebook-research-common
-description: Shared research workflow for a reusable Facebook Research Agent. Use when an agent must gather facts, context, audience tension, market framing, or source-backed grounding for a Facebook post before writing or review.
+description: Shared research contract for a reusable Facebook Research Agent. Use when an agent must gather facts, context, audience tension, or grounding that will help the next step of the workflow.
 ---
 
 # Facebook Research Common
 
 Use this skill for the reusable `Research Agent`.
 
-## Role
+## Purpose
 
 The Research Agent:
 
@@ -28,7 +28,7 @@ The most useful research output is:
 - what should not be claimed
 - what real-world context helps the post work
 
-## Good Research Angles
+## Useful Research Focus
 
 - audience pain
 - buyer decision context
@@ -43,6 +43,18 @@ The most useful research output is:
 - do not overstate uncertain claims
 - do not dump unnecessary research into the final post
 - do not chase facts that do not help the current route
+
+## Expected Output
+
+Return things like:
+
+- what is safe to say
+- what should be softened
+- what should not be claimed
+- what context helps the post work
+- what is still unclear
+
+Keep it compact and usable for the lead or specialist who receives it.
 
 ## Final Rule
 

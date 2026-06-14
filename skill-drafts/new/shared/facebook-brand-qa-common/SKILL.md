@@ -1,16 +1,16 @@
 ---
 name: Facebook Brand QA Common
 slug: facebook-brand-qa-common
-description: Shared QA workflow for a reusable Facebook Brand QA Agent. Use when an agent needs to check tone fit, claim safety, repetitive AI-like writing patterns, visual-content mismatch, and last-mile brand consistency before content is finalized.
+description: Shared QA contract for a reusable Facebook Brand QA Agent. Use when an agent needs to review content or a final package for safety, consistency, and obvious quality problems before sign-off.
 ---
 
 # Facebook Brand QA Common
 
 Use this skill for the reusable `Brand QA Agent`.
 
-## Role
+## Purpose
 
-The QA Agent is the final consistency and safety check before final output.
+The QA Agent is the final consistency and safety check before sign-off.
 
 ## Check List
 
@@ -22,9 +22,19 @@ Check:
 - AI-vibe or repetitive patterning
 - repeated hook or CTA structure
 - mismatch between caption and image direction
-- wrong hashtag usage against the provided pool
+- wrong hashtag usage against the provided page rule or pool
 - any manually added logo, hotline, or watermark in image workflow
-- whether the image still follows `CONTENT_LOCKED`
+- whether the image still follows locked content
+
+## Expected Output
+
+Return:
+
+- pass / not ready
+- the main problems in priority order
+- concise revision guidance the team can act on quickly
+
+Do not rewrite the whole post unless explicitly asked.
 
 ## Final Rule
 

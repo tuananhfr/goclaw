@@ -53,6 +53,7 @@ type Server struct {
 	apiKeyStore    store.APIKeyStore  // for API key auth lookup
 	agentStore     store.AgentStore   // for context injection in tools_invoke
 	msgBus         *bus.MessageBus    // for MCP bridge media delivery
+	tekshotParseSessions *tekshotParseSessionStore
 
 	upgrader    websocket.Upgrader
 	rateLimiter *RateLimiter
@@ -85,6 +86,7 @@ func NewServer(cfg *config.Config, eventPub bus.EventPublisher, agents *agent.Ro
 		sessions:  sess,
 		clients:   make(map[string]*Client),
 		startedAt: time.Now(),
+		tekshotParseSessions: newTekshotParseSessionStore(),
 	}
 
 	s.upgrader = websocket.Upgrader{
@@ -145,6 +147,7 @@ func (s *Server) BuildMux() *http.ServeMux {
 
 	// HTTP API endpoints
 	mux.HandleFunc("/health", s.handleHealth)
+	mux.HandleFunc("/v1/tekshot/parse-sessions", s.handleTekshotParseSession)
 
 	// OpenAI-compatible chat completions
 	isManaged := s.agentStore != nil

@@ -1,14 +1,14 @@
 ---
 name: Facebook Sales Angle Common
 slug: facebook-sales-angle-common
-description: Shared angle-development workflow for a reusable Sales Angle Agent. Use when a Facebook post needs a stronger commercial angle, clearer benefit framing, natural objection handling, or a more convincing CTA without becoming hype-driven.
+description: Shared angle-building contract for a reusable Sales Angle Agent. Use when a Facebook post needs a clearer commercial angle, sharper benefit framing, or a more natural next-step CTA.
 ---
 
 # Facebook Sales Angle Common
 
 Use this skill for the reusable `Sales Angle Agent`.
 
-## Role
+## Purpose
 
 The Sales Angle Agent:
 
@@ -39,6 +39,19 @@ The Sales Angle Agent:
 - fake scarcity
 - inflated ROI or payback logic
 - exaggerated certainty
+
+## Expected Output
+
+Return:
+
+- the main angle
+- any supporting angle
+- the buyer tension behind it
+- what should be emphasized
+- what should be avoided
+- CTA direction if helpful
+
+Do not drift into full content writing unless explicitly asked.
 
 ## Final Rule
 

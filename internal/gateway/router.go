@@ -63,8 +63,22 @@ func (r *MethodRouter) Handle(ctx context.Context, client *Client, req *protocol
 		return
 	}
 
+	if client.tekshotParseSession != nil && !client.authorizeTekshotRPC(req) {
+		slog.Warn("security.tekshot_parse_session_denied",
+			"method", req.Method,
+			"user_id", client.userID,
+			"client", client.id,
+		)
+		client.SendResponse(protocol.NewErrorResponse(
+			req.ID,
+			protocol.ErrUnauthorized,
+			"Tekshot parse session is not allowed to call this method or target",
+		))
+		return
+	}
+
 	// Permission check: skip for connect, health, and browser pairing status (used by unauthenticated clients)
-	if req.Method != protocol.MethodConnect && req.Method != protocol.MethodHealth && req.Method != protocol.MethodBrowserPairingStatus {
+	if client.tekshotParseSession == nil && req.Method != protocol.MethodConnect && req.Method != protocol.MethodHealth && req.Method != protocol.MethodBrowserPairingStatus {
 		if pe := r.server.policyEngine; pe != nil {
 			if !pe.CanAccess(client.role, req.Method) {
 				required := permissions.MethodRole(req.Method)
@@ -182,6 +196,20 @@ func (r *MethodRouter) handleConnect(ctx context.Context, client *Client, req *p
 	}
 
 	// Path 1b: API key → role derived from scopes (uses shared cache)
+	if params.Token != "" && r.server.tekshotParseSessions != nil {
+		if session, ok := r.server.tekshotParseSessions.get(params.Token); ok {
+			client.setTekshotParseSession(session)
+			slog.Info("tekshot.parse_session.connected",
+				"workspace_id", session.WorkspaceID,
+				"agent_key", session.AgentKey,
+				"user_id", session.UserID,
+				"session_key", session.SessionKey,
+			)
+			r.sendConnectResponse(ctx, client, req.ID)
+			return
+		}
+	}
+
 	if params.Token != "" {
 		if keyData, role := httpapi.ResolveAPIKey(ctx, params.Token); keyData != nil {
 			scopes := make([]permissions.Scope, len(keyData.Scopes))
