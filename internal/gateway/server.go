@@ -148,6 +148,8 @@ func (s *Server) BuildMux() *http.ServeMux {
 	// HTTP API endpoints
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/v1/tekshot/parse-sessions", s.handleTekshotParseSession)
+	mux.HandleFunc("/v1/tekshot/google/oauth/callback", s.handleTekshotGoogleOAuthCallback)
+	mux.HandleFunc("/api/tekshot-studio/google/callback", s.handleTekshotGoogleOAuthCallback)
 
 	// OpenAI-compatible chat completions
 	isManaged := s.agentStore != nil

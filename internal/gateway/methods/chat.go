@@ -3,6 +3,7 @@ package methods
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -11,10 +12,10 @@ import (
 	"github.com/nextlevelbuilder/goclaw/internal/agent"
 	"github.com/nextlevelbuilder/goclaw/internal/audio"
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
-	"github.com/nextlevelbuilder/goclaw/internal/config"
-	httpapi "github.com/nextlevelbuilder/goclaw/internal/http"
 	"github.com/nextlevelbuilder/goclaw/internal/channels/media"
+	"github.com/nextlevelbuilder/goclaw/internal/config"
 	"github.com/nextlevelbuilder/goclaw/internal/gateway"
+	httpapi "github.com/nextlevelbuilder/goclaw/internal/http"
 	"github.com/nextlevelbuilder/goclaw/internal/i18n"
 	"github.com/nextlevelbuilder/goclaw/internal/providers"
 	"github.com/nextlevelbuilder/goclaw/internal/sessions"
@@ -102,11 +103,11 @@ type chatMediaItem struct {
 }
 
 type chatSendParams struct {
-	Message    string            `json:"message"`
-	AgentID    string            `json:"agentId"`
-	SessionKey string            `json:"sessionKey"`
-	Stream     bool              `json:"stream"`
-	Media      json.RawMessage   `json:"media,omitempty"` // []string (legacy) or []chatMediaItem
+	Message    string          `json:"message"`
+	AgentID    string          `json:"agentId"`
+	SessionKey string          `json:"sessionKey"`
+	Stream     bool            `json:"stream"`
+	Media      json.RawMessage `json:"media,omitempty"` // []string (legacy) or []chatMediaItem
 }
 
 // parseMedia handles both legacy string paths and new {path,filename} objects.
@@ -284,8 +285,8 @@ func (m *ChatMethods) handleSend(ctx context.Context, client *gateway.Client, re
 			WorkspaceChatID: userID, // mirror ChatID so vault chat_id isolation activates for WS direct flow
 			RunID:           runID,
 			UserID:          userID,
-			Stream:     params.Stream,
-			InjectCh:   injectCh,
+			Stream:          params.Stream,
+			InjectCh:        injectCh,
 			// Wire trace ID back to the active run so force-abort can mark the
 			// correct trace as cancelled if the goroutine does not exit within 3s.
 			OnTraceCreated: func(traceID uuid.UUID) {
@@ -360,6 +361,28 @@ func (m *ChatMethods) handleSend(ctx context.Context, client *gateway.Client, re
 		mediaResults := result.Media
 		if ttsAudio != nil {
 			mediaResults = append([]agent.MediaResult{*ttsAudio}, mediaResults...)
+		}
+		if len(mediaResults) > 0 && (content == "" || content == "...") {
+			var mediaLines []string
+			for _, mediaResult := range mediaResults {
+				if mediaResult.Path == "" {
+					continue
+				}
+				lowerPath := strings.ToLower(mediaResult.Path)
+				if !strings.HasPrefix(mediaResult.ContentType, "image/") &&
+					!strings.HasSuffix(lowerPath, ".png") &&
+					!strings.HasSuffix(lowerPath, ".jpg") &&
+					!strings.HasSuffix(lowerPath, ".jpeg") &&
+					!strings.HasSuffix(lowerPath, ".webp") &&
+					!strings.HasSuffix(lowerPath, ".gif") {
+					continue
+				}
+				mediaLines = append(mediaLines, "image_path: "+mediaResult.Path)
+			}
+			if len(mediaLines) > 0 {
+				content = strings.Join(mediaLines, "\n")
+				resp["content"] = content
+			}
 		}
 		if len(mediaResults) > 0 {
 			resp["media"] = mediaResults
