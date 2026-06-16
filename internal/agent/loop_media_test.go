@@ -6,6 +6,53 @@ import (
 	"testing"
 )
 
+func TestParseMediaResult(t *testing.T) {
+	tests := []struct {
+		name        string
+		output      string
+		wantPath    string
+		wantContent string
+	}{
+		{
+			name:        "media prefix",
+			output:      "MEDIA:/tmp/generated/post.png\nUse the full MEDIA path exactly.",
+			wantPath:    "/tmp/generated/post.png",
+			wantContent: "image/png",
+		},
+		{
+			name:        "image path prefix",
+			output:      "image_path: /tmp/generated/post.png\nUse this full path exactly as an intermediate input path.",
+			wantPath:    "/tmp/generated/post.png",
+			wantContent: "image/png",
+		},
+		{
+			name:   "plain text ignored",
+			output: "Generated image: /tmp/generated/post.png",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseMediaResult(tt.output)
+			if tt.wantPath == "" {
+				if got != nil {
+					t.Fatalf("parseMediaResult() = %+v, want nil", got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatalf("parseMediaResult() = nil, want path %q", tt.wantPath)
+			}
+			if got.Path != tt.wantPath {
+				t.Fatalf("path = %q, want %q", got.Path, tt.wantPath)
+			}
+			if got.ContentType != tt.wantContent {
+				t.Fatalf("content type = %q, want %q", got.ContentType, tt.wantContent)
+			}
+		})
+	}
+}
+
 // writeTempFile drops a zero-byte file at workspace/relPath, creating dirs.
 func writeTempFile(t *testing.T, workspace, relPath string) string {
 	t.Helper()

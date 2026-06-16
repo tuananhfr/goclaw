@@ -6,13 +6,18 @@ import (
 	"strings"
 )
 
-// parseMediaResult extracts a MediaResult from a tool result string containing "MEDIA:" prefix.
-// Handles formats: "MEDIA:/path/to/file" and "[[audio_as_voice]]\nMEDIA:/path/to/file".
-// Returns nil if no MEDIA: prefix is found.
+// parseMediaResult extracts a MediaResult from a tool result string containing
+// a media path prefix.
+// Handles formats:
+//   - "MEDIA:/path/to/file"
+//   - "[[audio_as_voice]]\nMEDIA:/path/to/file"
+//   - "image_path: /path/to/file"
 //
-// IMPORTANT: Only matches "MEDIA:" at the start of the (trimmed) string to avoid false
-// positives when tool output contains "MEDIA:" in arbitrary text (e.g. a web page
-// mentioning a commit message like "return MEDIA: path from screenshot").
+// Returns nil if no supported media path prefix is found.
+//
+// IMPORTANT: Only matches prefixes at the start of the (trimmed) string to avoid
+// false positives when tool output contains these labels in arbitrary text (e.g.
+// a web page mentioning a commit message like "return MEDIA: path from screenshot").
 func parseMediaResult(toolOutput string) *MediaResult {
 	s := toolOutput
 	asVoice := false
@@ -25,11 +30,16 @@ func parseMediaResult(toolOutput string) *MediaResult {
 
 	s = strings.TrimSpace(s)
 
-	// Only match MEDIA: at the beginning of the string.
-	if !strings.HasPrefix(s, "MEDIA:") {
+	var path string
+	switch {
+	case strings.HasPrefix(s, "MEDIA:"):
+		path = strings.TrimSpace(s[6:])
+	case strings.HasPrefix(strings.ToLower(s), "image_path:"):
+		path = strings.TrimSpace(s[len("image_path:"):])
+	default:
 		return nil
 	}
-	path := strings.TrimSpace(s[6:])
+
 	if path == "" {
 		return nil
 	}
