@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"fmt"
 	"slices"
 
 	"github.com/nextlevelbuilder/goclaw/internal/providers"
@@ -88,6 +89,10 @@ func (l *Loop) buildFilteredTools(req *RunRequest, hadBootstrap bool, iteration,
 	if req.ChannelType != "" {
 		filtered := toolDefs[:0:0]
 		for _, td := range toolDefs {
+			if td.Function == nil {
+				filtered = append(filtered, td)
+				continue
+			}
 			if tool, ok := l.tools.Get(td.Function.Name); ok {
 				if ca, ok := tool.(tools.ChannelAware); ok {
 					if !slices.Contains(ca.RequiredChannelTypes(), req.ChannelType) {
@@ -103,12 +108,36 @@ func (l *Loop) buildFilteredTools(req *RunRequest, hadBootstrap bool, iteration,
 	// Final iteration: strip all tools to force a text-only response.
 	// Without this the model may keep requesting tools and exit with "...".
 	if iteration == maxIter {
+		if req.ToolChoice != nil && req.ToolChoice.Mode == "function" && req.ToolChoice.Name != "" {
+			for _, tool := range req.EphemeralTools {
+				if tool.Name() != req.ToolChoice.Name {
+					continue
+				}
+				toolDefs = []providers.ToolDefinition{strictProviderDef(tool)}
+				allowedTools = map[string]bool{tool.Name(): true}
+				messages = append(messages, providers.Message{
+					Role:    "user",
+					Content: fmt.Sprintf("[System] Final iteration reached. Submit the required structured result now using %s.", req.ToolChoice.Name),
+				})
+				return toolDefs, allowedTools, messages
+			}
+		}
 		toolDefs = nil
 		messages = append(messages, providers.Message{
 			Role:    "user",
 			Content: "[System] Final iteration reached. Summarize all findings and respond to the user now. No more tool calls allowed.",
 		})
 		return toolDefs, allowedTools, messages
+	}
+
+	if len(req.EphemeralTools) > 0 {
+		if allowedTools == nil {
+			allowedTools = make(map[string]bool, len(req.EphemeralTools))
+		}
+		for _, tool := range req.EphemeralTools {
+			toolDefs = append(toolDefs, strictProviderDef(tool))
+			allowedTools[tool.Name()] = true
+		}
 	}
 
 	// Two-tier image generation gate:
@@ -124,4 +153,17 @@ func (l *Loop) buildFilteredTools(req *RunRequest, hadBootstrap bool, iteration,
 	}
 
 	return toolDefs, allowedTools, messages
+}
+
+func strictProviderDef(tool tools.Tool) providers.ToolDefinition {
+	strict := true
+	return providers.ToolDefinition{
+		Type: "function",
+		Function: &providers.ToolFunctionSchema{
+			Name:        tool.Name(),
+			Description: tool.Description(),
+			Parameters:  tool.Parameters(),
+			Strict:      &strict,
+		},
+	}
 }

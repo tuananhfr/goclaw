@@ -116,6 +116,9 @@ func builtinToolSeedData() []store.BuiltinToolDef {
 		{Name: "team_tasks", DisplayName: "Team Tasks", Description: "View, create, update, and complete tasks on the team task board", Category: "teams", Enabled: true,
 			Requires: []string{"managed_mode", "teams"},
 		},
+
+		// tekshot
+		{Name: "tekshot_generate_draft_posts", DisplayName: "Tekshot Generate Draft Posts", Description: "Generate a strict structured Tekshot draft post batch for a workspace source", Category: "tekshot", Enabled: true},
 	}
 
 	// Lite edition: remove skill management tools — not available on desktop.

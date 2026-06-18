@@ -582,32 +582,34 @@ func NewLoop(cfg LoopConfig) *Loop {
 
 // RunRequest is the input for processing a message through the agent.
 type RunRequest struct {
-	SessionKey        string             // composite key: agent:{agentId}:{channel}:{peerKind}:{chatId}
-	Message           string             // user message
-	Media             []bus.MediaFile    // local media files with MIME types
-	ForwardMedia      []bus.MediaFile    // media files to forward to output (from delegation results)
-	Channel           string             // source channel instance name (e.g. "my-telegram-bot")
-	ChannelType       string             // platform type (e.g. "zalo_personal", "telegram") — for system prompt context
-	ChatTitle         string             // group chat display name (e.g. Telegram group title)
-	ChatID            string             // source chat ID
-	PeerKind          string             // "direct" or "group" (for session key building and tool context)
-	Addressed         bool               // current turn explicitly addresses this agent (DMs, @mentions, reply-to-bot)
-	RunID             string             // unique run identifier
-	UserID            string             // external user ID (TEXT, free-form) for multi-tenant scoping
-	SenderID          string             // original individual sender ID (preserved in group chats for permission checks)
-	SenderName        string             // display name from channel metadata (for bootstrap auto-contact)
-	Role              string             // caller's RBAC role (admin/operator/viewer/owner); bypasses per-user grants for authenticated admins (#915)
-	Stream            bool               // whether to stream response chunks
-	ExtraSystemPrompt string             // optional: injected into system prompt (skills, subagent context, etc.)
-	SkillFilter       []string           // per-request skill override: nil=use agent default, []=no skills, ["x","y"]=whitelist
-	HistoryLimit      int                // max user turns to keep in context (0=unlimited, from channel config)
-	ToolAllow         []string           // per-group tool allow list (nil = no restriction, supports "group:xxx")
-	LocalKey          string             // composite key with topic/thread suffix for routing (e.g. "-100123:topic:42")
-	ParentTraceID     uuid.UUID          // if set, reuse parent trace instead of creating new (announce runs)
-	ParentRootSpanID  uuid.UUID          // if set, nest announce agent span under this parent span
-	LinkedTraceID     uuid.UUID          // if set, create new trace with parent_trace_id pointing to this (team task runs)
-	TraceName         string             // override trace name (default: "chat <agentID>")
-	TraceTags         []string           // additional tags for the trace (e.g. "cron")
+	SessionKey        string          // composite key: agent:{agentId}:{channel}:{peerKind}:{chatId}
+	Message           string          // user message
+	Media             []bus.MediaFile // local media files with MIME types
+	ForwardMedia      []bus.MediaFile // media files to forward to output (from delegation results)
+	Channel           string          // source channel instance name (e.g. "my-telegram-bot")
+	ChannelType       string          // platform type (e.g. "zalo_personal", "telegram") — for system prompt context
+	ChatTitle         string          // group chat display name (e.g. Telegram group title)
+	ChatID            string          // source chat ID
+	PeerKind          string          // "direct" or "group" (for session key building and tool context)
+	Addressed         bool            // current turn explicitly addresses this agent (DMs, @mentions, reply-to-bot)
+	RunID             string          // unique run identifier
+	UserID            string          // external user ID (TEXT, free-form) for multi-tenant scoping
+	SenderID          string          // original individual sender ID (preserved in group chats for permission checks)
+	SenderName        string          // display name from channel metadata (for bootstrap auto-contact)
+	Role              string          // caller's RBAC role (admin/operator/viewer/owner); bypasses per-user grants for authenticated admins (#915)
+	Stream            bool            // whether to stream response chunks
+	ExtraSystemPrompt string          // optional: injected into system prompt (skills, subagent context, etc.)
+	SkillFilter       []string        // per-request skill override: nil=use agent default, []=no skills, ["x","y"]=whitelist
+	HistoryLimit      int             // max user turns to keep in context (0=unlimited, from channel config)
+	ToolAllow         []string        // per-group tool allow list (nil = no restriction, supports "group:xxx")
+	LocalKey          string          // composite key with topic/thread suffix for routing (e.g. "-100123:topic:42")
+	ParentTraceID     uuid.UUID       // if set, reuse parent trace instead of creating new (announce runs)
+	ParentRootSpanID  uuid.UUID       // if set, nest announce agent span under this parent span
+	LinkedTraceID     uuid.UUID       // if set, create new trace with parent_trace_id pointing to this (team task runs)
+	TraceName         string          // override trace name (default: "chat <agentID>")
+	TraceTags         []string        // additional tags for the trace (e.g. "cron")
+	EphemeralTools    []tools.Tool    // request-scoped tools exposed only for this run
+	ToolChoice        *providers.ToolChoice
 	MaxIterations     int                // per-request override (0 = use agent default, must be lower)
 	ModelOverride     string             // per-request model override (heartbeat uses cheaper model)
 	ProviderOverride  providers.Provider // per-request provider override (heartbeat uses different provider)

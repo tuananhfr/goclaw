@@ -322,6 +322,9 @@ func (r *Registry) ProviderDefs() []providers.ToolDefinition {
 
 	defs := make([]providers.ToolDefinition, 0, len(sortedNames)+len(r.aliases))
 	for _, name := range sortedNames {
+		if IsHiddenFromLLM(r.tools[name]) {
+			continue
+		}
 		defs = append(defs, ToProviderDef(r.tools[name]))
 	}
 
@@ -339,6 +342,9 @@ func (r *Registry) ProviderDefs() []providers.ToolDefinition {
 		}
 		tool, ok := r.tools[canonical]
 		if !ok {
+			continue
+		}
+		if IsHiddenFromLLM(tool) {
 			continue
 		}
 		defs = append(defs, providers.ToolDefinition{

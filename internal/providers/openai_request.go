@@ -148,7 +148,7 @@ func (p *OpenAIProvider) buildRequestBody(model string, req ChatRequest, stream 
 
 	if len(req.Tools) > 0 {
 		body["tools"] = buildToolsPayload(p.schemaProviderName(), req.Tools)
-		body["tool_choice"] = "auto"
+		body["tool_choice"] = openAIToolChoice(req.ToolChoice)
 	}
 
 	// Together returns HTTP 400 on some requests when stream_options is present.
@@ -218,6 +218,32 @@ func (p *OpenAIProvider) buildRequestBody(model string, req ChatRequest, stream 
 	}
 
 	return body
+}
+
+func openAIToolChoice(choice *ToolChoice) any {
+	if choice == nil {
+		return "auto"
+	}
+	switch choice.Mode {
+	case "function":
+		if choice.Name == "" {
+			return "auto"
+		}
+		return map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name": choice.Name,
+			},
+		}
+	case "required":
+		return "required"
+	case "none":
+		return "none"
+	case "auto":
+		return "auto"
+	default:
+		return "auto"
+	}
 }
 
 // buildToolNameIndex returns a raw-ID → tool-name map drawn from every assistant

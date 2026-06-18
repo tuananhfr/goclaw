@@ -125,7 +125,7 @@ func (h *ToolsInvokeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		args["action"] = req.Action
 	}
 
-	result := h.registry.ExecuteWithContext(ctx, req.Tool, args, "http", "api", "direct", "", nil)
+	result := h.registry.ExecuteWithContext(ctx, req.Tool, args, "http", "api", "direct", req.SessionKey, nil)
 
 	if result.IsError {
 		writeToolError(w, http.StatusBadRequest, "TOOL_ERROR", result.ForLLM)
@@ -135,9 +135,10 @@ func (h *ToolsInvokeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"result": map[string]any{
-			"output":   result.ForLLM,
-			"forUser":  result.ForUser,
-			"metadata": map[string]any{},
+			"output":            result.ForLLM,
+			"forUser":           result.ForUser,
+			"structuredContent": result.StructuredContent,
+			"metadata":          result.Metadata,
 		},
 	})
 }

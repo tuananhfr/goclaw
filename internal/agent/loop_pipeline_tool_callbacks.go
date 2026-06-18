@@ -232,6 +232,18 @@ func makeToolEmitRun(l *Loop, req *RunRequest) func(AgentEvent) {
 // tool instances (e.g. per-user MCP connections) over the shared agent registry.
 // This prevents cross-user data leaks where User B might execute a tool using User A's connection.
 func (l *Loop) executeToolWithUserOverride(ctx context.Context, registryName string, args map[string]any, req *RunRequest) *tools.Result {
+	// 0. Check request-scoped ephemeral tools first.
+	for _, t := range req.EphemeralTools {
+		if t.Name() != registryName {
+			continue
+		}
+		if reg, ok := l.tools.(*tools.Registry); ok {
+			clone := reg.Clone()
+			clone.Register(t)
+			return clone.ExecuteWithContext(ctx, registryName, args, req.Channel, req.ChatID, req.PeerKind, req.SessionKey, nil)
+		}
+	}
+
 	// 1. Check if the current user has a user-specific version of this tool
 	var userTool tools.Tool
 	if cached, ok := l.mcpUserTools.Load(req.UserID); ok {

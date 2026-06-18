@@ -8,11 +8,11 @@ import (
 // Result is the unified return type from tool execution.
 type Result struct {
 	ForLLM  string `json:"for_llm"`            // content sent to the LLM
-	ForUser string `json:"for_user,omitempty"`  // content shown to the user
-	Silent  bool   `json:"silent"`              // suppress user message
-	IsError bool   `json:"is_error"`            // marks error
-	Async   bool   `json:"async"`               // running asynchronously
-	Err     error  `json:"-"`                   // internal error (not serialized)
+	ForUser string `json:"for_user,omitempty"` // content shown to the user
+	Silent  bool   `json:"silent"`             // suppress user message
+	IsError bool   `json:"is_error"`           // marks error
+	Async   bool   `json:"async"`              // running asynchronously
+	Err     error  `json:"-"`                  // internal error (not serialized)
 
 	// Media holds media files to forward as output (e.g. images from delegation).
 	Media []bus.MediaFile `json:"-"`
@@ -26,6 +26,12 @@ type Result struct {
 	// Used to capture actual content (e.g. written file text, image prompt) for team
 	// task results instead of relying on the LLM's summary response.
 	Deliverable string `json:"-"`
+
+	// StructuredContent holds validated machine-readable data for direct tool invocations.
+	StructuredContent any `json:"-"`
+
+	// Metadata carries optional machine-readable execution metadata for direct tool invocations.
+	Metadata map[string]any `json:"-"`
 
 	// Usage holds token usage from tools that make internal LLM calls (e.g. read_image).
 	// When set, the agent loop records these on the tool span for tracing.

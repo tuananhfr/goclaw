@@ -144,6 +144,9 @@ func (p *CodexProvider) buildRequestBody(req ChatRequest, stream bool) map[strin
 			}
 		}
 		body["tools"] = tools
+		if choice := codexToolChoice(req.ToolChoice); choice != nil {
+			body["tool_choice"] = choice
+		}
 	}
 
 	if level, ok := req.Options[OptThinkingLevel].(string); ok && level != "" && level != "off" {
@@ -151,6 +154,26 @@ func (p *CodexProvider) buildRequestBody(req ChatRequest, stream bool) map[strin
 	}
 
 	return body
+}
+
+func codexToolChoice(choice *ToolChoice) any {
+	if choice == nil {
+		return nil
+	}
+	switch choice.Mode {
+	case "function":
+		if choice.Name == "" {
+			return nil
+		}
+		return map[string]any{
+			"type": "function",
+			"name": choice.Name,
+		}
+	case "auto", "required", "none":
+		return choice.Mode
+	default:
+		return nil
+	}
 }
 
 func (p *CodexProvider) doRequest(ctx context.Context, body any) (io.ReadCloser, error) {

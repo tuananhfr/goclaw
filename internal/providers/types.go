@@ -73,10 +73,16 @@ type ThinkingCapable interface {
 
 // ChatRequest contains the input for a Chat/ChatStream call.
 type ChatRequest struct {
-	Messages []Message        `json:"messages"`
-	Tools    []ToolDefinition `json:"tools,omitempty"`
-	Model    string           `json:"model,omitempty"`
-	Options  map[string]any   `json:"options,omitempty"`
+	Messages   []Message        `json:"messages"`
+	Tools      []ToolDefinition `json:"tools,omitempty"`
+	ToolChoice *ToolChoice      `json:"tool_choice,omitempty"`
+	Model      string           `json:"model,omitempty"`
+	Options    map[string]any   `json:"options,omitempty"`
+}
+
+type ToolChoice struct {
+	Mode string `json:"mode"`
+	Name string `json:"name,omitempty"`
 }
 
 // ChatResponse is the result from an LLM call.

@@ -222,6 +222,7 @@ func (l *Loop) makeCallLLM(req *RunRequest, emitRun func(AgentEvent)) func(ctx c
 	return func(ctx context.Context, state *pipeline.RunState, chatReq providers.ChatRequest) (*providers.ChatResponse, error) {
 		provider := state.Provider
 		model := state.Model
+		chatReq.ToolChoice = req.ToolChoice
 
 		// Enrich ChatRequest options to match v2 (providers need these for caching, routing, audit).
 		if chatReq.Options == nil {

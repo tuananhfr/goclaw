@@ -41,6 +41,7 @@ import (
 	"github.com/nextlevelbuilder/goclaw/internal/scheduler"
 	"github.com/nextlevelbuilder/goclaw/internal/skills"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
+	tekshottools "github.com/nextlevelbuilder/goclaw/internal/tekshot"
 	"github.com/nextlevelbuilder/goclaw/internal/tools"
 	"github.com/nextlevelbuilder/goclaw/internal/vault"
 	"github.com/nextlevelbuilder/goclaw/pkg/protocol"
@@ -278,6 +279,7 @@ func runGateway() {
 	if traceCollector != nil {
 		agentRouter.SetTraceCollector(traceCollector)
 	}
+	toolsReg.Register(tekshottools.NewDraftPostsTool(agentRouter))
 	slog.Info("agents will be resolved lazily from database")
 
 	// Create gateway server and wire enforcement

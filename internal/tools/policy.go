@@ -144,6 +144,9 @@ func (pe *PolicyEngine) FilterTools(
 	for _, name := range allowed {
 		canonical := resolveAlias(name)
 		if tool, ok := registry.Get(canonical); ok {
+			if IsHiddenFromLLM(tool) {
+				continue
+			}
 			defs = append(defs, ToProviderDef(tool))
 			allowedSet[canonical] = true
 		}
@@ -163,6 +166,9 @@ func (pe *PolicyEngine) FilterTools(
 			continue
 		}
 		if tool, ok := registry.Get(canonical); ok {
+			if IsHiddenFromLLM(tool) {
+				continue
+			}
 			defs = append(defs, providers.ToolDefinition{
 				Type: "function",
 				Function: &providers.ToolFunctionSchema{

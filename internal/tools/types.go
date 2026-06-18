@@ -18,6 +18,11 @@ type Tool interface {
 	Execute(ctx context.Context, args map[string]any) *Result
 }
 
+// HiddenFromLLM marks tools that may be invoked directly but must never be exposed to agents.
+type HiddenFromLLM interface {
+	HiddenFromLLM() bool
+}
+
 // ContextualTool receives channel/chat context before execution.
 type ContextualTool interface {
 	Tool
@@ -137,4 +142,11 @@ func ToProviderDef(t Tool) providers.ToolDefinition {
 			Parameters:  t.Parameters(),
 		},
 	}
+}
+
+func IsHiddenFromLLM(t Tool) bool {
+	if hidden, ok := t.(HiddenFromLLM); ok {
+		return hidden.HiddenFromLLM()
+	}
+	return false
 }
