@@ -20,6 +20,7 @@ import (
 	"github.com/nextlevelbuilder/goclaw/internal/providers"
 	"github.com/nextlevelbuilder/goclaw/internal/sessions"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
+	"github.com/nextlevelbuilder/goclaw/internal/tekshot"
 	"github.com/nextlevelbuilder/goclaw/internal/tools"
 	"github.com/nextlevelbuilder/goclaw/pkg/protocol"
 )
@@ -345,6 +346,11 @@ func (m *ChatMethods) handleSend(ctx context.Context, client *gateway.Client, re
 			}
 		}
 
+		var ephemeralTools []tools.Tool
+		if strings.HasPrefix(userID, "tekshot-") {
+			ephemeralTools = append(ephemeralTools, tekshot.NewDraftBatchCollectorTool())
+		}
+
 		result, err := loop.Run(runCtx, agent.RunRequest{
 			SessionKey:      sessionKey,
 			Message:         message,
@@ -356,6 +362,7 @@ func (m *ChatMethods) handleSend(ctx context.Context, client *gateway.Client, re
 			UserID:          userID,
 			Stream:          params.Stream,
 			InjectCh:        injectCh,
+			EphemeralTools:  ephemeralTools,
 			// Wire trace ID back to the active run so force-abort can mark the
 			// correct trace as cancelled if the goroutine does not exit within 3s.
 			OnTraceCreated: func(traceID uuid.UUID) {
