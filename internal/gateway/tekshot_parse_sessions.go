@@ -169,7 +169,7 @@ func (s *Server) handleTekshotParseSession(w http.ResponseWriter, r *http.Reques
 		"user_id":           userID,
 		"session_key":       input.SessionKey,
 		"expires_at":        expiresAt.Unix(),
-		"allowed_methods":   []string{protocol.MethodConnect, protocol.MethodChatSend, protocol.MethodChatAbort},
+		"allowed_methods":   []string{protocol.MethodConnect, protocol.MethodChatSend, protocol.MethodChatAbort, "tools.invoke"},
 		"allowed_agent_key": input.AgentKey,
 	})
 }
@@ -306,6 +306,17 @@ func (c *Client) authorizeTekshotRPC(req *protocol.RequestFrame) bool {
 			return false
 		}
 		return params.SessionKey == session.SessionKey
+
+	case "tools.invoke":
+		var params struct {
+			AgentID    string `json:"agentId"`
+			SessionKey string `json:"sessionKey"`
+			Tool       string `json:"tool"`
+		}
+		if req.Params == nil || json.Unmarshal(req.Params, &params) != nil {
+			return false
+		}
+		return params.AgentID == session.AgentKey && params.SessionKey == session.SessionKey && params.Tool == "tekshot_generate_draft_posts"
 	}
 
 	return false

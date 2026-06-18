@@ -124,7 +124,7 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 		timezone = defaultTimezone
 	}
 
-	collector := newDraftBatchCollectorTool()
+	collector := NewDraftBatchCollectorTool()
 	runReq := agent.RunRequest{
 		SessionKey:     sessionKey,
 		Message:        buildPrompt(args, timezone),
@@ -182,21 +182,21 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 	}
 }
 
-type draftBatchCollectorTool struct {
+type DraftBatchCollectorTool struct {
 	batch map[string]any
 }
 
-func newDraftBatchCollectorTool() *draftBatchCollectorTool {
-	return &draftBatchCollectorTool{}
+func NewDraftBatchCollectorTool() *DraftBatchCollectorTool {
+	return &DraftBatchCollectorTool{}
 }
 
-func (t *draftBatchCollectorTool) Name() string { return finalToolName }
+func (t *DraftBatchCollectorTool) Name() string { return finalToolName }
 
-func (t *draftBatchCollectorTool) Description() string {
+func (t *DraftBatchCollectorTool) Description() string {
 	return "Submit the final Tekshot draft post batch as validated structured JSON. Call this once when the batch is complete."
 }
 
-func (t *draftBatchCollectorTool) Parameters() map[string]any {
+func (t *DraftBatchCollectorTool) Parameters() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -236,7 +236,7 @@ func (t *draftBatchCollectorTool) Parameters() map[string]any {
 	}
 }
 
-func (t *draftBatchCollectorTool) Execute(_ context.Context, args map[string]any) *tools.Result {
+func (t *DraftBatchCollectorTool) Execute(_ context.Context, args map[string]any) *tools.Result {
 	batch, err := validateDraftBatch(args)
 	if err != nil {
 		return tools.ErrorResult("MODEL_OUTPUT_INVALID: " + err.Error())
@@ -245,7 +245,7 @@ func (t *draftBatchCollectorTool) Execute(_ context.Context, args map[string]any
 	return tools.SilentResult("Structured draft batch captured.")
 }
 
-func (t *draftBatchCollectorTool) Batch() map[string]any {
+func (t *DraftBatchCollectorTool) Batch() map[string]any {
 	if t.batch == nil {
 		return nil
 	}

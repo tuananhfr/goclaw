@@ -33,10 +33,16 @@ type ChatMethods struct {
 	eventBus    bus.EventPublisher
 	postTurn    tools.PostTurnProcessor
 	audioMgr    *audio.Manager // for TTS auto-apply on WS responses (nil = disabled)
+	tools       *tools.Registry // for tools.invoke via WS
 }
 
 func NewChatMethods(agents *agent.Router, sess store.SessionStore, cfg *config.Config, rl *gateway.RateLimiter, eventBus bus.EventPublisher) *ChatMethods {
 	return &ChatMethods{agents: agents, sessions: sess, cfg: cfg, rateLimiter: rl, eventBus: eventBus}
+}
+
+// SetToolsRegistry sets the tools registry for direct tool invocation.
+func (m *ChatMethods) SetToolsRegistry(registry *tools.Registry) {
+	m.tools = registry
 }
 
 // SetAudioManager sets the audio manager for TTS auto-apply on WS responses.
@@ -56,6 +62,69 @@ func (m *ChatMethods) Register(router *gateway.MethodRouter) {
 	router.Register(protocol.MethodChatAbort, m.handleAbort)
 	router.Register(protocol.MethodChatInject, m.handleInject)
 	router.Register(protocol.MethodChatSessionStatus, m.handleSessionStatus)
+	router.Register("tools.invoke", m.handleToolsInvoke)
+}
+
+// handleToolsInvoke handles direct tool invocation over WebSocket.
+func (m *ChatMethods) handleToolsInvoke(ctx context.Context, client *gateway.Client, req *protocol.RequestFrame) {
+	locale := store.LocaleFromContext(ctx)
+	if m.tools == nil {
+		client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrInvalidRequest, "Tools registry is not configured"))
+		return
+	}
+
+	var params struct {
+		Tool       string         `json:"tool"`
+		Action     string         `json:"action,omitempty"`
+		Args       map[string]any `json:"args"`
+		SessionKey string         `json:"sessionKey,omitempty"`
+		AgentID    string         `json:"agentId,omitempty"`
+	}
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrInvalidRequest, i18n.T(locale, i18n.MsgInvalidJSON)))
+		return
+	}
+
+	if params.Tool == "" {
+		client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrInvalidRequest, i18n.T(locale, i18n.MsgRequired, "tool")))
+		return
+	}
+
+	args := params.Args
+	if args == nil {
+		args = make(map[string]any)
+	}
+	if params.Action != "" {
+		args["action"] = params.Action
+	}
+
+	userID := client.UserID()
+	if userID == "" {
+		client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrInvalidRequest, i18n.T(locale, i18n.MsgUserIDRequired)))
+		return
+	}
+
+	runCtx := context.WithoutCancel(ctx)
+	if userID != "" {
+		runCtx = store.WithUserID(runCtx, userID)
+	}
+
+	go func() {
+		// execute the tool synchronously in this goroutine to avoid blocking the WS reader loop
+		result := m.tools.ExecuteWithContext(runCtx, params.Tool, args, "ws", client.UserID(), "direct", params.SessionKey, nil)
+		if result.IsError {
+			client.SendResponse(protocol.NewErrorResponse(req.ID, protocol.ErrInvalidRequest, result.ForLLM))
+			return
+		}
+		client.SendResponse(protocol.NewOKResponse(req.ID, map[string]any{
+			"result": map[string]any{
+				"output":            result.ForLLM,
+				"forUser":           result.ForUser,
+				"structuredContent": result.StructuredContent,
+				"metadata":          result.Metadata,
+			},
+		}))
+	}()
 }
 
 // handleSessionStatus returns the running state and activity for a session.
