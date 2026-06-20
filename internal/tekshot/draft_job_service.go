@@ -180,7 +180,8 @@ func (s *DraftJobService) process(ctx context.Context, job *store.TekshotDraftJo
 	_ = s.store.MarkRunning(ctx, job.ID, "Streaming from GoClaw", defaultDraftJobLockTTL)
 	s.sendCallback(ctx, job, store.TekshotDraftJobRunning, "Streaming from GoClaw", "", nil)
 
-	execCtx := store.WithUserID(ctx, "tekshot-"+job.ExternalUserID)
+	execCtx := store.WithTenantID(ctx, store.MasterTenantID)
+	execCtx = store.WithUserID(execCtx, "tekshot-"+job.ExternalUserID)
 	execCtx = store.WithAgentKey(execCtx, job.AgentKey)
 	result := s.tools.Execute(execCtx, toolName, args)
 	if result == nil {
