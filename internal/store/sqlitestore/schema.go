@@ -16,7 +16,7 @@ var schemaSQL string
 
 // SchemaVersion is the current SQLite schema version.
 // Bump this when adding new migration steps below.
-const SchemaVersion = 28
+const SchemaVersion = 29
 
 // migrations maps version → SQL to apply when upgrading FROM that version.
 // schema.sql always represents the LATEST full schema (for fresh DBs).
@@ -608,6 +608,32 @@ CREATE INDEX IF NOT EXISTS idx_tta_tenant_basename ON team_task_attachments(tena
 
 	// Version 27 → 28: random-window cron schedules.
 	27: `ALTER TABLE cron_jobs ADD COLUMN window_ms BIGINT;`,
+
+	28: `CREATE TABLE IF NOT EXISTS tekshot_draft_jobs (
+    id                TEXT NOT NULL PRIMARY KEY,
+    external_job_uuid TEXT NOT NULL UNIQUE,
+    workspace_id      TEXT NOT NULL DEFAULT '',
+    workspace_uuid    TEXT NOT NULL DEFAULT '',
+    external_user_id  TEXT NOT NULL DEFAULT '',
+    agent_key         TEXT NOT NULL DEFAULT '',
+    session_key       TEXT NOT NULL DEFAULT '',
+    status            TEXT NOT NULL DEFAULT 'queued',
+    progress_message  TEXT NOT NULL DEFAULT '',
+    error_message     TEXT NOT NULL DEFAULT '',
+    request_json      TEXT NOT NULL DEFAULT '{}',
+    result_json       TEXT NOT NULL DEFAULT '',
+    callback_url      TEXT NOT NULL DEFAULT '',
+    callback_token    TEXT NOT NULL DEFAULT '',
+    attempt_count     INTEGER NOT NULL DEFAULT 0,
+    locked_until      TEXT NOT NULL DEFAULT '',
+    created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    completed_at      TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_tekshot_draft_jobs_status_locked
+    ON tekshot_draft_jobs(status, locked_until, created_at);
+CREATE INDEX IF NOT EXISTS idx_tekshot_draft_jobs_workspace
+    ON tekshot_draft_jobs(workspace_id, created_at DESC);`,
 }
 
 // addHooksTables is the SQLite incremental migration for schema v19 → v20.

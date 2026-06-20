@@ -291,6 +291,13 @@ func runGateway() {
 	server.SetPairingService(pgStores.Pairing)
 	server.SetMessageBus(msgBus)
 	server.SetOAuthHandler(httpapi.NewOAuthHandler(pgStores.Providers, pgStores.ConfigSecrets, providerRegistry, msgBus))
+	var tekshotDraftJobs *tekshottools.DraftJobService
+	if pgStores.TekshotDraftJobs != nil {
+		tekshotDraftJobs = tekshottools.NewDraftJobService(pgStores.TekshotDraftJobs, toolsReg)
+		server.SetTekshotDraftJobService(tekshotDraftJobs)
+	} else {
+		slog.Warn("tekshot.draft_jobs.disabled: store is not configured")
+	}
 
 	// contextFileInterceptor is created inside wireExtras.
 	// Declared here so it can be passed to registerAllMethods → AgentsMethods
@@ -491,6 +498,9 @@ func runGateway() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	if tekshotDraftJobs != nil {
+		tekshotDraftJobs.Start(ctx)
+	}
 	server.StartUpdateChecker(ctx)
 
 	sigCh := make(chan os.Signal, 1)

@@ -21,11 +21,12 @@ import (
 	"github.com/nextlevelbuilder/goclaw/internal/config"
 	httpapi "github.com/nextlevelbuilder/goclaw/internal/http"
 	mcpbridge "github.com/nextlevelbuilder/goclaw/internal/mcp"
-	"github.com/nextlevelbuilder/goclaw/internal/webui"
 	"github.com/nextlevelbuilder/goclaw/internal/permissions"
 	"github.com/nextlevelbuilder/goclaw/internal/providers"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
+	tekshottools "github.com/nextlevelbuilder/goclaw/internal/tekshot"
 	"github.com/nextlevelbuilder/goclaw/internal/tools"
+	"github.com/nextlevelbuilder/goclaw/internal/webui"
 	"github.com/nextlevelbuilder/goclaw/pkg/protocol"
 )
 
@@ -48,24 +49,25 @@ type Server struct {
 	handlers []routeRegistrar
 
 	// Non-handler dependencies (don't implement RegisterRoutes)
-	policyEngine   *permissions.PolicyEngine
-	pairingService store.PairingStore
-	apiKeyStore    store.APIKeyStore  // for API key auth lookup
-	agentStore     store.AgentStore   // for context injection in tools_invoke
-	msgBus         *bus.MessageBus    // for MCP bridge media delivery
+	policyEngine         *permissions.PolicyEngine
+	pairingService       store.PairingStore
+	apiKeyStore          store.APIKeyStore // for API key auth lookup
+	agentStore           store.AgentStore  // for context injection in tools_invoke
+	msgBus               *bus.MessageBus   // for MCP bridge media delivery
 	tekshotParseSessions *tekshotParseSessionStore
+	tekshotDraftJobs     *tekshottools.DraftJobService
 
 	upgrader    websocket.Upgrader
 	rateLimiter *RateLimiter
 	clients     map[string]*Client
 	mu          sync.RWMutex
 
-	startedAt      time.Time
-	version        string
-	db             interface{ PingContext(context.Context) error } // for health check DB ping
-	updateChecker  *UpdateChecker
+	startedAt     time.Time
+	version       string
+	db            interface{ PingContext(context.Context) error } // for health check DB ping
+	updateChecker *UpdateChecker
 
-	logTee   *LogTee                  // optional; auto-unsubscribes clients on disconnect
+	logTee   *LogTee                 // optional; auto-unsubscribes clients on disconnect
 	postTurn tools.PostTurnProcessor // optional; for team task dispatch in HTTP API paths
 
 	httpServer *http.Server
@@ -80,12 +82,12 @@ func (s *Server) SetPostTurnProcessor(pt tools.PostTurnProcessor) {
 // NewServer creates a new gateway server.
 func NewServer(cfg *config.Config, eventPub bus.EventPublisher, agents *agent.Router, sess store.SessionStore, toolsReg ...*tools.Registry) *Server {
 	s := &Server{
-		cfg:       cfg,
-		eventPub:  eventPub,
-		agents:    agents,
-		sessions:  sess,
-		clients:   make(map[string]*Client),
-		startedAt: time.Now(),
+		cfg:                  cfg,
+		eventPub:             eventPub,
+		agents:               agents,
+		sessions:             sess,
+		clients:              make(map[string]*Client),
+		startedAt:            time.Now(),
 		tekshotParseSessions: newTekshotParseSessionStore(),
 	}
 
@@ -148,6 +150,8 @@ func (s *Server) BuildMux() *http.ServeMux {
 	// HTTP API endpoints
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/v1/tekshot/parse-sessions", s.handleTekshotParseSession)
+	mux.HandleFunc("/v1/tekshot/draft-jobs", s.handleTekshotDraftJobs)
+	mux.HandleFunc("/v1/tekshot/draft-jobs/", s.handleTekshotDraftJob)
 	mux.HandleFunc("/v1/tekshot/google/oauth/callback", s.handleTekshotGoogleOAuthCallback)
 	mux.HandleFunc("/api/tekshot-studio/google/callback", s.handleTekshotGoogleOAuthCallback)
 
