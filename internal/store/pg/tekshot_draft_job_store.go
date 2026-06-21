@@ -39,6 +39,8 @@ func (s *PGTekshotDraftJobStore) Create(ctx context.Context, job *store.TekshotD
 		job.CreatedAt = now
 	}
 	job.UpdatedAt = now
+	requestJSON := nonEmptyJSON(job.RequestJSON, "{}")
+	resultJSON := nonEmptyJSON(job.ResultJSON, "{}")
 
 	_, err := s.db.ExecContext(ctx, `INSERT INTO tekshot_draft_jobs
 		(id, external_job_uuid, workspace_id, workspace_uuid, external_user_id, agent_key, session_key,
@@ -47,7 +49,7 @@ func (s *PGTekshotDraftJobStore) Create(ctx context.Context, job *store.TekshotD
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
 		ON CONFLICT (external_job_uuid) DO NOTHING`,
 		job.ID, job.ExternalJobUUID, job.WorkspaceID, job.WorkspaceUUID, job.ExternalUserID, job.AgentKey, job.SessionKey,
-		job.Status, job.ProgressMessage, job.ErrorMessage, []byte(job.RequestJSON), []byte(job.ResultJSON), job.CallbackURL, job.CallbackToken,
+		job.Status, job.ProgressMessage, job.ErrorMessage, requestJSON, resultJSON, job.CallbackURL, job.CallbackToken,
 		job.AttemptCount, job.LockedUntil, job.CreatedAt, job.UpdatedAt, job.CompletedAt,
 	)
 	if err != nil {
@@ -104,7 +106,7 @@ func (s *PGTekshotDraftJobStore) MarkCompleted(ctx context.Context, id uuid.UUID
 	}
 	now := time.Now().UTC()
 	_, err := s.db.ExecContext(ctx, `UPDATE tekshot_draft_jobs SET status = $1, progress_message = $2, error_message = '', result_json = $3, locked_until = NULL, completed_at = $4, updated_at = $5 WHERE id = $6`,
-		store.TekshotDraftJobCompleted, progress, []byte(result), now, now, id)
+		store.TekshotDraftJobCompleted, progress, nonEmptyJSON(result, "{}"), now, now, id)
 	return err
 }
 
