@@ -219,13 +219,14 @@ func (t *DraftBatchCollectorTool) Parameters() map[string]any {
 						"brief":          map[string]any{"type": "string"},
 						"pillar":         map[string]any{"type": "string"},
 						"content":        map[string]any{"type": "string"},
+						"hashtags":       map[string]any{"type": "string", "description": "3-5 contextual hashtags for this post, space-separated, each starting with #. Example: '#BIMFrance #DessinTechnique #DesignSupport'. Use empty string if none."},
 						"publish_at":     map[string]any{"type": "string", "description": "Publish date and time. Must strictly match 'YYYY-MM-DDTHH:MM:SS' (e.g. 2026-06-21T15:30:00). Do NOT include timezone offsets or Z suffix."},
 						"publish_date":   map[string]any{"type": "string", "description": "Publish date. Must match 'YYYY-MM-DD' (e.g. 2026-06-21)."},
 						"publish_time":   map[string]any{"type": "string", "description": "Publish time in 24-hour format. Must match 'HH:MM' (e.g. 15:30)."},
 						"checklist_item": map[string]any{"type": "string"},
 					},
 					"required": []string{
-						"title", "brief", "pillar", "content",
+						"title", "brief", "pillar", "content", "hashtags",
 						"publish_at", "publish_date", "publish_time", "checklist_item",
 					},
 				},
@@ -289,10 +290,15 @@ func buildPrompt(args map[string]any, timezone string) string {
 		sb.WriteString("\n")
 	}
 
+	sb.WriteString("\nIMPORTANT content rules:\n")
+	sb.WriteString("- The 'content' field must contain ONLY the core post body text. Do NOT include any footer, contact information, company address, phone number, email, website URL, or brand hashtags in the content field.\n")
+	sb.WriteString("- The footer/signature block is managed separately by the system and will be appended automatically.\n")
+	sb.WriteString("- Generate 3-5 contextual hashtags relevant to each post's topic and place them in the 'hashtags' field, space-separated, each starting with #. Example: '#BIMFrance #DessinTechnique #DesignSupport'.\n")
+	sb.WriteString("- Do NOT include the brand/company hashtag (e.g. #LPCFrance) in the hashtags field — it is already in the footer.\n")
 	sb.WriteString("\nFinal output schema requirements:\n")
 	sb.WriteString("- title: short batch title\n")
 	sb.WriteString("- summary: short batch summary\n")
-	sb.WriteString("- posts: array of objects with exactly these string fields: title, brief, pillar, content, publish_at, publish_date, publish_time, checklist_item\n")
+	sb.WriteString("- posts: array of objects with exactly these string fields: title, brief, pillar, content, hashtags, publish_at, publish_date, publish_time, checklist_item\n")
 	sb.WriteString("  * publish_at must strictly use format 'YYYY-MM-DDTHH:MM:SS' (e.g., 2026-06-21T18:00:00). NO timezone offset (+07:00) or Z suffix allowed.\n")
 	sb.WriteString("  * publish_date must use format 'YYYY-MM-DD' (e.g., 2026-06-21).\n")
 	sb.WriteString("  * publish_time must use format 'HH:MM' (e.g., 18:00).\n")
@@ -371,11 +377,11 @@ func validateDraftBatch(args map[string]any) (map[string]any, error) {
 
 func validateDraftPost(post map[string]any, index int) (map[string]any, error) {
 	requiredPostKeys := map[string]bool{
-		"title": true, "brief": true, "pillar": true, "content": true,
+		"title": true, "brief": true, "pillar": true, "content": true, "hashtags": true,
 		"publish_at": true, "publish_date": true, "publish_time": true, "checklist_item": true,
 	}
 	if !sameKeys(post, requiredPostKeys) {
-		return nil, fmt.Errorf("posts[%d] must contain exactly title, brief, pillar, content, publish_at, publish_date, publish_time, checklist_item", index)
+		return nil, fmt.Errorf("posts[%d] must contain exactly title, brief, pillar, content, hashtags, publish_at, publish_date, publish_time, checklist_item", index)
 	}
 
 	title := strings.TrimSpace(stringArg(post, "title"))
@@ -403,6 +409,7 @@ func validateDraftPost(post map[string]any, index int) (map[string]any, error) {
 		"brief":          strings.TrimSpace(stringArg(post, "brief")),
 		"pillar":         strings.TrimSpace(stringArg(post, "pillar")),
 		"content":        content,
+		"hashtags":       strings.TrimSpace(stringArg(post, "hashtags")),
 		"publish_at":     publishAt,
 		"publish_date":   publishDate,
 		"publish_time":   publishTime,
