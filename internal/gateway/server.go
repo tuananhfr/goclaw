@@ -55,6 +55,7 @@ type Server struct {
 	agentStore           store.AgentStore  // for context injection in tools_invoke
 	msgBus               *bus.MessageBus   // for MCP bridge media delivery
 	tekshotParseSessions *tekshotParseSessionStore
+	tekshotJobs          *tekshottools.JobService
 	tekshotDraftJobs     *tekshottools.DraftJobService
 
 	upgrader    websocket.Upgrader
@@ -150,6 +151,8 @@ func (s *Server) BuildMux() *http.ServeMux {
 	// HTTP API endpoints
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/v1/tekshot/parse-sessions", s.handleTekshotParseSession)
+	mux.HandleFunc("/v1/tekshot/jobs", s.handleTekshotJobs)
+	mux.HandleFunc("/v1/tekshot/jobs/", s.handleTekshotJob)
 	mux.HandleFunc("/v1/tekshot/draft-jobs", s.handleTekshotDraftJobs)
 	mux.HandleFunc("/v1/tekshot/draft-jobs/", s.handleTekshotDraftJob)
 	mux.HandleFunc("/v1/tekshot/google/oauth/callback", s.handleTekshotGoogleOAuthCallback)

@@ -291,6 +291,13 @@ func runGateway() {
 	server.SetPairingService(pgStores.Pairing)
 	server.SetMessageBus(msgBus)
 	server.SetOAuthHandler(httpapi.NewOAuthHandler(pgStores.Providers, pgStores.ConfigSecrets, providerRegistry, msgBus))
+	var tekshotJobs *tekshottools.JobService
+	if pgStores.TekshotJobs != nil {
+		tekshotJobs = tekshottools.NewJobService(pgStores.TekshotJobs, agentRouter, toolsReg)
+		server.SetTekshotJobService(tekshotJobs)
+	} else {
+		slog.Warn("tekshot.jobs.disabled: store is not configured")
+	}
 	var tekshotDraftJobs *tekshottools.DraftJobService
 	if pgStores.TekshotDraftJobs != nil {
 		tekshotDraftJobs = tekshottools.NewDraftJobService(pgStores.TekshotDraftJobs, toolsReg)
@@ -500,6 +507,9 @@ func runGateway() {
 
 	if tekshotDraftJobs != nil {
 		tekshotDraftJobs.Start(ctx)
+	}
+	if tekshotJobs != nil {
+		tekshotJobs.Start(ctx)
 	}
 	server.StartUpdateChecker(ctx)
 
