@@ -70,6 +70,7 @@ func NewSQLiteStores(cfg store.StoreConfig) (*store.Stores, error) {
 		EvolutionSuggestions:  NewSQLiteEvolutionSuggestionStore(db),
 		KnowledgeGraph:        NewSQLiteKnowledgeGraphStore(db),
 		Vault:                 NewSQLiteVaultStore(db),
+		TekshotJobs:           NewSQLiteTekshotJobStore(db),
 		TekshotDraftJobs:      NewSQLiteTekshotDraftJobStore(db),
 		Hooks:                 NewSQLiteHookStore(db),
 	}, nil

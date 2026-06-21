@@ -1699,3 +1699,40 @@ CREATE INDEX IF NOT EXISTS idx_tekshot_draft_jobs_status_locked
 
 CREATE INDEX IF NOT EXISTS idx_tekshot_draft_jobs_workspace
     ON tekshot_draft_jobs(workspace_id, created_at DESC);
+
+-- ============================================================
+-- Table: tekshot_jobs
+-- Durable async Tekshot jobs owned by GoClaw.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS tekshot_jobs (
+    id                TEXT NOT NULL PRIMARY KEY,
+    external_job_uuid TEXT NOT NULL UNIQUE,
+    workspace_id      TEXT NOT NULL DEFAULT '',
+    workspace_uuid    TEXT NOT NULL DEFAULT '',
+    external_user_id  TEXT NOT NULL DEFAULT '',
+    job_type          TEXT NOT NULL DEFAULT '',
+    agent_key         TEXT NOT NULL DEFAULT '',
+    session_key       TEXT NOT NULL DEFAULT '',
+    status            TEXT NOT NULL DEFAULT 'queued',
+    progress_message  TEXT NOT NULL DEFAULT '',
+    error_message     TEXT NOT NULL DEFAULT '',
+    request_json      TEXT NOT NULL DEFAULT '{}',
+    result_json       TEXT NOT NULL DEFAULT '',
+    callback_url      TEXT NOT NULL DEFAULT '',
+    callback_token    TEXT NOT NULL DEFAULT '',
+    attempt_count     INTEGER NOT NULL DEFAULT 0,
+    locked_until      TEXT NOT NULL DEFAULT '',
+    created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    completed_at      TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_tekshot_jobs_status_locked
+    ON tekshot_jobs(status, locked_until, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_tekshot_jobs_workspace
+    ON tekshot_jobs(workspace_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_tekshot_jobs_type_status
+    ON tekshot_jobs(job_type, status, created_at DESC);
