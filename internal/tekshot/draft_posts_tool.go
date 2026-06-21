@@ -219,9 +219,9 @@ func (t *DraftBatchCollectorTool) Parameters() map[string]any {
 						"brief":          map[string]any{"type": "string"},
 						"pillar":         map[string]any{"type": "string"},
 						"content":        map[string]any{"type": "string"},
-						"publish_at":     map[string]any{"type": "string"},
-						"publish_date":   map[string]any{"type": "string"},
-						"publish_time":   map[string]any{"type": "string"},
+						"publish_at":     map[string]any{"type": "string", "description": "Publish date and time. Must strictly match 'YYYY-MM-DDTHH:MM:SS' (e.g. 2026-06-21T15:30:00). Do NOT include timezone offsets or Z suffix."},
+						"publish_date":   map[string]any{"type": "string", "description": "Publish date. Must match 'YYYY-MM-DD' (e.g. 2026-06-21)."},
+						"publish_time":   map[string]any{"type": "string", "description": "Publish time in 24-hour format. Must match 'HH:MM' (e.g. 15:30)."},
 						"checklist_item": map[string]any{"type": "string"},
 					},
 					"required": []string{
@@ -293,6 +293,9 @@ func buildPrompt(args map[string]any, timezone string) string {
 	sb.WriteString("- title: short batch title\n")
 	sb.WriteString("- summary: short batch summary\n")
 	sb.WriteString("- posts: array of objects with exactly these string fields: title, brief, pillar, content, publish_at, publish_date, publish_time, checklist_item\n")
+	sb.WriteString("  * publish_at must strictly use format 'YYYY-MM-DDTHH:MM:SS' (e.g., 2026-06-21T18:00:00). NO timezone offset (+07:00) or Z suffix allowed.\n")
+	sb.WriteString("  * publish_date must use format 'YYYY-MM-DD' (e.g., 2026-06-21).\n")
+	sb.WriteString("  * publish_time must use format 'HH:MM' (e.g., 18:00).\n")
 	sb.WriteString("- If scheduling data is unavailable, set publish_at, publish_date, and publish_time to empty strings.\n")
 	return sb.String()
 }
