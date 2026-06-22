@@ -281,6 +281,7 @@ func runGateway() {
 	}
 	toolsReg.Register(tekshottools.NewDraftPostsTool(agentRouter))
 	toolsReg.Register(tekshottools.NewDraftBatchCollectorTool())
+	toolsReg.Register(tekshottools.NewScheduledCallbackTool())
 	slog.Info("agents will be resolved lazily from database")
 
 	// Create gateway server and wire enforcement
@@ -290,6 +291,7 @@ func runGateway() {
 	server.SetPolicyEngine(permPE)
 	server.SetPairingService(pgStores.Pairing)
 	server.SetMessageBus(msgBus)
+	server.SetTekshotCronStore(pgStores.Cron)
 	server.SetOAuthHandler(httpapi.NewOAuthHandler(pgStores.Providers, pgStores.ConfigSecrets, providerRegistry, msgBus))
 	var tekshotJobs *tekshottools.JobService
 	if pgStores.TekshotJobs != nil {

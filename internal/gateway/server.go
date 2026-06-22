@@ -57,6 +57,7 @@ type Server struct {
 	tekshotParseSessions *tekshotParseSessionStore
 	tekshotJobs          *tekshottools.JobService
 	tekshotDraftJobs     *tekshottools.DraftJobService
+	tekshotCron          store.CronStore
 
 	upgrader    websocket.Upgrader
 	rateLimiter *RateLimiter
@@ -155,6 +156,8 @@ func (s *Server) BuildMux() *http.ServeMux {
 	mux.HandleFunc("/v1/tekshot/jobs/", s.handleTekshotJob)
 	mux.HandleFunc("/v1/tekshot/draft-jobs", s.handleTekshotDraftJobs)
 	mux.HandleFunc("/v1/tekshot/draft-jobs/", s.handleTekshotDraftJob)
+	mux.HandleFunc("/v1/tekshot/scheduled-callback-jobs", s.handleTekshotScheduledCallbackJobs)
+	mux.HandleFunc("/v1/tekshot/scheduled-callback-jobs/", s.handleTekshotScheduledCallbackJob)
 	mux.HandleFunc("/v1/tekshot/google/oauth/callback", s.handleTekshotGoogleOAuthCallback)
 	mux.HandleFunc("/api/tekshot-studio/google/callback", s.handleTekshotGoogleOAuthCallback)
 
