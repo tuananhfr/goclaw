@@ -16,6 +16,7 @@ import (
 
 	"github.com/nextlevelbuilder/goclaw/internal/agent"
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
+	"github.com/nextlevelbuilder/goclaw/internal/channels/media"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
 	"github.com/nextlevelbuilder/goclaw/internal/tools"
 )
@@ -267,6 +268,25 @@ func (s *JobService) runChat(ctx context.Context, job *store.TekshotJob, request
 	if strings.TrimSpace(message) == "" {
 		return nil, "", fmt.Errorf("chat message is required")
 	}
+	mediaFiles := mediaFromJobRequest(request)
+	if len(mediaFiles) > 0 {
+		mediaInfos := make([]media.MediaInfo, 0, len(mediaFiles))
+		for _, item := range mediaFiles {
+			mimeType := strings.TrimSpace(item.MimeType)
+			if mimeType == "" {
+				mimeType = media.DetectMIMEType(item.Path)
+			}
+			mediaInfos = append(mediaInfos, media.MediaInfo{
+				Type:        media.MediaKindFromMime(mimeType),
+				FilePath:    item.Path,
+				ContentType: mimeType,
+				FileName:    item.Filename,
+			})
+		}
+		if tags := media.BuildMediaTags(mediaInfos); tags != "" {
+			message = tags + "\n\n" + message
+		}
+	}
 
 	loop, err := s.agents.Get(store.WithTenantID(ctx, store.MasterTenantID), job.AgentKey)
 	if err != nil {
@@ -279,7 +299,7 @@ func (s *JobService) runChat(ctx context.Context, job *store.TekshotJob, request
 	result, err := loop.Run(runCtx, agent.RunRequest{
 		SessionKey:  job.SessionKey,
 		Message:     message,
-		Media:       mediaFromJobRequest(request),
+		Media:       mediaFiles,
 		Channel:     "tekshot_job",
 		ChannelType: "tekshot",
 		ChatID:      userID,
