@@ -88,17 +88,18 @@ type CronJobResult struct {
 
 // CronJobPatch holds optional fields for updating a job.
 type CronJobPatch struct {
-	Name           string        `json:"name,omitempty" db:"-"`
-	AgentID        *string       `json:"agentId,omitempty" db:"-"`
-	Enabled        *bool         `json:"enabled,omitempty" db:"-"`
-	Schedule       *CronSchedule `json:"schedule,omitempty" db:"-"`
-	Message        string        `json:"message,omitempty" db:"-"`
-	DeleteAfterRun *bool         `json:"deleteAfterRun,omitempty" db:"-"`
-	Stateless      *bool         `json:"stateless,omitempty" db:"-"`
-	Deliver        *bool         `json:"deliver,omitempty" db:"-"`
-	DeliverChannel *string       `json:"deliverChannel,omitempty" db:"-"`
-	DeliverTo      *string       `json:"deliverTo,omitempty" db:"-"`
-	WakeHeartbeat  *bool         `json:"wakeHeartbeat,omitempty" db:"-"`
+	Name           string         `json:"name,omitempty" db:"-"`
+	AgentID        *string        `json:"agentId,omitempty" db:"-"`
+	Enabled        *bool          `json:"enabled,omitempty" db:"-"`
+	Schedule       *CronSchedule  `json:"schedule,omitempty" db:"-"`
+	Message        string         `json:"message,omitempty" db:"-"`
+	ToolArgs       map[string]any `json:"toolArgs,omitempty" db:"-"`
+	DeleteAfterRun *bool          `json:"deleteAfterRun,omitempty" db:"-"`
+	Stateless      *bool          `json:"stateless,omitempty" db:"-"`
+	Deliver        *bool          `json:"deliver,omitempty" db:"-"`
+	DeliverChannel *string        `json:"deliverChannel,omitempty" db:"-"`
+	DeliverTo      *string        `json:"deliverTo,omitempty" db:"-"`
+	WakeHeartbeat  *bool          `json:"wakeHeartbeat,omitempty" db:"-"`
 }
 
 // CronEvent represents a job lifecycle event sent to subscribers.

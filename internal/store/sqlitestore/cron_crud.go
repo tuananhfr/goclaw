@@ -351,9 +351,19 @@ func (s *SQLiteCronStore) UpdateJob(ctx context.Context, jobID string, patch sto
 		updates["wake_heartbeat"] = *patch.WakeHeartbeat
 	}
 
-	if patch.Message != "" {
+	if patch.Message != "" || patch.ToolArgs != nil {
 		payload := current.Payload
-		payload.Message = patch.Message
+		if patch.Message != "" {
+			payload.Message = patch.Message
+		}
+		if patch.ToolArgs != nil {
+			if payload.Args == nil {
+				payload.Args = make(map[string]any)
+			}
+			for key, value := range patch.ToolArgs {
+				payload.Args[key] = value
+			}
+		}
 		mergedPayload, err := json.Marshal(payload)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal payload for job %s: %w", jobID, err)

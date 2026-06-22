@@ -3,9 +3,11 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +22,11 @@ type tekshotScheduledCallbackRequest struct {
 	CallbackToken string `json:"callback_token"`
 	Method        string `json:"method"`
 	TimeoutMS     int64  `json:"timeout_ms"`
+	PostID        string `json:"post_id"`
+	WorkspaceID   string `json:"workspace_id"`
+	TargetPageID  string `json:"target_page_id"`
+	PageName      string `json:"page_name"`
+	PostTitle     string `json:"post_title"`
 }
 
 func (s *Server) SetTekshotCronStore(service store.CronStore) {
@@ -53,7 +60,7 @@ func (s *Server) handleTekshotScheduledCallbackJobs(w http.ResponseWriter, r *ht
 	if !ok {
 		return
 	}
-	job, err := s.createTekshotScheduledCallbackJob(r.Context(), input)
+	job, err := s.upsertTekshotScheduledCallbackJob(r.Context(), input)
 	if err != nil {
 		writeTekshotJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":      false,
@@ -98,10 +105,13 @@ func (s *Server) handleTekshotScheduledCallbackJob(w http.ResponseWriter, r *htt
 		if !ok {
 			return
 		}
-		_ = s.tekshotCron.RemoveJob(r.Context(), jobID)
-		job, err := s.createTekshotScheduledCallbackJob(r.Context(), input)
+		job, err := s.updateTekshotScheduledCallbackJob(r.Context(), jobID, input)
 		if err != nil {
-			writeTekshotJSON(w, http.StatusBadRequest, map[string]any{
+			status := http.StatusBadRequest
+			if errors.Is(err, store.ErrCronJobNotFound) {
+				status = http.StatusNotFound
+			}
+			writeTekshotJSON(w, status, map[string]any{
 				"ok":      false,
 				"message": err.Error(),
 			})
@@ -146,6 +156,11 @@ func decodeTekshotScheduledCallbackRequest(w http.ResponseWriter, r *http.Reques
 	input.CallbackURL = strings.TrimSpace(input.CallbackURL)
 	input.CallbackToken = strings.TrimSpace(input.CallbackToken)
 	input.Method = strings.ToUpper(strings.TrimSpace(input.Method))
+	input.PostID = strings.TrimSpace(input.PostID)
+	input.WorkspaceID = strings.TrimSpace(input.WorkspaceID)
+	input.TargetPageID = strings.TrimSpace(input.TargetPageID)
+	input.PageName = strings.TrimSpace(input.PageName)
+	input.PostTitle = strings.TrimSpace(input.PostTitle)
 	if input.Method == "" {
 		input.Method = http.MethodPost
 	}
@@ -155,25 +170,164 @@ func decodeTekshotScheduledCallbackRequest(w http.ResponseWriter, r *http.Reques
 	return input, true
 }
 
-func (s *Server) createTekshotScheduledCallbackJob(ctx context.Context, input tekshotScheduledCallbackRequest) (*store.CronJob, error) {
-	if err := validateTekshotScheduledCallbackRequest(input); err != nil {
+func (s *Server) upsertTekshotScheduledCallbackJob(ctx context.Context, input tekshotScheduledCallbackRequest) (*store.CronJob, error) {
+	if err := validateTekshotScheduledCallbackRequest(input, true); err != nil {
 		return nil, err
 	}
-	name := "tekshot scheduled callback"
-	if input.ExternalID != "" {
-		name += ": " + input.ExternalID
+	matches := s.findTekshotScheduledCallbackJobs(ctx, input.ExternalID)
+	if len(matches) > 0 {
+		job, err := s.updateTekshotScheduledCallbackJob(ctx, matches[0].ID, input)
+		if err != nil {
+			return nil, err
+		}
+		s.removeDuplicateTekshotScheduledCallbackJobs(ctx, input.ExternalID, job.ID)
+		return job, nil
 	}
-	args := map[string]any{
-		"external_id":    input.ExternalID,
-		"callback_url":   input.CallbackURL,
-		"callback_token": input.CallbackToken,
-		"method":         input.Method,
-		"timeout_ms":     input.TimeoutMS,
+	job, err := s.createTekshotScheduledCallbackJob(ctx, input)
+	if err != nil {
+		return nil, err
 	}
-	return s.tekshotCron.AddToolCallJob(ctx, name, input.RunAtMS, tekshottools.ScheduledCallbackToolName, args, "", "tekshot")
+	s.removeDuplicateTekshotScheduledCallbackJobs(ctx, input.ExternalID, job.ID)
+	return job, nil
 }
 
-func validateTekshotScheduledCallbackRequest(input tekshotScheduledCallbackRequest) error {
+func (s *Server) createTekshotScheduledCallbackJob(ctx context.Context, input tekshotScheduledCallbackRequest) (*store.CronJob, error) {
+	if err := validateTekshotScheduledCallbackRequest(input, true); err != nil {
+		return nil, err
+	}
+	args := tekshotScheduledCallbackArgs(input)
+	args["callback_token"] = input.CallbackToken
+	return s.tekshotCron.AddToolCallJob(ctx, tekshotScheduledCallbackName(input), input.RunAtMS, tekshottools.ScheduledCallbackToolName, args, "", "tekshot")
+}
+
+func (s *Server) updateTekshotScheduledCallbackJob(ctx context.Context, jobID string, input tekshotScheduledCallbackRequest) (*store.CronJob, error) {
+	if err := validateTekshotScheduledCallbackRequest(input, false); err != nil {
+		return nil, err
+	}
+	args := tekshotScheduledCallbackArgs(input)
+	if input.CallbackToken != "" {
+		args["callback_token"] = input.CallbackToken
+	}
+	schedule := store.CronSchedule{Kind: "at", AtMS: &input.RunAtMS}
+	job, err := s.tekshotCron.UpdateJob(ctx, jobID, store.CronJobPatch{
+		Name:     tekshotScheduledCallbackName(input),
+		Schedule: &schedule,
+		ToolArgs: args,
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.removeDuplicateTekshotScheduledCallbackJobs(ctx, input.ExternalID, job.ID)
+	return job, nil
+}
+
+func tekshotScheduledCallbackArgs(input tekshotScheduledCallbackRequest) map[string]any {
+	args := map[string]any{
+		"external_id":  input.ExternalID,
+		"callback_url": input.CallbackURL,
+		"method":       input.Method,
+		"timeout_ms":   input.TimeoutMS,
+	}
+	if input.PostID != "" {
+		args["post_id"] = input.PostID
+	}
+	if input.WorkspaceID != "" {
+		args["workspace_id"] = input.WorkspaceID
+	}
+	if input.TargetPageID != "" {
+		args["target_page_id"] = input.TargetPageID
+	}
+	if input.PageName != "" {
+		args["page_name"] = input.PageName
+	}
+	if input.PostTitle != "" {
+		args["post_title"] = input.PostTitle
+	}
+	return args
+}
+
+func tekshotScheduledCallbackName(input tekshotScheduledCallbackRequest) string {
+	page := input.PageName
+	if page == "" && input.TargetPageID != "" {
+		page = "page " + input.TargetPageID
+	}
+	if page == "" {
+		page = "page unknown"
+	}
+	postID := input.PostID
+	if postID == "" {
+		postID = strings.TrimPrefix(input.ExternalID, "tekshot-post-")
+	}
+	if postID == "" {
+		postID = input.ExternalID
+	}
+	name := "tekshot | " + page + " | post " + postID
+	if title := shortenTekshotScheduledCallbackTitle(input.PostTitle, 48); title != "" {
+		name += " | " + title
+	}
+	return name
+}
+
+func shortenTekshotScheduledCallbackTitle(value string, limit int) string {
+	value = strings.Join(strings.Fields(value), " ")
+	runes := []rune(value)
+	if len(runes) <= limit {
+		return value
+	}
+	if limit <= 1 {
+		return string(runes[:limit])
+	}
+	if limit <= 3 {
+		return string(runes[:limit])
+	}
+	return strings.TrimSpace(string(runes[:limit-3])) + "..."
+}
+
+func (s *Server) findTekshotScheduledCallbackJobs(ctx context.Context, externalID string) []store.CronJob {
+	if externalID == "" {
+		return nil
+	}
+	jobs := s.tekshotCron.ListJobs(ctx, true, "", "tekshot")
+	matches := make([]store.CronJob, 0)
+	for _, job := range jobs {
+		if job.Payload.Kind != "tool_call" || job.Payload.ToolName != tekshottools.ScheduledCallbackToolName {
+			continue
+		}
+		if scheduledCallbackArgString(job.Payload.Args, "external_id") == externalID {
+			matches = append(matches, job)
+		}
+	}
+	return matches
+}
+
+func (s *Server) removeDuplicateTekshotScheduledCallbackJobs(ctx context.Context, externalID, keepID string) {
+	for _, job := range s.findTekshotScheduledCallbackJobs(ctx, externalID) {
+		if job.ID == keepID {
+			continue
+		}
+		_ = s.tekshotCron.RemoveJob(ctx, job.ID)
+	}
+}
+
+func scheduledCallbackArgString(args map[string]any, key string) string {
+	switch value := args[key].(type) {
+	case string:
+		return strings.TrimSpace(value)
+	case json.Number:
+		return value.String()
+	case int:
+		return strconv.Itoa(value)
+	case int64:
+		return strconv.FormatInt(value, 10)
+	case float64:
+		if value == float64(int64(value)) {
+			return strconv.FormatInt(int64(value), 10)
+		}
+	}
+	return ""
+}
+
+func validateTekshotScheduledCallbackRequest(input tekshotScheduledCallbackRequest, requireToken bool) error {
 	if input.RunAtMS <= 0 {
 		return fmt.Errorf("run_at_ms is required")
 	}
@@ -187,7 +341,7 @@ func validateTekshotScheduledCallbackRequest(input tekshotScheduledCallbackReque
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return fmt.Errorf("callback_url must use http or https")
 	}
-	if input.CallbackToken == "" {
+	if requireToken && input.CallbackToken == "" {
 		return fmt.Errorf("callback_token is required")
 	}
 	if input.Method != http.MethodPost {
