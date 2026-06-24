@@ -35,6 +35,12 @@ type DraftPostsTool struct {
 	router *agent.Router
 }
 
+type SourceItem struct {
+	SourceIndex   int
+	ChecklistItem string
+	SourceText    string
+}
+
 func NewDraftPostsTool(router *agent.Router) *DraftPostsTool {
 	return &DraftPostsTool{router: router}
 }
@@ -66,6 +72,34 @@ func (t *DraftPostsTool) Parameters() map[string]any {
 			"source_text": map[string]any{
 				"type":        "string",
 				"description": "Resolved source text when available.",
+			},
+			"source_items": map[string]any{
+				"type":        "array",
+				"description": "Exact checklist source items for this chunk. The final batch must return one post per source_index.",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"source_index":   map[string]any{"type": "number"},
+						"checklist_item": map[string]any{"type": "string"},
+						"source_text":    map[string]any{"type": "string"},
+					},
+				},
+			},
+			"expected_count": map[string]any{
+				"type":        "number",
+				"description": "Expected number of posts for this request.",
+			},
+			"chunk_index": map[string]any{
+				"type":        "number",
+				"description": "1-based chunk number for chunked Tekshot generation.",
+			},
+			"chunk_count": map[string]any{
+				"type":        "number",
+				"description": "Total chunk count for chunked Tekshot generation.",
+			},
+			"parent_job_uuid": map[string]any{
+				"type":        "string",
+				"description": "Drupal parent job UUID for chunked Tekshot generation.",
 			},
 			"source_url": map[string]any{
 				"type":        "string",
@@ -124,7 +158,7 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 		timezone = defaultTimezone
 	}
 
-	collector := NewDraftBatchCollectorTool()
+	collector := NewDraftBatchCollectorTool(sourceItemsArg(args["source_items"]))
 	runReq := agent.RunRequest{
 		SessionKey:     sessionKey,
 		Message:        buildPrompt(args, timezone),
@@ -137,7 +171,7 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 		UserID:         store.UserIDFromContext(ctx),
 		ToolAllow:      []string{"web_fetch", "read_document"},
 		EphemeralTools: []tools.Tool{collector},
-		MaxIterations:  6,
+		MaxIterations:  8,
 		TraceName:      "tekshot draft posts",
 		TraceTags:      []string{"tekshot", "draft_posts"},
 	}
@@ -150,7 +184,7 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 		finalReq := runReq
 		finalReq.RunID = uuid.NewString()
 		finalReq.Message = fmt.Sprintf("Submit the final Tekshot batch now by calling %s with the complete structured result. Do not answer with plain text.", finalToolName)
-		finalReq.MaxIterations = 2
+		finalReq.MaxIterations = 3
 		finalReq.ToolChoice = &providers.ToolChoice{
 			Mode: "function",
 			Name: finalToolName,
@@ -183,11 +217,16 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 }
 
 type DraftBatchCollectorTool struct {
-	batch map[string]any
+	batch       map[string]any
+	sourceItems []SourceItem
 }
 
-func NewDraftBatchCollectorTool() *DraftBatchCollectorTool {
-	return &DraftBatchCollectorTool{}
+func NewDraftBatchCollectorTool(sourceItems ...[]SourceItem) *DraftBatchCollectorTool {
+	var items []SourceItem
+	if len(sourceItems) > 0 {
+		items = sourceItems[0]
+	}
+	return &DraftBatchCollectorTool{sourceItems: items}
 }
 
 func (t *DraftBatchCollectorTool) Name() string { return finalToolName }
@@ -224,6 +263,7 @@ func (t *DraftBatchCollectorTool) Parameters() map[string]any {
 						"publish_date":   map[string]any{"type": "string", "description": "Publish date. Must match 'YYYY-MM-DD' (e.g. 2026-06-21)."},
 						"publish_time":   map[string]any{"type": "string", "description": "Publish time in 24-hour format. Must match 'HH:MM' (e.g. 15:30)."},
 						"checklist_item": map[string]any{"type": "string"},
+						"source_index":   map[string]any{"type": "number", "description": "Required when source_items is provided. Must match the source_index of the checklist item used for this post."},
 					},
 					"required": []string{
 						"title", "brief", "pillar", "content", "hashtags",
@@ -240,6 +280,9 @@ func (t *DraftBatchCollectorTool) Parameters() map[string]any {
 func (t *DraftBatchCollectorTool) Execute(_ context.Context, args map[string]any) *tools.Result {
 	batch, err := validateDraftBatch(args)
 	if err != nil {
+		return tools.ErrorResult("MODEL_OUTPUT_INVALID: " + err.Error())
+	}
+	if err := validateBatchSourceIndexes(batch, t.sourceItems); err != nil {
 		return tools.ErrorResult("MODEL_OUTPUT_INVALID: " + err.Error())
 	}
 	t.batch = batch
@@ -289,6 +332,21 @@ func buildPrompt(args map[string]any, timezone string) string {
 		sb.WriteString(sourceText)
 		sb.WriteString("\n")
 	}
+	if sourceItems := sourceItemsArg(args["source_items"]); len(sourceItems) > 0 {
+		sb.WriteString("\nExact source items for this chunk:\n")
+		for _, item := range sourceItems {
+			sb.WriteString(fmt.Sprintf("- source_index=%d | checklist_item=%s", item.SourceIndex, item.ChecklistItem))
+			if item.SourceText != "" && item.SourceText != item.ChecklistItem {
+				sb.WriteString(" | source_text=")
+				sb.WriteString(item.SourceText)
+			}
+			sb.WriteString("\n")
+		}
+		sb.WriteString("\nSTRICT source item rules:\n")
+		sb.WriteString("- Return exactly one post for every source_index listed above.\n")
+		sb.WriteString("- Every submitted post must include the matching numeric source_index.\n")
+		sb.WriteString("- Do not skip, merge, duplicate, or invent source_index values.\n")
+	}
 
 	sb.WriteString("\nIMPORTANT content rules:\n")
 	sb.WriteString("- The 'content' field must contain ONLY the core post body text. Do NOT include any footer, contact information, company address, phone number, email, website URL, or brand hashtags in the content field.\n")
@@ -298,7 +356,8 @@ func buildPrompt(args map[string]any, timezone string) string {
 	sb.WriteString("\nFinal output schema requirements:\n")
 	sb.WriteString("- title: short batch title\n")
 	sb.WriteString("- summary: short batch summary\n")
-	sb.WriteString("- posts: array of objects with exactly these string fields: title, brief, pillar, content, hashtags, publish_at, publish_date, publish_time, checklist_item\n")
+	sb.WriteString("- posts: array of objects with these fields: title, brief, pillar, content, hashtags, publish_at, publish_date, publish_time, checklist_item, source_index\n")
+	sb.WriteString("  * source_index: numeric source item index. Required when exact source items are provided.\n")
 	sb.WriteString("  * publish_at must strictly use format 'YYYY-MM-DDTHH:MM:SS' (e.g., 2026-06-21T18:00:00). NO timezone offset (+07:00) or Z suffix allowed.\n")
 	sb.WriteString("  * publish_date must use format 'YYYY-MM-DD' (e.g., 2026-06-21).\n")
 	sb.WriteString("  * publish_time must use format 'HH:MM' (e.g., 18:00).\n")
@@ -328,6 +387,35 @@ func mediaFilesArg(raw any) []bus.MediaFile {
 		})
 	}
 	return media
+}
+
+func sourceItemsArg(raw any) []SourceItem {
+	items, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+
+	out := make([]SourceItem, 0, len(items))
+	for _, item := range items {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		sourceIndex := intNumberArg(entry, "source_index")
+		if sourceIndex <= 0 {
+			continue
+		}
+		checklistItem := strings.TrimSpace(stringArg(entry, "checklist_item"))
+		if checklistItem == "" {
+			continue
+		}
+		out = append(out, SourceItem{
+			SourceIndex:   sourceIndex,
+			ChecklistItem: checklistItem,
+			SourceText:    strings.TrimSpace(stringArg(entry, "source_text")),
+		})
+	}
+	return out
 }
 
 func validateDraftBatch(args map[string]any) (map[string]any, error) {
@@ -380,8 +468,15 @@ func validateDraftPost(post map[string]any, index int) (map[string]any, error) {
 		"title": true, "brief": true, "pillar": true, "content": true, "hashtags": true,
 		"publish_at": true, "publish_date": true, "publish_time": true, "checklist_item": true,
 	}
-	if !sameKeys(post, requiredPostKeys) {
-		return nil, fmt.Errorf("posts[%d] must contain exactly title, brief, pillar, content, hashtags, publish_at, publish_date, publish_time, checklist_item", index)
+	for key := range post {
+		if !requiredPostKeys[key] && key != "source_index" {
+			return nil, fmt.Errorf("posts[%d] contains unsupported field %q", index, key)
+		}
+	}
+	for key := range requiredPostKeys {
+		if _, ok := post[key]; !ok {
+			return nil, fmt.Errorf("posts[%d] must contain title, brief, pillar, content, hashtags, publish_at, publish_date, publish_time, checklist_item", index)
+		}
 	}
 
 	title := strings.TrimSpace(stringArg(post, "title"))
@@ -404,7 +499,7 @@ func validateDraftPost(post map[string]any, index int) (map[string]any, error) {
 		return nil, err
 	}
 
-	return map[string]any{
+	validated := map[string]any{
 		"title":          title,
 		"brief":          strings.TrimSpace(stringArg(post, "brief")),
 		"pillar":         strings.TrimSpace(stringArg(post, "pillar")),
@@ -414,7 +509,49 @@ func validateDraftPost(post map[string]any, index int) (map[string]any, error) {
 		"publish_date":   publishDate,
 		"publish_time":   publishTime,
 		"checklist_item": checklistItem,
-	}, nil
+	}
+	if _, ok := post["source_index"]; ok {
+		validated["source_index"] = intNumberArg(post, "source_index")
+	}
+	return validated, nil
+}
+
+func validateBatchSourceIndexes(batch map[string]any, sourceItems []SourceItem) error {
+	if len(sourceItems) == 0 {
+		return nil
+	}
+	posts, ok := batch["posts"].([]map[string]any)
+	if !ok {
+		return fmt.Errorf("posts must be a validated array")
+	}
+	if len(posts) != len(sourceItems) {
+		return fmt.Errorf("returned %d posts for %d source items", len(posts), len(sourceItems))
+	}
+
+	expected := make(map[int]string, len(sourceItems))
+	for _, item := range sourceItems {
+		expected[item.SourceIndex] = item.ChecklistItem
+	}
+	seen := make(map[int]bool, len(sourceItems))
+	for i, post := range posts {
+		sourceIndex := intNumberArg(post, "source_index")
+		if sourceIndex <= 0 {
+			return fmt.Errorf("posts[%d].source_index is required", i)
+		}
+		if _, ok := expected[sourceIndex]; !ok {
+			return fmt.Errorf("posts[%d].source_index %d is not in source_items", i, sourceIndex)
+		}
+		if seen[sourceIndex] {
+			return fmt.Errorf("posts[%d].source_index %d is duplicated", i, sourceIndex)
+		}
+		seen[sourceIndex] = true
+	}
+	for sourceIndex := range expected {
+		if !seen[sourceIndex] {
+			return fmt.Errorf("missing source_index %d", sourceIndex)
+		}
+	}
+	return nil
 }
 
 func validateSchedule(index int, publishAt, publishDate, publishTime string) error {
@@ -483,6 +620,30 @@ func stringArg(values map[string]any, key string) string {
 		return ""
 	}
 	return value
+}
+
+func intNumberArg(values map[string]any, key string) int {
+	raw, ok := values[key]
+	if !ok || raw == nil {
+		return 0
+	}
+	switch value := raw.(type) {
+	case int:
+		return value
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
+	case json.Number:
+		parsed, _ := value.Int64()
+		return int(parsed)
+	case string:
+		var parsed int
+		_, _ = fmt.Sscanf(strings.TrimSpace(value), "%d", &parsed)
+		return parsed
+	default:
+		return 0
+	}
 }
 
 func cloneBatch(batch map[string]any) map[string]any {
