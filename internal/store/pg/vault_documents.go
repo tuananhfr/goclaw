@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"log/slog"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -437,6 +437,39 @@ func (s *PGVaultStore) UpdateHash(ctx context.Context, tenantID, id, newHash str
 	return err
 }
 
+// UpdateDocumentAfterContentWrite updates metadata derived from an already-written file.
+// It intentionally updates by document ID and clears summary/embedding so enrichment uses fresh content.
+func (s *PGVaultStore) UpdateDocumentAfterContentWrite(ctx context.Context, tenantID, docID, title, docType string, metadata map[string]any, contentHash string) (*store.VaultDocument, error) {
+	uid, err := parseUUID(docID)
+	if err != nil {
+		return nil, fmt.Errorf("vault update content state: id: %w", err)
+	}
+	tid, err := parseUUID(tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("vault update content state: tenant: %w", err)
+	}
+	meta, err := json.Marshal(metadata)
+	if err != nil {
+		meta = []byte("{}")
+	}
+
+	var row vaultDocRow
+	err = s.db.QueryRowContext(ctx, `
+		UPDATE vault_documents
+		SET title = $1, doc_type = $2, content_hash = $3, summary = '', embedding = NULL, metadata = $4, updated_at = $5
+		WHERE id = $6 AND tenant_id = $7
+		RETURNING id, tenant_id, agent_id, team_id, chat_id, scope, custom_scope, path, path_basename, title, doc_type, content_hash, summary, metadata, created_at, updated_at`,
+		title, docType, contentHash, meta, time.Now().UTC(), uid, tid,
+	).Scan(&row.ID, &row.TenantID, &row.AgentID, &row.TeamID, &row.ChatID, &row.Scope, &row.CustomScope,
+		&row.Path, &row.PathBasename, &row.Title, &row.DocType, &row.ContentHash, &row.Summary,
+		&row.MetaJSON, &row.CreatedAt, &row.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	doc := row.toVaultDocument()
+	return &doc, nil
+}
+
 // UpdateSummaryAndReembed updates summary and re-generates embedding from title+path+summary.
 // UpdateSummaryAndReembed and FindSimilarDocs moved to vault_documents_enrichment.go.
 
@@ -842,4 +875,3 @@ func extractFolderNames(prefix string, deepPaths []string) []string {
 	sort.Strings(folders)
 	return folders
 }
-

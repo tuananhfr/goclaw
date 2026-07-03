@@ -301,6 +301,24 @@ func (s *SQLiteVaultStore) UpdateHash(ctx context.Context, tenantID, id, newHash
 	return err
 }
 
+// UpdateDocumentAfterContentWrite updates metadata derived from an already-written file.
+// It intentionally updates by document ID and clears summary so enrichment cannot reuse stale content.
+func (s *SQLiteVaultStore) UpdateDocumentAfterContentWrite(ctx context.Context, tenantID, docID, title, docType string, metadata map[string]any, contentHash string) (*store.VaultDocument, error) {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	meta, err := json.Marshal(metadata)
+	if err != nil {
+		meta = []byte("{}")
+	}
+
+	row := s.db.QueryRowContext(ctx, `
+		UPDATE vault_documents
+		SET title = ?, doc_type = ?, content_hash = ?, summary = '', metadata = ?, updated_at = ?
+		WHERE id = ? AND tenant_id = ?
+		RETURNING id, tenant_id, agent_id, team_id, chat_id, scope, custom_scope, path, path_basename, title, doc_type, content_hash, summary, metadata, created_at, updated_at`,
+		title, docType, contentHash, string(meta), now, docID, tenantID)
+	return scanVaultDoc(row)
+}
+
 // ListUnenrichedDocs returns documents with empty summary for re-enrichment.
 // limit=0 means no limit.
 func (s *SQLiteVaultStore) ListUnenrichedDocs(ctx context.Context, tenantID string, limit int) ([]store.VaultDocument, error) {
