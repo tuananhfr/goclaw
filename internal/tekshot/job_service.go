@@ -17,6 +17,7 @@ import (
 	"github.com/nextlevelbuilder/goclaw/internal/agent"
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
 	"github.com/nextlevelbuilder/goclaw/internal/channels/media"
+	"github.com/nextlevelbuilder/goclaw/internal/providers"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
 	"github.com/nextlevelbuilder/goclaw/internal/tools"
 )
@@ -296,7 +297,7 @@ func (s *JobService) runChat(ctx context.Context, job *store.TekshotJob, request
 	runCtx := store.WithTenantID(ctx, store.MasterTenantID)
 	runCtx = store.WithUserID(runCtx, userID)
 	runCtx = store.WithAgentKey(runCtx, job.AgentKey)
-	result, err := loop.Run(runCtx, agent.RunRequest{
+	runReq := agent.RunRequest{
 		SessionKey:  job.SessionKey,
 		Message:     message,
 		Media:       mediaFiles,
@@ -309,13 +310,36 @@ func (s *JobService) runChat(ctx context.Context, job *store.TekshotJob, request
 		UserID:      userID,
 		SenderID:    userID,
 		Stream:      false,
-	})
+	}
+	result, err := loop.Run(runCtx, runReq)
 	if err != nil {
 		return nil, "", err
 	}
 	if result == nil {
 		return nil, "", fmt.Errorf("agent returned no result")
 	}
+
+	// image_chat must actually produce an image. Agents (especially with a
+	// heavy image skill) sometimes narrate completion or stop at a text
+	// "plan" without calling create_image. If the free first pass yielded no
+	// delivered media, force a final create_image pass — mirrors the draft
+	// flow's forced submit_draft_batch fallback (draft_posts_tool.go). All
+	// other tools (skills, edit, references) still ran freely in pass one.
+	if job.JobType == "image_chat" && len(result.Media) == 0 {
+		finalReq := runReq
+		finalReq.RunID = uuid.NewString()
+		finalReq.MaxIterations = 2
+		finalReq.ToolChoice = &providers.ToolChoice{Mode: "function", Name: "create_image"}
+		finalReq.Message = "Create the final image NOW by calling create_image with a complete prompt. " +
+			"All needed images are already attached — do NOT set reference_image_path. Do not reply with plain text."
+		if forced, ferr := loop.Run(runCtx, finalReq); ferr == nil && forced != nil && len(forced.Media) > 0 {
+			result = forced
+		}
+	}
+	if job.JobType == "image_chat" && len(result.Media) == 0 {
+		return nil, "", fmt.Errorf("tekshot image_chat: agent did not produce an image; please retry")
+	}
+
 	return map[string]any{
 		"content": result.Content,
 		"media":   result.Media,

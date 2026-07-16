@@ -1,6 +1,10 @@
-# GoClaw Gateway
+# CLAUDE.md
 
-PostgreSQL multi-tenant AI agent gateway with WebSocket RPC + HTTP API.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Overview
+
+**GoClaw Gateway** — PostgreSQL multi-tenant AI agent gateway with WebSocket RPC + HTTP API. Ships as a single static Go binary (~25 MB, no Node runtime). Go module path: `github.com/nextlevelbuilder/goclaw`. Default git branch is `dev` (all PRs target `dev`); `main` is the protected stable branch.
 
 ## Language
 
@@ -70,6 +74,8 @@ ui/web/                       React SPA (pnpm, Vite, Tailwind, Radix UI)
 ui/desktop/                   Wails v2 desktop app (React frontend + embedded gateway)
 ```
 
+**Deep-dive docs:** `docs/` holds numbered architecture references (`00-architecture-overview.md`, `01-agent-loop.md`, `02-providers.md`, `06-store-data-model.md`, `09-security.md`, `23-multi-tenant-architecture.md`, etc.). Read the relevant one before large changes to that subsystem. `CONTRIBUTING.md` covers branch strategy, PR review criteria, and the tenant-scope guard decision table.
+
 ## Key Patterns
 
 - **Store layer:** Interface-based (`store.SessionStore`, `store.AgentStore`, etc.) with shared Dialect pattern in `store/base/`. PostgreSQL (`pg/`) and SQLite (`sqlitestore/`) implementations use `database/sql` + `pgx/v5/stdlib` + sqlx, raw SQL, `BuildMapUpdate()` and `BuildScopeClause()` helpers
@@ -96,10 +102,22 @@ ui/desktop/                   Wails v2 desktop app (React frontend + embedded ga
 ```bash
 go build -o goclaw . && ./goclaw onboard && source .env.local && ./goclaw
 ./goclaw migrate up                 # DB migrations
+
+# Build variants (Makefile) — selected via build tags:
+make build          # API-only, CGO_ENABLED=0, no embedded UI
+make build-full     # -tags embedui: bundles ui/web/dist into binary (runs pnpm build first)
+make build-tui      # -tags tui: Bubble Tea enhanced CLI
+# desktop uses -tags sqliteonly (SQLite, no Postgres); tsnet/OTel are opt-in build tags too
 # Integration tests (requires pgvector pg18 on port 5433)
 docker run -d --name pgtest -p 5433:5432 -e POSTGRES_PASSWORD=test -e POSTGRES_DB=goclaw_test pgvector/pgvector:pg18
 TEST_DATABASE_URL="postgres://postgres:test@localhost:5433/goclaw_test?sslmode=disable" \
   go test -v -tags integration ./tests/integration/
+
+# Unit tests (fast, no DB) + single test
+make test                                    # go test -race -timeout=5m ./...
+go test ./internal/tekshot/                  # one package
+go test -race -run TestDraftPosts ./internal/tekshot/   # one test (regex on name)
+go test -run TestX/subtest ./path/...        # one subtable case
 
 # Layered tests
 make test-invariants  # P0 - tenant isolation (blocking)

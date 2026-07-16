@@ -151,3 +151,45 @@ func validPost(sourceIndex int) map[string]any {
 		"source_index":   sourceIndex,
 	}
 }
+func TestTekshotDraftResearchToolAllowIncludesResearchTools(t *testing.T) {
+	allowed := tekshotDraftResearchToolAllow()
+	allowedSet := make(map[string]bool, len(allowed))
+	for _, name := range allowed {
+		allowedSet[name] = true
+	}
+
+	required := []string{
+		"skill_search",
+		"vault_search",
+		"vault_read",
+		"web_search",
+		"web_fetch",
+		"memory_search",
+		"memory_get",
+		"memory_expand",
+		"knowledge_graph_search",
+		"read_document",
+		"read_image",
+		"datetime",
+	}
+	for _, name := range required {
+		if !allowedSet[name] {
+			t.Fatalf("expected %s in Tekshot draft research allow-list", name)
+		}
+	}
+}
+
+func TestTekshotDraftResearchToolAllowExcludesSideEffectTools(t *testing.T) {
+	allowed := tekshotDraftResearchToolAllow()
+	allowedSet := make(map[string]bool, len(allowed))
+	for _, name := range allowed {
+		allowedSet[name] = true
+	}
+
+	denied := []string{"exec", "write_file", "edit", "message", "cron", "team_tasks", "create_image"}
+	for _, name := range denied {
+		if allowedSet[name] {
+			t.Fatalf("did not expect %s in Tekshot draft research allow-list", name)
+		}
+	}
+}

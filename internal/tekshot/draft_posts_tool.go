@@ -41,6 +41,22 @@ type SourceItem struct {
 	SourceText    string
 }
 
+func tekshotDraftResearchToolAllow() []string {
+	return []string{
+		"skill_search",
+		"vault_search",
+		"vault_read",
+		"web_search",
+		"web_fetch",
+		"memory_search",
+		"memory_get",
+		"memory_expand",
+		"knowledge_graph_search",
+		"read_document",
+		"read_image",
+		"datetime",
+	}
+}
 func NewDraftPostsTool(router *agent.Router) *DraftPostsTool {
 	return &DraftPostsTool{router: router}
 }
@@ -169,7 +185,7 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 		Addressed:      true,
 		RunID:          uuid.NewString(),
 		UserID:         store.UserIDFromContext(ctx),
-		ToolAllow:      []string{"web_fetch", "read_document"},
+		ToolAllow:      tekshotDraftResearchToolAllow(),
 		EphemeralTools: []tools.Tool{collector},
 		MaxIterations:  8,
 		TraceName:      "tekshot draft posts",
@@ -302,6 +318,9 @@ func buildPrompt(args map[string]any, timezone string) string {
 	sb.WriteString("Study the provided source carefully, plan the batch, and when the batch is complete you must call submit_draft_batch exactly once with the final structured result.\n")
 	sb.WriteString("Do not return the final batch as plain text.\n")
 	sb.WriteString("Keep every post grounded in the source material. Use empty strings for unknown optional fields, never omit required fields.\n")
+	sb.WriteString("When business facts are needed, search the Vault first and read relevant results before drafting.\n")
+	sb.WriteString("Use web search/fetch for external or current information, and skill_search for brand voice, content, or visual guidance.\n")
+	sb.WriteString("Do not invent page, brand, product, service, policy, pricing, FAQ, availability, or promotion facts that are not supported by the provided source, Vault, or web evidence.\n")
 	sb.WriteString("Scheduling timezone: ")
 	sb.WriteString(timezone)
 	sb.WriteString("\n\n")
