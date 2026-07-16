@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -53,6 +54,11 @@ type JobService struct {
 	httpClient *http.Client
 	workers    int
 	wake       chan struct{}
+
+	// cancels holds the run-context cancel func of each in-flight job, keyed by
+	// job id, so an external cancel request can interrupt a running job.
+	mu      sync.Mutex
+	cancels map[uuid.UUID]context.CancelFunc
 }
 
 func NewJobService(jobStore store.TekshotJobStore, agents *agent.Router, toolsReg *tools.Registry) *JobService {
@@ -72,6 +78,7 @@ func NewJobService(jobStore store.TekshotJobStore, agents *agent.Router, toolsRe
 		},
 		workers: workers,
 		wake:    make(chan struct{}, 1),
+		cancels: make(map[uuid.UUID]context.CancelFunc),
 	}
 }
 
@@ -146,6 +153,82 @@ func (s *JobService) Get(ctx context.Context, id uuid.UUID) (*store.TekshotJob, 
 	return s.store.Get(ctx, id)
 }
 
+// Cancel stops a job. A queued job is cancelled in the store so no worker ever
+// claims it; a running job has its run context interrupted (which aborts the
+// in-flight agent/LLM call) and is then marked cancelled. A terminal job is a
+// no-op. Returns (nil, nil) when the job does not exist. On success a
+// "cancelled" callback is delivered to the job's callback URL.
+func (s *JobService) Cancel(ctx context.Context, id uuid.UUID) (*store.TekshotJob, error) {
+	if s == nil || s.store == nil {
+		return nil, fmt.Errorf("tekshot job service is not configured")
+	}
+	job, err := s.store.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if job == nil {
+		return nil, nil
+	}
+	if isTerminalTekshotStatus(job.Status) {
+		return job, nil
+	}
+
+	cancelledQueued, err := s.store.CancelIfQueued(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if !cancelledQueued {
+		// Running (or claimed): interrupt the run context, then persist cancelled.
+		if fn := s.takeCancel(id); fn != nil {
+			fn()
+		}
+		if err := s.store.MarkCancelled(context.Background(), id, "Cancelled by user"); err != nil {
+			return nil, err
+		}
+	}
+
+	updated, gerr := s.store.Get(context.Background(), id)
+	if gerr != nil || updated == nil {
+		updated = job
+		updated.Status = store.TekshotJobCancelled
+	}
+	s.sendCallback(context.Background(), updated, store.TekshotJobCancelled, "Cancelled by user", "", nil)
+	slog.Info("tekshot.job.cancel_requested", "job_id", id, "job_type", job.JobType, "was_queued", cancelledQueued)
+	return updated, nil
+}
+
+func (s *JobService) registerCancel(id uuid.UUID, cancel context.CancelFunc) {
+	s.mu.Lock()
+	if s.cancels == nil {
+		s.cancels = make(map[uuid.UUID]context.CancelFunc)
+	}
+	s.cancels[id] = cancel
+	s.mu.Unlock()
+}
+
+func (s *JobService) unregisterCancel(id uuid.UUID) {
+	s.mu.Lock()
+	delete(s.cancels, id)
+	s.mu.Unlock()
+}
+
+func (s *JobService) takeCancel(id uuid.UUID) context.CancelFunc {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	fn := s.cancels[id]
+	delete(s.cancels, id)
+	return fn
+}
+
+func isTerminalTekshotStatus(status string) bool {
+	switch status {
+	case store.TekshotJobCompleted, store.TekshotJobFailed, store.TekshotJobCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *JobService) watch(ctx context.Context, workerID int) {
 	ticker := time.NewTicker(defaultJobPollInterval)
 	defer ticker.Stop()
@@ -178,9 +261,21 @@ func (s *JobService) processNext(parent context.Context, workerID int) error {
 
 	slog.Info("tekshot.job.claimed", "worker", workerID, "job_id", job.ID, "job_type", job.JobType, "external_job_uuid", job.ExternalJobUUID)
 	runCtx, cancel := context.WithTimeout(parent, defaultJobRunTimeout)
-	defer cancel()
+	s.registerCancel(job.ID, cancel)
+	defer func() {
+		s.unregisterCancel(job.ID)
+		cancel()
+	}()
 
 	if err := s.process(runCtx, job); err != nil {
+		// If Cancel() already marked this job cancelled (running-job path), do not
+		// overwrite the terminal status with a failure. The store is authoritative
+		// here, so a full-gateway shutdown (parent ctx cancelled) still falls
+		// through to MarkFailed as before.
+		if cur, gerr := s.store.Get(context.Background(), job.ID); gerr == nil && cur != nil && cur.Status == store.TekshotJobCancelled {
+			slog.Info("tekshot.job.cancelled", "job_id", job.ID, "job_type", job.JobType)
+			return nil
+		}
 		message := err.Error()
 		_ = s.store.MarkFailed(context.Background(), job.ID, message)
 		s.sendCallback(context.Background(), job, store.TekshotJobFailed, "Tekshot job failed", message, nil)
@@ -352,7 +447,7 @@ func (s *JobService) sendCallback(ctx context.Context, job *store.TekshotJob, st
 		return
 	}
 	payload := map[string]any{
-		"ok":                status != store.TekshotJobFailed,
+		"ok":                status != store.TekshotJobFailed && status != store.TekshotJobCancelled,
 		"goclaw_job_id":     job.ID.String(),
 		"external_job_uuid": job.ExternalJobUUID,
 		"job_type":          job.JobType,

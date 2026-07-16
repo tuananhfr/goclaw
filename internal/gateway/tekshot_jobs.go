@@ -76,6 +76,15 @@ func (s *Server) handleTekshotJob(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
+	rawID := strings.TrimPrefix(r.URL.Path, "/v1/tekshot/jobs/")
+	// POST /v1/tekshot/jobs/{id}/cancel — cancel sub-route (the "/v1/tekshot/jobs/"
+	// prefix mux entry routes it here alongside GET-by-id).
+	if strings.HasSuffix(rawID, "/cancel") {
+		s.handleTekshotJobCancel(w, r, strings.TrimSuffix(rawID, "/cancel"))
+		return
+	}
+
 	if r.Method != http.MethodGet {
 		writeTekshotJSON(w, http.StatusMethodNotAllowed, map[string]any{
 			"ok":      false,
@@ -84,7 +93,6 @@ func (s *Server) handleTekshotJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rawID := strings.TrimPrefix(r.URL.Path, "/v1/tekshot/jobs/")
 	id, err := uuid.Parse(strings.TrimSpace(rawID))
 	if err != nil {
 		writeTekshotJSON(w, http.StatusBadRequest, map[string]any{
@@ -111,6 +119,43 @@ func (s *Server) handleTekshotJob(w http.ResponseWriter, r *http.Request) {
 	writeTekshotJSON(w, http.StatusOK, map[string]any{
 		"ok":  true,
 		"job": serializeTekshotJob(job, true),
+	})
+}
+
+func (s *Server) handleTekshotJobCancel(w http.ResponseWriter, r *http.Request, rawID string) {
+	if r.Method != http.MethodPost {
+		writeTekshotJSON(w, http.StatusMethodNotAllowed, map[string]any{
+			"ok":      false,
+			"message": "method not allowed",
+		})
+		return
+	}
+	id, err := uuid.Parse(strings.TrimSpace(rawID))
+	if err != nil {
+		writeTekshotJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":      false,
+			"message": "invalid tekshot job id",
+		})
+		return
+	}
+	job, err := s.tekshotJobs.Cancel(r.Context(), id)
+	if err != nil {
+		writeTekshotJSON(w, http.StatusInternalServerError, map[string]any{
+			"ok":      false,
+			"message": err.Error(),
+		})
+		return
+	}
+	if job == nil {
+		writeTekshotJSON(w, http.StatusNotFound, map[string]any{
+			"ok":      false,
+			"message": "tekshot job not found",
+		})
+		return
+	}
+	writeTekshotJSON(w, http.StatusOK, map[string]any{
+		"ok":  true,
+		"job": serializeTekshotJob(job, false),
 	})
 }
 

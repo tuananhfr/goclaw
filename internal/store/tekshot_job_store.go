@@ -13,6 +13,7 @@ const (
 	TekshotJobRunning   = "running"
 	TekshotJobCompleted = "completed"
 	TekshotJobFailed    = "failed"
+	TekshotJobCancelled = "cancelled"
 )
 
 type TekshotJob struct {
@@ -46,4 +47,10 @@ type TekshotJobStore interface {
 	MarkRunning(ctx context.Context, id uuid.UUID, progress string, lockFor time.Duration) error
 	MarkCompleted(ctx context.Context, id uuid.UUID, result json.RawMessage, progress string) error
 	MarkFailed(ctx context.Context, id uuid.UUID, message string) error
+	// MarkCancelled marks a job cancelled (terminal). Used for a running job
+	// after its run context has been interrupted.
+	MarkCancelled(ctx context.Context, id uuid.UUID, message string) error
+	// CancelIfQueued cancels a job only while it is still queued (not yet
+	// claimed by a worker); returns true when a queued row was cancelled.
+	CancelIfQueued(ctx context.Context, id uuid.UUID) (bool, error)
 }

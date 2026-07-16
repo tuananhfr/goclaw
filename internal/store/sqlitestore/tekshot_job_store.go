@@ -114,6 +114,24 @@ func (s *SQLiteTekshotJobStore) MarkFailed(ctx context.Context, id uuid.UUID, me
 	return err
 }
 
+func (s *SQLiteTekshotJobStore) MarkCancelled(ctx context.Context, id uuid.UUID, message string) error {
+	now := time.Now().UTC()
+	_, err := s.db.ExecContext(ctx, `UPDATE tekshot_jobs SET status = ?, progress_message = ?, error_message = ?, locked_until = '', completed_at = ?, updated_at = ? WHERE id = ?`,
+		store.TekshotJobCancelled, "Tekshot job cancelled", message, now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), id.String())
+	return err
+}
+
+func (s *SQLiteTekshotJobStore) CancelIfQueued(ctx context.Context, id uuid.UUID) (bool, error) {
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx, `UPDATE tekshot_jobs SET status = ?, progress_message = ?, locked_until = '', completed_at = ?, updated_at = ? WHERE id = ? AND status = ?`,
+		store.TekshotJobCancelled, "Tekshot job cancelled", now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), id.String(), store.TekshotJobQueued)
+	if err != nil {
+		return false, err
+	}
+	affected, _ := res.RowsAffected()
+	return affected > 0, nil
+}
+
 const selectSQLiteTekshotJobSQL = `SELECT id, external_job_uuid, workspace_id, workspace_uuid, external_user_id, job_type, agent_key, session_key,
 	status, progress_message, error_message, request_json, result_json, callback_url, callback_token,
 	attempt_count, locked_until, created_at, updated_at, completed_at

@@ -111,6 +111,24 @@ func (s *PGTekshotJobStore) MarkFailed(ctx context.Context, id uuid.UUID, messag
 	return err
 }
 
+func (s *PGTekshotJobStore) MarkCancelled(ctx context.Context, id uuid.UUID, message string) error {
+	now := time.Now().UTC()
+	_, err := s.db.ExecContext(ctx, `UPDATE tekshot_jobs SET status = $1, progress_message = $2, error_message = $3, locked_until = NULL, completed_at = $4, updated_at = $5 WHERE id = $6`,
+		store.TekshotJobCancelled, "Tekshot job cancelled", message, now, now, id)
+	return err
+}
+
+func (s *PGTekshotJobStore) CancelIfQueued(ctx context.Context, id uuid.UUID) (bool, error) {
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx, `UPDATE tekshot_jobs SET status = $1, progress_message = $2, locked_until = NULL, completed_at = $3, updated_at = $4 WHERE id = $5 AND status = $6`,
+		store.TekshotJobCancelled, "Tekshot job cancelled", now, now, id, store.TekshotJobQueued)
+	if err != nil {
+		return false, err
+	}
+	affected, _ := res.RowsAffected()
+	return affected > 0, nil
+}
+
 const selectTekshotJobSQL = `SELECT id, external_job_uuid, workspace_id, workspace_uuid, external_user_id, job_type, agent_key, session_key,
 	status, progress_message, error_message, request_json, result_json, callback_url, callback_token,
 	attempt_count, locked_until, created_at, updated_at, completed_at
