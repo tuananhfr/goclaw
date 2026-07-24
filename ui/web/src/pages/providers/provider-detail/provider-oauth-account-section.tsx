@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, Info } from "lucide-react";
+import { Copy, Info, LogIn } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ChatGPTOAuthQuotaStrip } from "@/pages/agents/agent-detail/chatgpt-oauth-quota-strip";
+import { OAuthSection } from "@/pages/providers/provider-oauth-section";
 import type { ChatGPTOAuthProviderQuota } from "@/pages/providers/hooks/use-chatgpt-oauth-provider-quotas";
 import type { ChatGPTOAuthAvailability } from "@/pages/providers/hooks/use-chatgpt-oauth-provider-statuses";
 import { toast } from "@/stores/use-toast-store";
@@ -28,12 +30,19 @@ export function ProviderOAuthAccountSection({
   quotaLoading = false,
 }: ProviderOAuthAccountSectionProps) {
   const { t } = useTranslation("providers");
+  const [reauthOpen, setReauthOpen] = useState(false);
   const modelPrefix = `${provider.name}/`;
   const role: "member" | "owner" | "standalone" = managedByProvider
     ? "member"
     : managedMemberCount > 0
       ? "owner"
       : "standalone";
+  // Offer an actionable re-login when the account needs re-auth (token expired
+  // per quota) or its status is "needs sign-in" — but not when intentionally
+  // disabled. The quota strip alone only shows a non-interactive status badge.
+  const reauthNeeded =
+    (availability !== "ready" && availability !== "disabled") ||
+    Boolean(quota?.needs_reauth);
 
   const handleCopyPrefix = () => {
     navigator.clipboard.writeText(modelPrefix).catch(() => {});
@@ -116,6 +125,31 @@ export function ProviderOAuthAccountSection({
             )}
           </div>
         </div>
+
+        {reauthNeeded ? (
+          reauthOpen ? (
+            <div className="mt-3 border-t pt-3">
+              <OAuthSection
+                providerName={provider.name}
+                displayName={provider.display_name || undefined}
+                onSuccess={() => setReauthOpen(false)}
+              />
+            </div>
+          ) : (
+            <div className="mt-3 flex justify-end border-t pt-3">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => setReauthOpen(true)}
+              >
+                <LogIn className="h-3.5 w-3.5" />
+                {t("quota.failure.reauth.label")}
+              </Button>
+            </div>
+          )
+        ) : null}
       </div>
 
       <Alert>

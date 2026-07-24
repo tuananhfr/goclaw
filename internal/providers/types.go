@@ -97,6 +97,12 @@ type ChatResponse struct {
 	// Agent loop must persist this on assistant messages for Codex performance.
 	Phase string `json:"phase,omitempty"`
 
+	// Model is the actual model the provider served, taken from the response
+	// payload (Codex: response.model). May differ from the requested model when
+	// the backend substitutes it (e.g. an alias resolving to a newer default).
+	// Populated at runtime for observability; not persisted.
+	Model string `json:"model,omitempty"`
+
 	// RawAssistantContent preserves the raw content blocks array from the provider response.
 	// Used by Anthropic to pass thinking blocks back in tool use loops (required by API).
 	RawAssistantContent json.RawMessage `json:"-"`

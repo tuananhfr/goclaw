@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 )
@@ -199,6 +200,26 @@ func (p *CodexProvider) ChatStream(ctx context.Context, req ChatRequest, onChunk
 		onChunk(StreamChunk{Done: true})
 	}
 
+	// Observability: log the model the backend actually served vs the one we
+	// requested. A mismatch means the ChatGPT/Codex backend substituted the
+	// model (e.g. an alias resolving to a newer, more expensive default).
+	requestedModel := req.Model
+	if requestedModel == "" {
+		requestedModel = p.defaultModel
+	}
+	served := result.Model
+	switch {
+	case served == "":
+		slog.Debug("codex.model_served",
+			"provider", p.name, "requested", requestedModel, "served", "unknown")
+	case served != requestedModel:
+		slog.Warn("codex.model_mismatch",
+			"provider", p.name, "requested", requestedModel, "served", served)
+	default:
+		slog.Info("codex.model_served",
+			"provider", p.name, "requested", requestedModel, "served", served)
+	}
+
 	return result, nil
 }
 
@@ -294,6 +315,11 @@ func (p *CodexProvider) processSSEEvent(event *codexSSEEvent, result *ChatRespon
 
 	case "response.completed", "response.incomplete":
 		if event.Response != nil {
+			// Capture the model the backend actually served (may differ from the
+			// requested model if the alias resolves to a newer/default model).
+			if event.Response.Model != "" {
+				result.Model = event.Response.Model
+			}
 			if result.Content == "" {
 				streamState.ingestCompletedResponse(event.Response)
 				streamState.flushCompletedResponse(result, onChunk)

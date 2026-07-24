@@ -24,6 +24,9 @@ Always respond in the same language as the user's prompt. If the user writes in 
 cmd/                          CLI commands, gateway startup, onboard wizard, migrations
 internal/
 ├── agent/                    Agent loop (think→act→observe), router, resolver, input guard
+├── audio/                    Audio params: TTS/STT agent param adapter + legacy STT bridge
+├── backup/                   DB dump/backup + restore (PG pg_dump + SQLite), tenant-scoped
+├── bgalert/                  Reports non-retryable background-worker LLM errors to web UI (system_configs + WS events)
 ├── bootstrap/                System prompt files (SOUL.md, IDENTITY.md) + seeding + per-user seed
 ├── bus/                      Event bus system
 ├── cache/                    Caching layer
@@ -37,6 +40,7 @@ internal/
 ├── eventbus/                 Domain event bus with worker pool, dedup, retry (v3)
 ├── gateway/                  WS + HTTP server, client, method router
 │   └── methods/              RPC handlers (chat, agents, sessions, config, skills, cron, pairing)
+├── heartbeat/                Proactive agent heartbeat ticker
 ├── hooks/                    Hook system for extensibility
 ├── http/                     HTTP API (/v1/chat/completions, /v1/agents, /v1/skills, etc.)
 ├── i18n/                     Message catalog: T(locale, key, args...) + per-locale catalogs (en/vi/zh)
@@ -50,8 +54,10 @@ internal/
 ├── pipeline/                 8-stage agent pipeline (context→history→prompt→think→act→observe→memory→summarize)
 ├── providers/                LLM providers: Anthropic (native HTTP+SSE), OpenAI-compat (HTTP+SSE), DashScope (Alibaba Qwen), Claude CLI (stdio+MCP bridge), ACP (Anthropic Console Proxy), Codex (OpenAI)
 ├── providerresolve/          Provider adapter + model registry with forward-compat resolver
+├── safego/                   Panic-recovering goroutine wrapper (safego.Go)
 ├── sandbox/                  Docker-based code execution sandbox
 ├── scheduler/                Lane-based concurrency (main/subagent/cron)
+├── security/                 SSRF protection helpers
 ├── sessions/                 Session management
 ├── skills/                   SKILL.md loader + BM25 search
 ├── store/                    Store interfaces + implementations (PostgreSQL, SQLite)
@@ -59,6 +65,8 @@ internal/
 │   ├── pg/                   PostgreSQL implementations (database/sql + pgx/v5)
 │   └── sqlitestore/          SQLite implementations (modernc.org/sqlite)
 ├── tasks/                    Task management
+├── tekshot/                  Async draft-post generation: structured social-content batches via orchestrated agent + job service
+├── testutil/                 Shared test helpers
 ├── tokencount/               tiktoken BPE token counting
 ├── tools/                    Tool registry, filesystem, exec, web, memory, subagent, MCP bridge, delegate
 ├── tracing/                  LLM call tracing + optional OTel export (build-tag gated)
@@ -66,6 +74,8 @@ internal/
 ├── updater/                  Desktop auto-update checker (Lite edition)
 ├── upgrade/                  Database schema version tracking
 ├── vault/                    Knowledge Vault with wikilinks, hybrid search, FS sync
+├── version/                  Semver parsing/comparison
+├── webui/                    Embedded web UI handler (build-tag `embedui`; stub otherwise)
 ├── workspace/                WorkspaceContext resolver for 6 scenarios
 pkg/protocol/                 Wire types (frames, methods, errors, events)
 pkg/browser/                  Browser automation (Rod + CDP)

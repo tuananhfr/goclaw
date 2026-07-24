@@ -132,7 +132,7 @@ func (a *CodexAdapter) FromStreamChunk(data []byte) (*StreamChunk, error) {
 // Simple concatenation — does not handle phase-aware ordering like the streaming
 // path (codex_stream_state.go). Sufficient for Pipeline non-streaming use.
 func parseCodexAPIResponse(resp *codexAPIResponse) *ChatResponse {
-	result := &ChatResponse{FinishReason: "stop"}
+	result := &ChatResponse{FinishReason: "stop", Model: resp.Model}
 
 	for _, item := range resp.Output {
 		switch item.Type {

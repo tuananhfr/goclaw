@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type {
   AgentData, MemoryConfig, SubagentsConfig, ToolPolicyConfig,
 } from "@/types/agent";
+import { deriveLegacyThinkingLevel, normalizeReasoningEffort } from "@/types/provider";
 import { StickySaveBar } from "@/components/shared/sticky-save-bar";
 import { PersonalitySection } from "./overview-sections/personality-section";
 import { ModelBudgetSection } from "./overview-sections/model-budget-section";
@@ -17,6 +18,18 @@ import { HeartbeatCard } from "./overview-sections/heartbeat-card";
 import { HooksSummaryCard } from "./overview-sections/hooks-summary-card";
 import { MemorySection } from "./config-sections";
 import type { UseAgentHeartbeatReturn } from "../hooks/use-agent-heartbeat";
+
+// Read the effective quick-effort value for the inline picker. "inherit" means
+// use the provider default; otherwise the agent's own reasoning effort. Mirrors
+// deriveState() in agent-advanced-state-utils so both editors agree.
+function deriveInlineEffort(agent: AgentData): string {
+  const cfg = (agent.reasoning_config ?? {}) as Record<string, unknown>;
+  if (cfg.override_mode === "inherit") return "inherit";
+  const eff =
+    normalizeReasoningEffort(cfg.effort) ||
+    normalizeReasoningEffort(agent.thinking_level);
+  return eff || "inherit";
+}
 
 interface AgentOverviewTabProps {
   agent: AgentData;
@@ -45,6 +58,7 @@ export function AgentOverviewTab({ agent, onUpdate, heartbeat, onManageCodexPool
   const [budgetDollars, setBudgetDollars] = useState(
     agent.budget_monthly_cents ? String(agent.budget_monthly_cents / 100) : "",
   );
+  const [effort, setEffort] = useState(() => deriveInlineEffort(agent));
   // Evolution (predefined only)
   const [selfEvolve, setSelfEvolve] = useState(Boolean(agent.self_evolve));
   const [skillEvolve, setSkillEvolve] = useState(Boolean(agent.skill_evolve));
@@ -95,6 +109,18 @@ export function AgentOverviewTab({ agent, onUpdate, heartbeat, onManageCodexPool
       if (provider !== agent.provider) {
         updates.chatgpt_oauth_routing = null;
       }
+      // Only persist reasoning when the inline effort actually changed, so we
+      // never clobber advanced settings (fallback, expert efforts) set elsewhere.
+      if (effort !== deriveInlineEffort(agent)) {
+        if (effort === "inherit") {
+          updates.reasoning_config = { override_mode: "inherit" };
+          updates.thinking_level = null;
+        } else {
+          updates.reasoning_config = { override_mode: "custom", effort };
+          const legacy = deriveLegacyThinkingLevel(effort);
+          updates.thinking_level = legacy !== "off" ? legacy : null;
+        }
+      }
       await onUpdate(updates);
     } catch {
       // toast shown by hook
@@ -135,6 +161,8 @@ export function AgentOverviewTab({ agent, onUpdate, heartbeat, onManageCodexPool
         budgetDollars={budgetDollars}
         onBudgetDollarsChange={setBudgetDollars}
         onSaveBlockedChange={setLlmSaveBlocked}
+        effort={effort}
+        onEffortChange={setEffort}
       />
 
       <ChatGPTOAuthRoutingSummarySection agent={agent} onManage={onManageCodexPool} />

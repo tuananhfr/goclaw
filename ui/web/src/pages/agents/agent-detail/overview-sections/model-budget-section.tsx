@@ -3,7 +3,19 @@ import { useTranslation } from "react-i18next";
 import { DollarSign } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ProviderModelSelect } from "@/components/shared/provider-model-select";
+
+// Quick reasoning-effort levels shown inline next to the model picker. Advanced
+// options (auto/none/minimal/xhigh + fallback) still live in the Advanced dialog;
+// this control edits the same reasoning_config and stays non-destructive to those.
+const BASE_EFFORTS = ["inherit", "off", "low", "medium", "high"];
 
 interface ModelBudgetSectionProps {
   provider: string;
@@ -19,6 +31,8 @@ interface ModelBudgetSectionProps {
   budgetDollars: string;
   onBudgetDollarsChange: (v: string) => void;
   onSaveBlockedChange?: (blocked: boolean) => void;
+  effort?: string;
+  onEffortChange?: (v: string) => void;
 }
 
 export function ModelBudgetSection({
@@ -28,12 +42,19 @@ export function ModelBudgetSection({
   savedProvider, savedModel,
   budgetDollars, onBudgetDollarsChange,
   onSaveBlockedChange,
+  effort, onEffortChange,
 }: ModelBudgetSectionProps) {
   const { t } = useTranslation("agents");
 
   const handleSaveBlockedChange = useCallback((blocked: boolean) => {
     onSaveBlockedChange?.(blocked);
   }, [onSaveBlockedChange]);
+
+  // Keep any advanced-set effort (e.g. "xhigh") selectable so the inline picker
+  // never silently drops it.
+  const effortOptions = effort && !BASE_EFFORTS.includes(effort)
+    ? [...BASE_EFFORTS, effort]
+    : BASE_EFFORTS;
 
   return (
     <section className="space-y-3 rounded-lg border p-3 sm:p-4 overflow-hidden">
@@ -50,6 +71,26 @@ export function ModelBudgetSection({
         providerTip="LLM provider name. Must match a configured provider."
         modelTip="Model ID to use."
       />
+
+      {onEffortChange ? (
+        <div className="space-y-1.5">
+          <Label htmlFor="reasoningEffort" className="text-xs">
+            {t("configSections.thinking.thinkingLevel")}
+          </Label>
+          <Select value={effort || "inherit"} onValueChange={onEffortChange}>
+            <SelectTrigger id="reasoningEffort" className="w-full text-base sm:w-56 md:text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {effortOptions.map((lvl) => (
+                <SelectItem key={lvl} value={lvl}>
+                  {t(`configSections.thinking.${lvl}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
