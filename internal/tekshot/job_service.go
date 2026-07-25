@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -421,18 +422,50 @@ func (s *JobService) runChat(ctx context.Context, job *store.TekshotJob, request
 	// flow's forced submit_draft_batch fallback (draft_posts_tool.go). All
 	// other tools (skills, edit, references) still ran freely in pass one.
 	if job.JobType == "image_chat" && len(result.Media) == 0 {
+		// MaxIterations MUST stay 1. ToolChoice is re-applied on every LLM call
+		// (loop_pipeline_callbacks.go), and the "strip tools on the last
+		// iteration" guard compares iteration == maxIter while the pipeline loop
+		// is 0-based — so it never fires here. With N iterations the model is
+		// forced into N create_image calls, i.e. N images. One iteration = one
+		// image.
+		//
+		// The message must NOT ask for "a complete prompt": that reads as
+		// "describe a whole new image" and made the model regenerate from
+		// scratch (losing the subject of the image being edited). The original
+		// request — including its EDIT instruction — is still in the session
+		// history, so the forced turn only needs to re-assert intent.
+		isEdit := numberFromMap(request, "edit_media_id") > 0
 		finalReq := runReq
 		finalReq.RunID = uuid.NewString()
-		finalReq.MaxIterations = 2
+		finalReq.MaxIterations = 1
 		finalReq.ToolChoice = &providers.ToolChoice{Mode: "function", Name: "create_image"}
-		finalReq.Message = "Create the final image NOW by calling create_image with a complete prompt. " +
-			"All needed images are already attached — do NOT set reference_image_path. Do not reply with plain text."
+		if isEdit {
+			finalReq.Message = "[System] You must call create_image now — do not reply with plain text. " +
+				"Follow the EDIT instruction from the request above: the base image is already attached, " +
+				"so preserve its composition, subject and identity, and apply ONLY the changes that were " +
+				"requested. Do not describe a brand-new image. Leave reference_image_path empty."
+		} else {
+			finalReq.Message = "[System] You must call create_image now — do not reply with plain text. " +
+				"Build the prompt from the post context and image brief in the request above. " +
+				"Leave reference_image_path empty so all attached images are used."
+		}
 		if forced, ferr := loop.Run(runCtx, finalReq); ferr == nil && forced != nil && len(forced.Media) > 0 {
 			result = forced
 		}
 	}
 	if job.JobType == "image_chat" && len(result.Media) == 0 {
 		return nil, "", fmt.Errorf("tekshot image_chat: agent did not produce an image; please retry")
+	}
+	// Defence in depth: image_chat is a one-image contract, and Drupal silently
+	// keeps only the first image it can resolve. Never hand back more than one.
+	// Keeping the LAST is an arbitrary tie-break, NOT a correctness claim — when
+	// two images are produced, either one can be the good one. The warning is the
+	// point: this branch means A1/A2 above regressed, so investigate rather than
+	// trust the survivor.
+	if job.JobType == "image_chat" && len(result.Media) > 1 {
+		slog.Warn("tekshot image_chat produced multiple images (unexpected) — keeping the last",
+			"count", len(result.Media), "job", job.ID.String(), "external", job.ExternalJobUUID)
+		result.Media = result.Media[len(result.Media)-1:]
 	}
 
 	return map[string]any{
@@ -504,6 +537,28 @@ func stringFromMap(values map[string]any, key string) string {
 		return value
 	}
 	return ""
+}
+
+// numberFromMap reads a numeric request field. JSON decoding yields float64
+// (or json.Number when the decoder uses UseNumber), so every shape is handled.
+func numberFromMap(values map[string]any, key string) float64 {
+	switch v := values[key].(type) {
+	case float64:
+		return v
+	case int:
+		return float64(v)
+	case int64:
+		return float64(v)
+	case json.Number:
+		if f, err := v.Float64(); err == nil {
+			return f
+		}
+	case string:
+		if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil {
+			return f
+		}
+	}
+	return 0
 }
 
 func mediaFromJobRequest(request map[string]any) []bus.MediaFile {
