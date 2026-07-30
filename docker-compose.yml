@@ -68,9 +68,14 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          # Sized for GOCLAW_TEKSHOT_JOB_WORKERS: each worker is one concurrent
+          # agent loop. These are HARD container caps — a 32G host does not
+          # raise them, the kernel still OOM-kills at the number below, and an
+          # OOM kills every in-flight job at once (the queue only makes jobs
+          # wait). Raise this together with the worker count, never after.
+          memory: 4G
           cpus: '2.0'
-          pids: 200
+          pids: 500
     networks:
       - default
       - goclaw-net
