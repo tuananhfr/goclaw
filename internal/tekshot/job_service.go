@@ -25,10 +25,12 @@ import (
 )
 
 const (
-	TekshotJobTypeDraftPosts     = "draft_posts"
-	TekshotJobTypePostChat       = "post_chat"
-	TekshotJobTypeImageChat      = "image_chat"
-	TekshotJobTypeMarketResearch = "market_research"
+	TekshotJobTypeDraftPosts       = "draft_posts"
+	TekshotJobTypePostChat         = "post_chat"
+	TekshotJobTypeImageChat        = "image_chat"
+	TekshotJobTypeMarketResearch   = "market_research"
+	TekshotJobTypeContentChecklist = "content_checklist"
+	TekshotJobTypeCompetitorDisc   = "competitor_discovery"
 
 	defaultJobPollInterval = 2 * time.Second
 	defaultJobLockTTL      = 10 * time.Minute
@@ -308,6 +310,10 @@ func (s *JobService) process(ctx context.Context, job *store.TekshotJob) error {
 		result, progress, err = s.runChat(ctx, job, request)
 	case TekshotJobTypeMarketResearch:
 		result, progress, err = s.runMarketResearch(ctx, job, request)
+	case TekshotJobTypeContentChecklist:
+		result, progress, err = s.runContentChecklist(ctx, job, request)
+	case TekshotJobTypeCompetitorDisc:
+		result, progress, err = s.runCompetitorDiscovery(ctx, job, request)
 	default:
 		err = fmt.Errorf("unsupported tekshot job type: %s", job.JobType)
 	}
@@ -528,7 +534,7 @@ func (s *JobService) notify() {
 
 func isSupportedTekshotJobType(jobType string) bool {
 	switch jobType {
-	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeMarketResearch:
+	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeCompetitorDisc:
 		return true
 	default:
 		return false

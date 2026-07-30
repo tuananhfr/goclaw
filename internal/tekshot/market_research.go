@@ -305,6 +305,49 @@ func validateResearchSources(raw any) error {
 	return nil
 }
 
+// hasKnownCompetitors reports whether Drupal sent an approved competitor list.
+func hasKnownCompetitors(request map[string]any) bool {
+	competitors, ok := request["competitors"].([]any)
+	return ok && len(competitors) > 0
+}
+
+// writeKnownCompetitors renders the approved competitor list into the prompt.
+//
+// Only APPROVED rows ever reach here — Drupal filters them — so the agent can
+// treat the list as vetted and go look at these businesses specifically
+// instead of guessing who matters in the area.
+func writeKnownCompetitors(sb *strings.Builder, request map[string]any) {
+	if !hasKnownCompetitors(request) {
+		return
+	}
+	competitors, _ := request["competitors"].([]any)
+
+	sb.WriteString("## Competitors the store's team has confirmed\n")
+	for _, raw := range competitors {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		name := strings.TrimSpace(stringFromMap(item, "name"))
+		if name == "" {
+			continue
+		}
+		line := "- " + name
+		if label := strings.TrimSpace(stringFromMap(item, "label")); label == "reference" {
+			line += " (watch for content ideas only)"
+		} else {
+			line += " (direct competitor)"
+		}
+		for _, key := range []string{"website", "facebook_url"} {
+			if link := strings.TrimSpace(stringFromMap(item, key)); link != "" {
+				line += " " + link
+			}
+		}
+		sb.WriteString(line + "\n")
+	}
+	sb.WriteString("\n")
+}
+
 func buildMarketResearchPrompt(request map[string]any) string {
 	industry := strings.TrimSpace(stringFromMap(request, "industry"))
 	locality := strings.TrimSpace(stringFromMap(request, "locality"))
@@ -338,6 +381,8 @@ func buildMarketResearchPrompt(request map[string]any) string {
 	}
 	sb.WriteString(fmt.Sprintf("- Planning horizon: next %d weeks\n\n", horizonWeeks))
 
+	writeKnownCompetitors(&sb, request)
+
 	sb.WriteString("## What to research (three sections, all required)\n")
 	sb.WriteString("1. trends — what is currently trending in this industry in Vietnam: products, menu items, content formats, campaign styles. Prefer signals from the last 60 days.\n")
 	sb.WriteString(fmt.Sprintf("2. seasonal_hooks — holidays, occasions and seasonal angles inside the next %d weeks that this industry can build campaigns around, with enough lead time to prepare content BEFORE the date.\n", horizonWeeks))
@@ -350,6 +395,9 @@ func buildMarketResearchPrompt(request map[string]any) string {
 	sb.WriteString("- Distinguish 'nothing in the market' from 'my tools failed': if web_search/web_fetch calls errored, say so in tool_health (web_search: 'degraded' or 'dead') instead of returning empty sections with 'ok'.\n")
 	sb.WriteString("- suggested_action must be concrete enough for a marketer to act on this week (a post idea, a campaign angle, a timing recommendation) — not generic advice.\n")
 	sb.WriteString(fmt.Sprintf("- 3 to %d items per section. Quality over quantity.\n", researchMaxItemsPerBlock))
+	if hasKnownCompetitors(request) {
+		sb.WriteString("- The competitor list above was approved by the store's own team: local_signals MUST check what those specific businesses are doing right now (new items, promotions, openings, closures) instead of describing the area in general.\n")
+	}
 
 	return sb.String()
 }
