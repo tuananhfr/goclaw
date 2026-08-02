@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -260,12 +261,7 @@ func validateCompetitorDiscovery(args map[string]any) (map[string]any, error) {
 }
 
 func containsString(haystack []string, needle string) bool {
-	for _, candidate := range haystack {
-		if candidate == needle {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(haystack, needle)
 }
 
 func buildCompetitorDiscoveryPrompt(request map[string]any) string {

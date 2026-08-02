@@ -332,18 +332,19 @@ func writeKnownCompetitors(sb *strings.Builder, request map[string]any) {
 		if name == "" {
 			continue
 		}
-		line := "- " + name
+		var line strings.Builder
+		line.WriteString("- " + name)
 		if label := strings.TrimSpace(stringFromMap(item, "label")); label == "reference" {
-			line += " (watch for content ideas only)"
+			line.WriteString(" (watch for content ideas only)")
 		} else {
-			line += " (direct competitor)"
+			line.WriteString(" (direct competitor)")
 		}
 		for _, key := range []string{"website", "facebook_url"} {
 			if link := strings.TrimSpace(stringFromMap(item, key)); link != "" {
-				line += " " + link
+				line.WriteString(" " + link)
 			}
 		}
-		sb.WriteString(line + "\n")
+		sb.WriteString(line.String() + "\n")
 	}
 	sb.WriteString("\n")
 }

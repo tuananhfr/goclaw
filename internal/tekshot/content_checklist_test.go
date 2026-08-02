@@ -1,6 +1,7 @@
 package tekshot
 
 import (
+	"maps"
 	"strings"
 	"testing"
 )
@@ -110,18 +111,14 @@ func TestBuildContentChecklistPromptBranchesOnPosCapability(t *testing.T) {
 	}
 
 	withPos := map[string]any{"has_pos": true}
-	for k, v := range base {
-		withPos[k] = v
-	}
+	maps.Copy(withPos, base)
 	prompt := buildContentChecklistPrompt(withPos)
 	if !strings.Contains(prompt, "Sales numbers above are real") {
 		t.Fatal("expected POS store prompt to assert the numbers are real")
 	}
 
 	withoutPos := map[string]any{"has_pos": false}
-	for k, v := range base {
-		withoutPos[k] = v
-	}
+	maps.Copy(withoutPos, base)
 	prompt = buildContentChecklistPrompt(withoutPos)
 	if !strings.Contains(prompt, "NO sales data") {
 		t.Fatal("expected non-POS store prompt to forbid inventing sales data")

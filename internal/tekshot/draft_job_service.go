@@ -49,10 +49,7 @@ type DraftJobService struct {
 }
 
 func NewDraftJobService(jobStore store.TekshotDraftJobStore, toolsReg *tools.Registry) *DraftJobService {
-	workers := envInt("GOCLAW_TEKSHOT_DRAFT_WORKERS", 1)
-	if workers < 1 {
-		workers = 1
-	}
+	workers := max(envInt("GOCLAW_TEKSHOT_DRAFT_WORKERS", 1), 1)
 	if workers > 8 {
 		workers = 8
 	}
