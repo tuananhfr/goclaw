@@ -69,10 +69,7 @@ type JobService struct {
 }
 
 func NewJobService(jobStore store.TekshotJobStore, agents *agent.Router, toolsReg *tools.Registry) *JobService {
-	workers := envInt("GOCLAW_TEKSHOT_JOB_WORKERS", 1)
-	if workers < 1 {
-		workers = 1
-	}
+	workers := max(envInt("GOCLAW_TEKSHOT_JOB_WORKERS", 1), 1)
 	if workers > 8 {
 		workers = 8
 	}
