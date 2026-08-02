@@ -3,12 +3,15 @@ package tekshot
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/nextlevelbuilder/goclaw/internal/agent"
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
+	"github.com/nextlevelbuilder/goclaw/internal/channels/media"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
 )
 
@@ -39,6 +42,25 @@ func (s *JobService) runDescribeImage(ctx context.Context, job *store.TekshotJob
 	}
 	referenceImageID := int(numberFromMap(request, "reference_image_id"))
 
+	// Fail fast on a dead URL. Without this the agent runs with no attachment,
+	// "describes" the missing image in prose, and Drupal stores that text as a
+	// real description — observed in E2E with a stale media row. Failing here
+	// keeps the Drupal row in its error state so the retry button means something.
+	probeCtx, cancelProbe := context.WithTimeout(ctx, 20*time.Second)
+	defer cancelProbe()
+	probeReq, err := http.NewRequestWithContext(probeCtx, http.MethodGet, imageURL, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("describe_image: invalid image_url: %w", err)
+	}
+	probeResp, err := s.httpClient.Do(probeReq)
+	if err != nil {
+		return nil, "", fmt.Errorf("describe_image: image_url unreachable: %w", err)
+	}
+	probeResp.Body.Close()
+	if probeResp.StatusCode < 200 || probeResp.StatusCode >= 300 {
+		return nil, "", fmt.Errorf("describe_image: image_url returned HTTP %d", probeResp.StatusCode)
+	}
+
 	loop, err := s.agents.Get(store.WithTenantID(ctx, store.MasterTenantID), job.AgentKey)
 	if err != nil {
 		return nil, "", err
@@ -49,9 +71,21 @@ func (s *JobService) runDescribeImage(ctx context.Context, job *store.TekshotJob
 	runCtx = store.WithUserID(runCtx, userID)
 	runCtx = store.WithAgentKey(runCtx, job.AgentKey)
 
+	// Prepend the media tag like runChat does: the pipeline stamps id/path onto
+	// it, which is what lets the model find the image in file-ref vision mode.
+	message := buildDescribeImagePrompt(request)
+	if tags := media.BuildMediaTags([]media.MediaInfo{{
+		Type:        media.TypeImage,
+		FilePath:    imageURL,
+		ContentType: "image/jpeg",
+		FileName:    fmt.Sprintf("ref-%d", referenceImageID),
+	}}); tags != "" {
+		message = tags + "\n\n" + message
+	}
+
 	runReq := agent.RunRequest{
 		SessionKey: job.SessionKey,
-		Message:    buildDescribeImagePrompt(request),
+		Message:    message,
 		Media: []bus.MediaFile{{
 			Path:     imageURL,
 			Filename: fmt.Sprintf("ref-%d", referenceImageID),
