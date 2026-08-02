@@ -32,6 +32,7 @@ const (
 	TekshotJobTypeContentChecklist = "content_checklist"
 	TekshotJobTypeCompetitorDisc   = "competitor_discovery"
 	TekshotJobTypeCompetitorAds    = "competitor_ads"
+	TekshotJobTypeLearnStyle       = "learn_style"
 
 	defaultJobPollInterval = 2 * time.Second
 	defaultJobLockTTL      = 10 * time.Minute
@@ -317,6 +318,8 @@ func (s *JobService) process(ctx context.Context, job *store.TekshotJob) error {
 		result, progress, err = s.runCompetitorDiscovery(ctx, job, request)
 	case TekshotJobTypeCompetitorAds:
 		result, progress, err = s.runCompetitorAds(ctx, job, request)
+	case TekshotJobTypeLearnStyle:
+		result, progress, err = s.runLearnStyle(ctx, job, request)
 	default:
 		err = fmt.Errorf("unsupported tekshot job type: %s", job.JobType)
 	}
@@ -537,7 +540,7 @@ func (s *JobService) notify() {
 
 func isSupportedTekshotJobType(jobType string) bool {
 	switch jobType {
-	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds:
+	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle:
 		return true
 	default:
 		return false
