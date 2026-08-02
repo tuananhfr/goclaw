@@ -69,6 +69,32 @@ func TestReferenceLibraryMediaFiles(t *testing.T) {
 	}
 }
 
+func TestDraftBuildPromptIncludesReferenceLibrary(t *testing.T) {
+	args := map[string]any{
+		"instructions": "Viết bài cho quán bún bò.",
+		"reference_library": []any{
+			map[string]any{"id": float64(12), "url": "https://x/a.jpg", "description": "Tô bún bò trên bàn gỗ."},
+		},
+	}
+	prompt := buildPrompt(args, defaultTimezone)
+	for _, want := range []string{
+		"Reference image library",
+		"[12] Tô bún bò trên bàn gỗ.",
+		"planning context only",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("draft prompt missing %q\n---\n%s", want, prompt)
+		}
+	}
+}
+
+func TestDraftBuildPromptOmitsEmptyReferenceLibrary(t *testing.T) {
+	prompt := buildPrompt(map[string]any{"instructions": "x"}, defaultTimezone)
+	if strings.Contains(prompt, "Reference image library") {
+		t.Fatalf("draft prompt must omit library section when manifest absent\n---\n%s", prompt)
+	}
+}
+
 func TestBuildReferenceLibraryBlock(t *testing.T) {
 	items := []referenceLibraryItem{
 		{ID: 12, URL: "https://x/a.jpg", Description: "Tô bún bò trên bàn gỗ."},

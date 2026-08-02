@@ -367,6 +367,17 @@ func buildPrompt(args map[string]any, timezone string) string {
 		sb.WriteString("- Do not skip, merge, duplicate, or invent source_index values.\n")
 	}
 
+	// Descriptions only — the draft job never generates images itself. Listing
+	// the curated imagery lets briefs point at photos that actually exist, so
+	// the later image_chat step can reuse them as references.
+	if refLibrary := referenceLibraryFromRequest(args); len(refLibrary) > 0 {
+		sb.WriteString("\nReference image library (curated store imagery — planning context only):\n")
+		for _, item := range refLibrary {
+			sb.WriteString(fmt.Sprintf("- [%d] %s\n", item.ID, item.Description))
+		}
+		sb.WriteString("When a post needs a visual, prefer briefs whose imagery matches one of these descriptions so the image step can reuse the real photo. Never claim an image exists that is not listed above.\n")
+	}
+
 	sb.WriteString("\nIMPORTANT content rules:\n")
 	sb.WriteString("- The 'content' field must contain ONLY the core post body text. Do NOT include any footer, contact information, company address, phone number, email, website URL, or brand hashtags in the content field.\n")
 	sb.WriteString("- The footer/signature block is managed separately by the system and will be appended automatically.\n")
