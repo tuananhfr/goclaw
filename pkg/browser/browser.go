@@ -150,18 +150,41 @@ func (m *Manager) Start(ctx context.Context) error {
 		m.logger.Info("Chrome launched", "cdp", controlURL, "headless", m.headless, "pid", l.PID())
 	}
 
-	connectCtx, connectCancel := context.WithTimeout(ctx, 15*time.Second)
-	defer connectCancel()
+	// The browser outlives this call, so it must NOT be built on a cancellable
+	// context: rod's Context() stores the ctx on the Browser and Connect()
+	// starts the CDP client with that same ctx, so cancelling it here kills
+	// the connection for every later call. Observed 2026-07-30 with the remote
+	// sidecar: every browser tool call failed "open tab: context canceled"
+	// immediately after a successful connect. reconnectLocked() has always
+	// built the browser without a ctx — Start() was the outlier.
+	b := rod.New().ControlURL(controlURL)
 
-	b := rod.New().Context(connectCtx).ControlURL(controlURL)
-	if err := b.Connect(); err != nil {
-		// If local launch succeeded but connect failed, kill the orphan process
+	// If a local launch succeeded but connect failed, kill the orphan process.
+	killLauncher := func() {
 		if m.launcher != nil {
 			m.launcher.Kill()
 			m.launcher.Cleanup()
 			m.launcher = nil
 		}
-		return fmt.Errorf("connect to Chrome: %w", err)
+	}
+
+	// The attempt still has to be bounded — just not by a context the browser
+	// keeps afterwards. The buffered channel keeps a timed-out Connect from
+	// leaking its goroutine permanently.
+	connectDone := make(chan error, 1)
+	go func() { connectDone <- b.Connect() }()
+	select {
+	case err := <-connectDone:
+		if err != nil {
+			killLauncher()
+			return fmt.Errorf("connect to Chrome: %w", err)
+		}
+	case <-time.After(15 * time.Second):
+		killLauncher()
+		return fmt.Errorf("connect to Chrome at %s: timed out after 15s", controlURL)
+	case <-ctx.Done():
+		killLauncher()
+		return fmt.Errorf("connect to Chrome: %w", ctx.Err())
 	}
 
 	m.browser = b
