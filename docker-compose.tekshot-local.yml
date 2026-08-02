@@ -1,0 +1,18 @@
+# Local-dev overlay for the Tekshot Drupal site (WAMP on the host).
+#
+# Usage (add after the other -f flags):
+#   docker compose -f docker-compose.yml -f docker-compose.postgres.yml \
+#     -f docker-compose.facebook-mcp.yml -f docker-compose.google-drive-mcp.yml \
+#     -f docker-compose.browser.yml -f docker-compose.tekshot-local.yml up -d --build
+#
+# Why: GoClaw posts job callbacks back into Drupal. The Apache vhost is matched
+# by ServerName (tekshot.localhost), so calling the host as
+# host.docker.internal would land on the DEFAULT vhost and 404. Mapping the
+# real hostname to the host gateway keeps the Host header correct, and needs no
+# Apache change.
+#
+# Not needed once callbacks go through a tunnel or a real domain.
+services:
+  goclaw:
+    extra_hosts:
+      - "tekshot.localhost:host-gateway"
