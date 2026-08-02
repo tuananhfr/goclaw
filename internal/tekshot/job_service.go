@@ -384,6 +384,15 @@ func (s *JobService) runChat(ctx context.Context, job *store.TekshotJob, request
 		return nil, "", fmt.Errorf("chat message is required")
 	}
 	mediaFiles := mediaFromJobRequest(request)
+	// Reference library only applies to image generation; post_chat shares this
+	// runner and must not suddenly grow image attachments.
+	refLibrary := referenceLibraryFromRequest(request)
+	if job.JobType != TekshotJobTypeImageChat {
+		refLibrary = nil
+	}
+	if len(refLibrary) > 0 {
+		mediaFiles = append(mediaFiles, referenceLibraryMediaFiles(refLibrary)...)
+	}
 	if len(mediaFiles) > 0 {
 		mediaInfos := make([]media.MediaInfo, 0, len(mediaFiles))
 		for _, item := range mediaFiles {
@@ -401,6 +410,9 @@ func (s *JobService) runChat(ctx context.Context, job *store.TekshotJob, request
 		if tags := media.BuildMediaTags(mediaInfos); tags != "" {
 			message = tags + "\n\n" + message
 		}
+	}
+	if len(refLibrary) > 0 {
+		message = message + "\n\n" + buildReferenceLibraryBlock(refLibrary)
 	}
 
 	loop, err := s.agents.Get(store.WithTenantID(ctx, store.MasterTenantID), job.AgentKey)
@@ -462,6 +474,12 @@ func (s *JobService) runChat(ctx context.Context, job *store.TekshotJob, request
 				"Follow the EDIT instruction from the request above: the base image is already attached, " +
 				"so preserve its composition, subject and identity, and apply ONLY the changes that were " +
 				"requested. Do not describe a brand-new image. Leave reference_image_path empty."
+		} else if len(refLibrary) > 0 {
+			finalReq.Message = "[System] You must call create_image now — do not reply with plain text. " +
+				"Build the prompt from the post context and image brief in the request above. " +
+				"If one attached library image (filename starting with \"ref-lib-\") fits the brief, set " +
+				"reference_image_path to the path=\"...\" value of its <media:image> tag; otherwise leave " +
+				"reference_image_path empty so all attached images are used."
 		} else {
 			finalReq.Message = "[System] You must call create_image now — do not reply with plain text. " +
 				"Build the prompt from the post context and image brief in the request above. " +

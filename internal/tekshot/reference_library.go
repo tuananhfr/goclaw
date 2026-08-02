@@ -1,0 +1,85 @@
+package tekshot
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/nextlevelbuilder/goclaw/internal/bus"
+	"github.com/nextlevelbuilder/goclaw/internal/channels/media"
+)
+
+// referenceLibraryItem is one entry of the request's reference_library
+// manifest. Drupal only lists images that already have a description
+// (StudioReferenceImageRepository::manifestForStudio), and only when the user
+// ticked "use reference library" — so presence of entries IS the opt-in.
+type referenceLibraryItem struct {
+	ID          int
+	URL         string
+	Description string
+}
+
+func referenceLibraryFromRequest(request map[string]any) []referenceLibraryItem {
+	raw, ok := request["reference_library"].([]any)
+	if !ok {
+		return nil
+	}
+	items := make([]referenceLibraryItem, 0, len(raw))
+	for _, entry := range raw {
+		record, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		id := int(numberFromMap(record, "id"))
+		url := strings.TrimSpace(stringFromMap(record, "url"))
+		description := strings.TrimSpace(stringFromMap(record, "description"))
+		if id <= 0 || url == "" || description == "" {
+			continue
+		}
+		if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+			continue
+		}
+		items = append(items, referenceLibraryItem{ID: id, URL: url, Description: description})
+	}
+	return items
+}
+
+// referenceLibraryMediaFiles turns manifest entries into URL attachments. The
+// agent loop's persistMedia downloads each URL into the run workspace's
+// .uploads/ dir, keeping the "ref-lib-<id>" stem in the persisted filename —
+// which is how the manifest block below and the <media:image path="..."> tags
+// stay linkable. MimeType is only a hint for the media TAG kind (the tag must
+// render as <media:image> so path enrichment can find it); the real MIME is
+// re-detected from the download, and image sanitising re-encodes to JPEG.
+func referenceLibraryMediaFiles(items []referenceLibraryItem) []bus.MediaFile {
+	files := make([]bus.MediaFile, 0, len(items))
+	for _, item := range items {
+		mimeType := media.DetectMIMEType(item.URL)
+		if !strings.HasPrefix(mimeType, "image/") {
+			mimeType = "image/jpeg"
+		}
+		files = append(files, bus.MediaFile{
+			Path:     item.URL,
+			MimeType: mimeType,
+			Filename: fmt.Sprintf("ref-lib-%d", item.ID),
+		})
+	}
+	return files
+}
+
+// buildReferenceLibraryBlock renders the manifest the agent picks from. The
+// path indirection is deliberate: the runner cannot know the persisted path
+// up front (persistMedia appends a random suffix), but the pipeline's
+// enrichImageIDs stamps the real path onto each image's <media:image> tag, so
+// the block teaches the agent to read it from there.
+func buildReferenceLibraryBlock(items []referenceLibraryItem) string {
+	var sb strings.Builder
+	sb.WriteString("## Reference image library (attached)\n")
+	sb.WriteString("The attached images whose filenames start with \"ref-lib-\" come from the store's curated reference library. Catalogue descriptions:\n")
+	for _, item := range items {
+		sb.WriteString(fmt.Sprintf("- ref-lib-%d: %s\n", item.ID, item.Description))
+	}
+	sb.WriteString("Library rules:\n")
+	sb.WriteString("- When GENERATING a new image: if one library image fits the brief, call create_image with reference_image_path set to the path=\"...\" value of that image's <media:image> tag (the path contains \"ref-lib-<id>-\"). Pick at most ONE library image; if none fits, ignore the library.\n")
+	sb.WriteString("- When EDITING an existing image: keep reference_image_path empty so the image being edited stays the base; library images then act only as additional style references.\n")
+	return sb.String()
+}
