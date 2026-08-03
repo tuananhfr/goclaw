@@ -127,3 +127,79 @@ func TestBuildContentChecklistPromptBranchesOnPosCapability(t *testing.T) {
 		t.Fatal("expected the POS fact block to be marked unavailable")
 	}
 }
+
+func TestBuildContentChecklistPromptWithPageNameIncludesPageContextAndRule(t *testing.T) {
+	request := map[string]any{
+		"industry":   "Pizza / đồ ăn nhanh",
+		"store_name": "Pizza Hip'S",
+		"page_name":  "Pizza Hip'S Đại Áng",
+		"plan_from":  "2026-08-01",
+		"plan_to":    "2026-08-07",
+		"item_count": float64(7),
+		"has_pos":    true,
+	}
+
+	prompt := buildContentChecklistPrompt(request)
+
+	if !strings.Contains(prompt, "- Page: Pizza Hip'S Đại Áng\n") {
+		t.Fatal("expected prompt to include the page context line")
+	}
+	if !strings.Contains(prompt, `This plan is for the page "Pizza Hip'S Đại Áng" specifically`) {
+		t.Fatal("expected prompt to include the page-specific hard rule")
+	}
+	storeIdx := strings.Index(prompt, "- Store:")
+	pageIdx := strings.Index(prompt, "- Page:")
+	if storeIdx == -1 || pageIdx == -1 || pageIdx < storeIdx {
+		t.Fatal("expected the page line to come right after the store line")
+	}
+}
+
+func TestBuildContentChecklistPromptWithoutPageNameOmitsPageContextAndRule(t *testing.T) {
+	base := map[string]any{
+		"industry":   "Pizza / đồ ăn nhanh",
+		"store_name": "Pizza Hip'S",
+		"plan_from":  "2026-08-01",
+		"plan_to":    "2026-08-07",
+		"item_count": float64(7),
+		"has_pos":    true,
+	}
+
+	// Absent entirely.
+	prompt := buildContentChecklistPrompt(base)
+	if strings.Contains(prompt, "- Page:") {
+		t.Fatal("expected no page line when page_name is absent")
+	}
+	if strings.Contains(prompt, "specifically. Fit that page's own audience") {
+		t.Fatal("expected no page-specific hard rule when page_name is absent")
+	}
+
+	// Present but blank.
+	withBlank := map[string]any{"page_name": "   "}
+	maps.Copy(withBlank, base)
+	prompt = buildContentChecklistPrompt(withBlank)
+	if strings.Contains(prompt, "- Page:") {
+		t.Fatal("expected no page line when page_name is blank")
+	}
+	if strings.Contains(prompt, "specifically. Fit that page's own audience") {
+		t.Fatal("expected no page-specific hard rule when page_name is blank")
+	}
+
+	// The rest of the prompt must still be well-formed: this is the
+	// regression guard that matters, since every existing caller in
+	// production today sends no page_name until Drupal is deployed.
+	if !strings.Contains(prompt, "- Store: Pizza Hip'S\n") {
+		t.Fatal("expected the store line to still be present")
+	}
+	if !strings.Contains(prompt, "- Industry: Pizza / đồ ăn nhanh\n") {
+		t.Fatal("expected the industry line to still be present")
+	}
+	if !strings.Contains(prompt, "## Hard rules\n") {
+		t.Fatal("expected the hard rules section to still be present")
+	}
+	if !strings.Contains(prompt, "Sales numbers above are real") {
+		t.Fatal("expected the has_pos branch to still render correctly")
+	}
+	if !strings.Contains(prompt, checklistFinalToolName) {
+		t.Fatal("expected the submission instruction to still reference the collector tool")
+	}
+}

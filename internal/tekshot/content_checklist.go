@@ -210,6 +210,7 @@ func validateContentChecklist(args map[string]any) (map[string]any, error) {
 
 func buildContentChecklistPrompt(request map[string]any) string {
 	storeName := strings.TrimSpace(stringFromMap(request, "store_name"))
+	pageName := strings.TrimSpace(stringFromMap(request, "page_name"))
 	industry := strings.TrimSpace(stringFromMap(request, "industry"))
 	locality := strings.TrimSpace(stringFromMap(request, "locality"))
 	language := strings.TrimSpace(stringFromMap(request, "language"))
@@ -234,6 +235,9 @@ func buildContentChecklistPrompt(request map[string]any) string {
 	sb.WriteString("## Store context\n")
 	if storeName != "" {
 		sb.WriteString("- Store: " + storeName + "\n")
+	}
+	if pageName != "" {
+		sb.WriteString("- Page: " + pageName + "\n")
 	}
 	sb.WriteString("- Industry: " + industry + "\n")
 	if locality != "" {
@@ -265,6 +269,9 @@ func buildContentChecklistPrompt(request map[string]any) string {
 	sb.WriteString("## Hard rules\n")
 	sb.WriteString(fmt.Sprintf("- Write EVERY field in language '%s'. Marketing staff read this, not developers.\n", language))
 	sb.WriteString("- Ground the plan in the facts above. When a real product, a weak weekday, a peak hour or a research finding is given, USE it — name the actual dish, react to the actual dip.\n")
+	if pageName != "" {
+		sb.WriteString(fmt.Sprintf("- This plan is for the page \"%s\" specifically. Fit that page's own audience and voice, and do not write a generic plan that would suit any of the store's other pages equally well.\n", pageName))
+	}
 	if hasPos {
 		sb.WriteString("- Sales numbers above are real. Never invent different ones, and never claim a promotion or a price the store did not state.\n")
 	} else {
