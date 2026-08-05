@@ -39,8 +39,8 @@ func TestChatGPTOAuthRouterRoundRobin(t *testing.T) {
 
 	tenantID := uuid.New()
 	registry := NewRegistry(nil)
-	providerA := NewCodexProvider("acct-a", &staticTokenSource{token: "token-a"}, serverA.URL, "gpt-5.4")
-	providerB := NewCodexProvider("acct-b", &staticTokenSource{token: "token-b"}, serverB.URL, "gpt-5.4")
+	providerA := NewCodexProvider("acct-a", &staticTokenSource{token: "token-a"}, serverA.URL, "gpt-5.6-terra")
+	providerB := NewCodexProvider("acct-b", &staticTokenSource{token: "token-b"}, serverB.URL, "gpt-5.6-terra")
 	providerA.retryConfig.Attempts = 1
 	providerB.retryConfig.Attempts = 1
 	registry.RegisterForTenant(tenantID, providerA)
@@ -83,8 +83,8 @@ func TestChatGPTOAuthRouterFailoverOnRetryableError(t *testing.T) {
 
 	tenantID := uuid.New()
 	registry := NewRegistry(nil)
-	providerA := NewCodexProvider("acct-a", &staticTokenSource{token: "token-a"}, serverA.URL, "gpt-5.4")
-	providerB := NewCodexProvider("acct-b", &staticTokenSource{token: "token-b"}, serverB.URL, "gpt-5.4")
+	providerA := NewCodexProvider("acct-a", &staticTokenSource{token: "token-a"}, serverA.URL, "gpt-5.6-terra")
+	providerB := NewCodexProvider("acct-b", &staticTokenSource{token: "token-b"}, serverB.URL, "gpt-5.6-terra")
 	providerA.retryConfig.Attempts = 1
 	providerB.retryConfig.Attempts = 1
 	registry.RegisterForTenant(tenantID, providerA)
@@ -125,11 +125,11 @@ func TestChatGPTOAuthRouterSkipsBlockedProviderBeforeFirstPick(t *testing.T) {
 	providerA := NewCodexProvider("acct-a", &routeEligibilityTokenSource{
 		token:       "token-a",
 		eligibility: RouteEligibility{Class: RouteEligibilityBlocked, Reason: "reauth"},
-	}, serverA.URL, "gpt-5.4")
+	}, serverA.URL, "gpt-5.6-terra")
 	providerB := NewCodexProvider("acct-b", &routeEligibilityTokenSource{
 		token:       "token-b",
 		eligibility: RouteEligibility{Class: RouteEligibilityHealthy},
-	}, serverB.URL, "gpt-5.4")
+	}, serverB.URL, "gpt-5.6-terra")
 	providerA.retryConfig.Attempts = 1
 	providerB.retryConfig.Attempts = 1
 	registry.RegisterForTenant(tenantID, providerA)
@@ -175,15 +175,15 @@ func TestChatGPTOAuthRouterRoundRobinPrefersHealthyBeforeUnknown(t *testing.T) {
 	providerA := NewCodexProvider("acct-a", &routeEligibilityTokenSource{
 		token:       "token-a",
 		eligibility: RouteEligibility{Class: RouteEligibilityHealthy},
-	}, serverA.URL, "gpt-5.4")
+	}, serverA.URL, "gpt-5.6-terra")
 	providerB := NewCodexProvider("acct-b", &routeEligibilityTokenSource{
 		token:       "token-b",
 		eligibility: RouteEligibility{Class: RouteEligibilityUnknown, Reason: "retry_later"},
-	}, serverB.URL, "gpt-5.4")
+	}, serverB.URL, "gpt-5.6-terra")
 	providerC := NewCodexProvider("acct-c", &routeEligibilityTokenSource{
 		token:       "token-c",
 		eligibility: RouteEligibility{Class: RouteEligibilityHealthy},
-	}, serverC.URL, "gpt-5.4")
+	}, serverC.URL, "gpt-5.6-terra")
 	providerA.retryConfig.Attempts = 1
 	providerB.retryConfig.Attempts = 1
 	providerC.retryConfig.Attempts = 1
@@ -217,11 +217,11 @@ func TestChatGPTOAuthRouterReportsWhenAllProvidersBlocked(t *testing.T) {
 	registry.RegisterForTenant(tenantID, NewCodexProvider("acct-a", &routeEligibilityTokenSource{
 		token:       "token-a",
 		eligibility: RouteEligibility{Class: RouteEligibilityBlocked, Reason: "reauth"},
-	}, "http://127.0.0.1", "gpt-5.4"))
+	}, "http://127.0.0.1", "gpt-5.6-terra"))
 	registry.RegisterForTenant(tenantID, NewCodexProvider("acct-b", &routeEligibilityTokenSource{
 		token:       "token-b",
 		eligibility: RouteEligibility{Class: RouteEligibilityBlocked, Reason: "exhausted"},
-	}, "http://127.0.0.1", "gpt-5.4"))
+	}, "http://127.0.0.1", "gpt-5.6-terra"))
 
 	router := NewChatGPTOAuthRouter(tenantID, registry, "acct-a", "round_robin", []string{"acct-b"})
 	_, err := router.Chat(context.Background(), ChatRequest{
@@ -254,11 +254,11 @@ func TestChatGPTOAuthRouterPriorityOrderKeepsPrimaryAheadOfHealthyFallbacks(t *t
 	providerA := NewCodexProvider("acct-a", &routeEligibilityTokenSource{
 		token:       "token-a",
 		eligibility: RouteEligibility{Class: RouteEligibilityUnknown, Reason: "retry_later"},
-	}, serverA.URL, "gpt-5.4")
+	}, serverA.URL, "gpt-5.6-terra")
 	providerB := NewCodexProvider("acct-b", &routeEligibilityTokenSource{
 		token:       "token-b",
 		eligibility: RouteEligibility{Class: RouteEligibilityHealthy},
-	}, serverB.URL, "gpt-5.4")
+	}, serverB.URL, "gpt-5.6-terra")
 	providerA.retryConfig.Attempts = 1
 	providerB.retryConfig.Attempts = 1
 	registry.RegisterForTenant(tenantID, providerA)

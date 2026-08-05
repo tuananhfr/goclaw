@@ -371,21 +371,23 @@ func TestOpenAIForwardCompatResolveExactMatch(t *testing.T) {
 	resolver := &OpenAIForwardCompat{}
 	registry.RegisterResolver("openai", resolver)
 
-	// Try to resolve gpt-5.5 which should use gpt-5.4 as template with patch
-	resolved := registry.Resolve("openai", "gpt-5.5")
+	// o5-mini is the exact-match entry that SeedDefaultModels does NOT seed, so
+	// it still exercises the forward-compat path (gpt-5.5/gpt-5.6 are seeded and
+	// would resolve on the direct-hit path instead).
+	resolved := registry.Resolve("openai", "o5-mini")
 
 	if resolved == nil {
-		t.Fatal("expected forward-compat resolution for gpt-5.5, got nil")
+		t.Fatal("expected forward-compat resolution for o5-mini, got nil")
 	}
-	if resolved.ID != "gpt-5.5" {
-		t.Errorf("expected ID=gpt-5.5, got %s", resolved.ID)
+	if resolved.ID != "o5-mini" {
+		t.Errorf("expected ID=o5-mini, got %s", resolved.ID)
 	}
-	// Should have patched values from the map
-	if resolved.ContextWindow != 1_000_000 {
-		t.Errorf("expected ContextWindow=1000000 from patch, got %d", resolved.ContextWindow)
+	// ContextWindow comes from the patch, MaxTokens from the o4-mini template.
+	if resolved.ContextWindow != 300_000 {
+		t.Errorf("expected ContextWindow=300000 from patch, got %d", resolved.ContextWindow)
 	}
-	if resolved.MaxTokens != 200_000 {
-		t.Errorf("expected MaxTokens=200000 from patch, got %d", resolved.MaxTokens)
+	if resolved.MaxTokens != 100_000 {
+		t.Errorf("expected MaxTokens=100000 from template, got %d", resolved.MaxTokens)
 	}
 }
 
@@ -409,6 +411,29 @@ func TestOpenAIForwardCompatResolvePrefixMatch(t *testing.T) {
 	}
 }
 
+// The Codex catalog ships gpt-5.6-sol/terra/luna; none are seeded individually,
+// so each must resolve through the "gpt-5.6" prefix entry.
+func TestOpenAIForwardCompatResolvesGPT56Variants(t *testing.T) {
+	registry := NewInMemoryRegistry()
+	registry.RegisterResolver("openai", &OpenAIForwardCompat{})
+
+	for _, modelID := range []string{"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"} {
+		resolved := registry.Resolve("openai", modelID)
+		if resolved == nil {
+			t.Fatalf("expected forward-compat resolution for %s, got nil", modelID)
+		}
+		if resolved.ID != modelID {
+			t.Errorf("expected ID=%s, got %s", modelID, resolved.ID)
+		}
+		if resolved.ContextWindow != 2_000_000 {
+			t.Errorf("%s: expected ContextWindow=2000000, got %d", modelID, resolved.ContextWindow)
+		}
+		if resolved.MaxTokens != 200_000 {
+			t.Errorf("%s: expected MaxTokens=200000, got %d", modelID, resolved.MaxTokens)
+		}
+	}
+}
+
 func TestOpenAIForwardCompatResolveNoMatch(t *testing.T) {
 	registry := NewInMemoryRegistry()
 	resolver := &OpenAIForwardCompat{}
@@ -427,14 +452,14 @@ func TestRegistryForwardCompatCaching(t *testing.T) {
 	resolver := &OpenAIForwardCompat{}
 	registry.RegisterResolver("openai", resolver)
 
-	// First resolve
-	resolved1 := registry.Resolve("openai", "gpt-5.5")
+	// First resolve — o5-mini is not seeded, so this goes through forward-compat.
+	resolved1 := registry.Resolve("openai", "o5-mini")
 	if resolved1 == nil {
 		t.Fatal("expected first resolution to work")
 	}
 
 	// Second resolve should be cached
-	resolved2 := registry.Resolve("openai", "gpt-5.5")
+	resolved2 := registry.Resolve("openai", "o5-mini")
 	if resolved2 == nil {
 		t.Fatal("expected second resolution to work")
 	}

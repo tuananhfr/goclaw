@@ -11,11 +11,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ProviderModelSelect } from "@/components/shared/provider-model-select";
+import { useProviders } from "@/pages/providers/hooks/use-providers";
+import { useProviderModels } from "@/pages/providers/hooks/use-provider-models";
 
 // Quick reasoning-effort levels shown inline next to the model picker. Advanced
-// options (auto/none/minimal/xhigh + fallback) still live in the Advanced dialog;
+// options (auto/none/minimal + fallback) still live in the Advanced dialog;
 // this control edits the same reasoning_config and stays non-destructive to those.
 const BASE_EFFORTS = ["inherit", "off", "low", "medium", "high"];
+
+// Tiers above "high" are appended inline when the selected model's capability
+// metadata advertises them (e.g. GPT-5.6: xhigh/max/ultra, Luna without ultra).
+const HIGH_TIERS = ["xhigh", "max", "ultra"];
 
 interface ModelBudgetSectionProps {
   provider: string;
@@ -50,11 +56,24 @@ export function ModelBudgetSection({
     onSaveBlockedChange?.(blocked);
   }, [onSaveBlockedChange]);
 
-  // Keep any advanced-set effort (e.g. "xhigh") selectable so the inline picker
-  // never silently drops it.
-  const effortOptions = effort && !BASE_EFFORTS.includes(effort)
-    ? [...BASE_EFFORTS, effort]
-    : BASE_EFFORTS;
+  // Resolve the selected model's reasoning capability (react-query dedupes the
+  // /models fetch with ProviderModelSelect below).
+  const { providers } = useProviders();
+  const providerId = providers.find((p) => p.name === provider)?.id;
+  const { models } = useProviderModels(providerId);
+  const capability = models.find(
+    (m) => m.id === model || model.endsWith(`/${m.id}`),
+  )?.reasoning ?? null;
+  const supportedHighTiers = HIGH_TIERS.filter(
+    (lvl) => capability?.levels?.includes(lvl),
+  );
+
+  // Base + model-supported high tiers; keep any advanced-set effort (e.g.
+  // "minimal") selectable so the inline picker never silently drops it.
+  const knownOptions = [...BASE_EFFORTS, ...supportedHighTiers];
+  const effortOptions = effort && !knownOptions.includes(effort)
+    ? [...knownOptions, effort]
+    : knownOptions;
 
   return (
     <section className="space-y-3 rounded-lg border p-3 sm:p-4 overflow-hidden">

@@ -38,7 +38,9 @@ func NewCodexProvider(name string, tokenSource TokenSource, apiBase, defaultMode
 	apiBase = strings.TrimRight(apiBase, "/")
 
 	if defaultModel == "" {
-		defaultModel = "gpt-5.4"
+		// gpt-5.6-terra is the OpenAI-recommended replacement for gpt-5.4,
+		// which retires from the ChatGPT sign-in path on 2026-08-31.
+		defaultModel = "gpt-5.6-terra"
 	}
 
 	return &CodexProvider{

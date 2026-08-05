@@ -88,7 +88,7 @@ export function normalizeReasoningEffort(value: unknown): string {
   if (typeof value !== "string") return "";
   const normalized = value.trim().toLowerCase();
   return [
-    "off", "auto", "none", "minimal", "low", "medium", "high", "xhigh",
+    "off", "auto", "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra",
   ].includes(normalized) ? normalized : "";
 }
 
@@ -111,6 +111,8 @@ export function deriveLegacyThinkingLevel(effort: string): string {
     case "minimal":
       return "low";
     case "xhigh":
+    case "max":
+    case "ultra":
       return "high";
     default:
       return "off";

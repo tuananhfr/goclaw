@@ -254,6 +254,11 @@ func (l *Loop) makeCallLLM(req *RunRequest, emitRun func(AgentEvent)) func(ctx c
 		if reasoningDecision.StripThinking {
 			chatReq.Options[providers.OptStripThinking] = true
 		}
+		if l.fastMode {
+			// Codex maps this to service_tier="fast" (buildRequestBody); other
+			// providers consume it via FastModeMiddleware where attached.
+			chatReq.Options[providers.OptFastMode] = true
+		}
 
 		// Emit LLM span start for tracing.
 		start := time.Now().UTC()

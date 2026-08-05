@@ -511,6 +511,7 @@ func NewManagedResolver(deps ResolverDeps) ResolverFunc {
 			TenantAllowedPaths:     tenantAllowedPaths,
 			DisabledTools:          disabledTools,
 			ReasoningConfig:        store.ResolveEffectiveReasoningConfig(providerReasoningDefaults, ag.ParseReasoningConfig()),
+			FastMode:               ag.ParseFastMode(),
 			PromptMode:             PromptMode(ag.ParsePromptMode()),
 			PinnedSkills:           ag.ParsePinnedSkills(),
 			SelfEvolve:             ag.ParseSelfEvolve(),

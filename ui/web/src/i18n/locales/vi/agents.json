@@ -293,6 +293,12 @@
     "saved": "Đã lưu",
     "failedToSave": "Lưu thất bại"
   },
+  "fastMode": {
+    "title": "Chế độ nhanh",
+    "description": "Service tier \"fast\" của Codex: phản hồi nhanh hơn ~1.5x, tốn credit cao hơn (~2-2.5x).",
+    "enable": "Bật chế độ nhanh",
+    "unsupportedModel": "Chế độ nhanh chỉ áp dụng cho model GPT-5.4/5.5/5.6; model khác sẽ bỏ qua cài đặt này."
+  },
   "chatgptOAuthRouting": {
     "title": "Pool Codex OAuth",
     "description": "Chỉnh pool đã lưu rồi kiểm tra trực tiếp.",
@@ -888,7 +894,11 @@
       "high": "Cao",
       "highDesc": "~32K ngân sách token",
       "xhigh": "Rất cao",
-      "xhighDesc": "Dùng mức reasoning cao nhất được hỗ trợ",
+      "xhighDesc": "Mức reasoning rất cao",
+      "max": "Tối đa",
+      "maxDesc": "Cao hơn Rất cao — chỉ dòng GPT-5.6",
+      "ultra": "Ultra",
+      "ultraDesc": "Mức cao nhất; chạy subagent song song (GPT-5.6 Sol/Terra)",
       "downgrade": "Giảm cấp",
       "downgradeDesc": "Chuẩn hóa xuống mức thấp hơn gần nhất được hỗ trợ hoặc mức thấp nhất được hỗ trợ nếu cần",
       "provider_default": "Dùng mặc định model",

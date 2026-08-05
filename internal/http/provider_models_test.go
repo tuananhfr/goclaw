@@ -97,22 +97,30 @@ func TestProvidersHandlerListProviderModelsChatGPTOAuthIncludesReasoningMetadata
 
 	var found bool
 	for _, model := range result.Models {
-		if model.ID != "gpt-5.4" {
+		if model.ID != "gpt-5.6-terra" {
 			continue
 		}
 		found = true
 		if model.Reasoning == nil {
-			t.Fatal("gpt-5.4 reasoning = nil, want capability metadata")
+			t.Fatal("gpt-5.6-terra reasoning = nil, want capability metadata")
 		}
-		if model.Reasoning.DefaultEffort != "none" {
-			t.Fatalf("gpt-5.4 default_effort = %q, want none", model.Reasoning.DefaultEffort)
+		if model.Reasoning.DefaultEffort != "medium" {
+			t.Fatalf("gpt-5.6-terra default_effort = %q, want medium", model.Reasoning.DefaultEffort)
 		}
-		if got := model.Reasoning.Levels; len(got) != 5 || got[4] != "xhigh" {
-			t.Fatalf("gpt-5.4 levels = %#v, want none..xhigh", got)
+		if got := model.Reasoning.Levels; len(got) != 6 || got[5] != "ultra" {
+			t.Fatalf("gpt-5.6-terra levels = %#v, want low..ultra", got)
 		}
 	}
 	if !found {
-		t.Fatal("gpt-5.4 not found in ChatGPT OAuth model list")
+		t.Fatal("gpt-5.6-terra not found in ChatGPT OAuth model list")
+	}
+
+	// Models retired from the ChatGPT sign-in path must not be offered.
+	for _, model := range result.Models {
+		switch model.ID {
+		case "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex", "gpt-5.2", "gpt-5.1":
+			t.Fatalf("retired model %q still listed for ChatGPT OAuth", model.ID)
+		}
 	}
 }
 

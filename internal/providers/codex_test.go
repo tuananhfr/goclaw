@@ -47,8 +47,8 @@ func TestCodexProviderName(t *testing.T) {
 
 func TestCodexProviderDefaultModel(t *testing.T) {
 	p := NewCodexProvider("test", &staticTokenSource{token: "test"}, "", "")
-	if p.DefaultModel() != "gpt-5.4" {
-		t.Errorf("DefaultModel() = %q, want %q", p.DefaultModel(), "gpt-5.4")
+	if p.DefaultModel() != "gpt-5.6-terra" {
+		t.Errorf("DefaultModel() = %q, want %q", p.DefaultModel(), "gpt-5.6-terra")
 	}
 
 	p2 := NewCodexProvider("test", &staticTokenSource{token: "test"}, "", "o3")
@@ -1105,5 +1105,45 @@ func TestCodexProviderBuildRequestBodyWithImages(t *testing.T) {
 	}
 	if content[1]["type"] != "input_text" {
 		t.Errorf("content[1] type = %v, want input_text", content[1]["type"])
+	}
+}
+
+func TestCodexProviderBuildRequestBodyFastMode(t *testing.T) {
+	p := NewCodexProvider("test", &staticTokenSource{token: "test"}, "", "")
+
+	cases := []struct {
+		name     string
+		model    string
+		options  map[string]any
+		wantTier any // nil = service_tier must be absent
+	}{
+		{"fast on gpt-5.6", "gpt-5.6-terra", map[string]any{OptFastMode: true}, "priority"},
+		{"fast on alias-prefixed model", "openai-codex/gpt-5.6-sol", map[string]any{OptFastMode: true}, "priority"},
+		{"fast on gpt-5.5", "gpt-5.5", map[string]any{OptFastMode: true}, "priority"},
+		{"fast off", "gpt-5.6-terra", map[string]any{OptFastMode: false}, nil},
+		{"option absent", "gpt-5.6-terra", nil, nil},
+		{"unsupported model strips tier", "gpt-5.3-codex-spark", map[string]any{OptFastMode: true}, nil},
+		{"non-boolean option ignored", "gpt-5.6-terra", map[string]any{OptFastMode: "true"}, nil},
+		{"default model supports fast", "", map[string]any{OptFastMode: true}, "priority"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := ChatRequest{
+				Model:    tc.model,
+				Messages: []Message{{Role: "user", Content: "hi"}},
+				Options:  tc.options,
+			}
+			body := p.buildRequestBody(req, true)
+			got, present := body["service_tier"]
+			if tc.wantTier == nil {
+				if present {
+					t.Fatalf("service_tier = %v, want absent", got)
+				}
+				return
+			}
+			if got != tc.wantTier {
+				t.Fatalf("service_tier = %v, want %v", got, tc.wantTier)
+			}
+		})
 	}
 }

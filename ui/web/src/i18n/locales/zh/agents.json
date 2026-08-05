@@ -293,6 +293,12 @@
     "saved": "已保存",
     "failedToSave": "保存失败"
   },
+  "fastMode": {
+    "title": "极速模式",
+    "description": "Codex \"fast\" 服务层级：响应速度约提升 1.5 倍，积分消耗更高（约 2-2.5 倍）。",
+    "enable": "启用极速模式",
+    "unsupportedModel": "极速模式仅适用于 GPT-5.4/5.5/5.6 系列模型；其他模型将忽略此设置。"
+  },
   "chatgptOAuthRouting": {
     "title": "Codex OAuth 池",
     "description": "编辑已保存的池，然后直接检查。",
@@ -888,7 +894,11 @@
       "high": "高",
       "highDesc": "~32K 令牌预算",
       "xhigh": "超高",
-      "xhighDesc": "使用模型支持的最高 reasoning 级别",
+      "xhighDesc": "超高 reasoning 级别",
+      "max": "最大",
+      "maxDesc": "高于超高 — 仅 GPT-5.6 系列",
+      "ultra": "Ultra",
+      "ultraDesc": "最高级别；并行运行子代理（GPT-5.6 Sol/Terra）",
       "downgrade": "降级",
       "downgradeDesc": "规范化到最近的受支持较低级别，必要时使用最低受支持级别",
       "provider_default": "使用模型默认值",

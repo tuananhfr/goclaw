@@ -57,7 +57,7 @@ func badRequestImageTestServer(t *testing.T) *httptest.Server {
 
 // newImageCodexProvider creates a *CodexProvider with retries disabled, pointing at apiBase.
 func newImageCodexProvider(name, apiBase string) *CodexProvider {
-	p := NewCodexProvider(name, &staticTokenSource{token: "token-" + name}, apiBase, "gpt-5.4")
+	p := NewCodexProvider(name, &staticTokenSource{token: "token-" + name}, apiBase, "gpt-5.6-terra")
 	p.retryConfig.Attempts = 1 // disable internal retries so router failover logic is exercised
 	return p
 }

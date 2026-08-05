@@ -101,6 +101,7 @@ ui/desktop/                   Wails v2 desktop app (React frontend + embedded ga
 - **Request middleware:** Composable chain (cache, service tier, request guards), zero-alloc fast path for hot operations
 - **Self-evolution:** Metrics → suggestions → auto-adapt. 3 progressive stages: metrics collection, suggestion analysis, guardrail-protected apply/rollback
 - **Orchestration:** Delegate tool for inter-agent task delegation with agent_links, 3 delegation modes (auto/explicit/manual), token-aware work distribution. BatchQueue[T] generic for result aggregation
+- **Codex fast mode:** per-agent `other_config.fast_mode` → `AgentData.ParseFastMode()` → `LoopConfig.FastMode` → `Options[OptFastMode]` → `service_tier:"priority"` set in `codex_build.go` (gpt-5.4/5.5/5.6 families only; other models silently skip). Wire value is "priority" — "fast" is only the config-facing name and the ChatGPT backend rejects it. ChatGPT OAuth model catalog is hand-curated in `internal/http/provider_models_catalog.go` (no upstream /models endpoint)
 - **WebSocket protocol:** Frame types `req`/`res`/`event`. First request must be `connect`
 - **Config:** JSON5 at `GOCLAW_CONFIG` env. Secrets in `.env.local` or env vars, never in config.json
 - **Security:** Rate limiting, input guard (detection-only), CORS, shell deny patterns, SSRF protection, path traversal prevention, AES-256-GCM encryption. All security logs: `slog.Warn("security.*")`

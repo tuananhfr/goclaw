@@ -191,6 +191,9 @@ type Loop struct {
 	// Requested reasoning config parsed from agent other_config.
 	reasoningConfig store.AgentReasoningConfig
 
+	// Fast mode from agent other_config (Codex "fast" service tier).
+	fastMode bool
+
 	// Prompt mode from agent other_config (empty = full).
 	promptMode PromptMode
 
@@ -388,6 +391,9 @@ type LoopConfig struct {
 	// Requested reasoning config parsed from agent other_config.
 	ReasoningConfig store.AgentReasoningConfig
 
+	// Fast mode from agent other_config (Codex "fast" service tier).
+	FastMode bool
+
 	// Prompt mode from agent other_config ("full", "task", "minimal", "none")
 	PromptMode PromptMode
 
@@ -552,6 +558,7 @@ func NewLoop(cfg LoopConfig) *Loop {
 		tenantAllowedPaths:     cfg.TenantAllowedPaths,
 		disabledTools:          cfg.DisabledTools,
 		reasoningConfig:        cfg.ReasoningConfig,
+		fastMode:               cfg.FastMode,
 		promptMode:             cfg.PromptMode,
 		pinnedSkills:           cfg.PinnedSkills,
 		selfEvolve:             cfg.SelfEvolve,

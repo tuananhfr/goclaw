@@ -439,3 +439,27 @@ func TestParseAllowImageGeneration_UnrelatedKeys_DefaultsTrue(t *testing.T) {
 		t.Error("other_config without allow_image_generation key must default to true")
 	}
 }
+
+func TestParseFastMode(t *testing.T) {
+	cases := []struct {
+		name  string
+		other json.RawMessage
+		want  bool
+	}{
+		{"nil other_config", nil, false},
+		{"empty object", json.RawMessage(`{}`), false},
+		{"enabled", json.RawMessage(`{"fast_mode":true}`), true},
+		{"disabled", json.RawMessage(`{"fast_mode":false}`), false},
+		{"non-boolean value", json.RawMessage(`{"fast_mode":"yes"}`), false},
+		{"malformed json", json.RawMessage(`{fast_mode`), false},
+		{"alongside other keys", json.RawMessage(`{"self_evolve":true,"fast_mode":true}`), true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ag := &AgentData{OtherConfig: tc.other}
+			if got := ag.ParseFastMode(); got != tc.want {
+				t.Errorf("ParseFastMode() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

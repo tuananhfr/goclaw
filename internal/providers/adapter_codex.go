@@ -26,7 +26,7 @@ func NewCodexAdapter(cfg ProviderConfig) (ProviderAdapter, error) {
 
 	model := cfg.Model
 	if model == "" {
-		model = "gpt-5.4"
+		model = "gpt-5.6-terra" // keep in sync with NewCodexProvider
 	}
 
 	var ts TokenSource

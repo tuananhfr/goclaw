@@ -25,6 +25,13 @@ type reasoningCapabilityEntry struct {
 }
 
 var reasoningCapabilityEntries = []reasoningCapabilityEntry{
+	// GPT-5.6 family: "max" and "ultra" sit above "xhigh"; Luna stops at "max".
+	// Sol defaults to "low" (it is slow at higher efforts), Terra/Luna to "medium".
+	{id: "gpt-5.6-sol", capability: ReasoningCapability{Levels: []string{"low", "medium", "high", "xhigh", "max", "ultra"}, DefaultEffort: "low"}},
+	{id: "gpt-5.6-terra", capability: ReasoningCapability{Levels: []string{"low", "medium", "high", "xhigh", "max", "ultra"}, DefaultEffort: "medium"}},
+	{id: "gpt-5.6-luna", capability: ReasoningCapability{Levels: []string{"low", "medium", "high", "xhigh", "max"}, DefaultEffort: "medium"}},
+	// gpt-5.5 levels are not published; mirrors gpt-5.4 (previous frontier).
+	{id: "gpt-5.5", capability: ReasoningCapability{Levels: []string{"none", "low", "medium", "high", "xhigh"}, DefaultEffort: "none"}},
 	{id: "gpt-5.4-mini", capability: ReasoningCapability{Levels: []string{"none", "low", "medium", "high", "xhigh"}, DefaultEffort: "none"}},
 	{id: "gpt-5-mini", capability: ReasoningCapability{Levels: []string{"none", "low", "medium", "high", "xhigh"}, DefaultEffort: "none"}},
 	{id: "gpt-5.4", capability: ReasoningCapability{Levels: []string{"none", "low", "medium", "high", "xhigh"}, DefaultEffort: "none"}},

@@ -522,7 +522,7 @@
                       "properties": {
                         "effort": {
                           "type": "string",
-                          "enum": ["off", "auto", "none", "minimal", "low", "medium", "high", "xhigh"]
+                          "enum": ["off", "auto", "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
                         },
                         "fallback": {
                           "type": "string",
@@ -901,7 +901,7 @@
               },
               "effort": {
                 "type": "string",
-                "enum": ["off", "auto", "none", "minimal", "low", "medium", "high", "xhigh"]
+                "enum": ["off", "auto", "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
               },
               "fallback": {
                 "type": "string",
@@ -939,7 +939,7 @@
                 "properties": {
                   "effort": {
                     "type": "string",
-                    "enum": ["off", "auto", "none", "minimal", "low", "medium", "high", "xhigh"]
+                    "enum": ["off", "auto", "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
                   },
                   "fallback": {
                     "type": "string",

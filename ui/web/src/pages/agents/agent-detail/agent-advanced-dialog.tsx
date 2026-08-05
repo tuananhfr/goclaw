@@ -12,8 +12,8 @@ import type {
   SandboxConfig, WorkspaceSharingConfig,
 } from "@/types/agent";
 import {
-  ChatGPTOAuthRoutingSection, ThinkingSection, WorkspaceSharingSection, CompactionSection,
-  ContextPruningSection, SandboxSection,
+  ChatGPTOAuthRoutingSection, FastModeSection, ThinkingSection, WorkspaceSharingSection,
+  CompactionSection, ContextPruningSection, SandboxSection,
 } from "./config-sections";
 import { WorkspaceSection } from "./general-sections";
 import { useProviders } from "@/pages/providers/hooks/use-providers";
@@ -54,6 +54,7 @@ export function AgentAdvancedDialog({ open, onOpenChange, agent, onUpdate }: Age
   const [reasoningEffort, setReasoningEffort] = useState(init.reasoningEffort);
   const [reasoningFallback, setReasoningFallback] = useState<string>(init.reasoningFallback);
   const [reasoningExpert, setReasoningExpert] = useState(init.reasoningExpert);
+  const [fastMode, setFastMode] = useState(init.fastMode);
   const [chatgptRouting, setChatgptRouting] = useState<ChatGPTOAuthRoutingConfig>(init.chatgptRouting);
   const [comp, setComp] = useState<CompactionConfig>(init.comp);
   const [pruneEnabled, setPruneEnabled] = useState(init.pruneEnabled);
@@ -71,6 +72,7 @@ export function AgentAdvancedDialog({ open, onOpenChange, agent, onUpdate }: Age
     setReasoningEffort(s.reasoningEffort);
     setReasoningFallback(s.reasoningFallback);
     setReasoningExpert(s.reasoningExpert);
+    setFastMode(s.fastMode);
     setChatgptRouting(s.chatgptRouting);
     setWsSharing(s.wsSharing);
     setComp(s.comp);
@@ -123,6 +125,7 @@ export function AgentAdvancedDialog({ open, onOpenChange, agent, onUpdate }: Age
         reasoningExpert,
         reasoningFallback,
         thinkingLevel,
+        fastMode,
         chatgptRouting,
         wsSharing,
         comp,
@@ -210,6 +213,15 @@ export function AgentAdvancedDialog({ open, onOpenChange, agent, onUpdate }: Age
               currentProvider?.display_name || agent.provider
             }
           />
+
+          {/* Fast mode (Codex "fast" service tier) — ChatGPT OAuth providers only */}
+          {currentProvider?.provider_type === "chatgpt_oauth" ? (
+            <FastModeSection
+              enabled={fastMode}
+              onChange={setFastMode}
+              model={agent.model}
+            />
+          ) : null}
 
           {/* Performance */}
           <ConfigGroupHeader

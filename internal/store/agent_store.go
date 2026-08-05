@@ -177,6 +177,21 @@ func (a *AgentData) ParseThinkingLevel() string {
 	return a.ParseReasoningConfig().Effort
 }
 
+// ParseFastMode reads other_config.fast_mode (Codex/ChatGPT OAuth "fast"
+// service tier). Missing, malformed, or non-boolean values mean off.
+func (a *AgentData) ParseFastMode() bool {
+	if len(a.OtherConfig) == 0 {
+		return false
+	}
+	var other struct {
+		FastMode bool `json:"fast_mode"`
+	}
+	if json.Unmarshal(a.OtherConfig, &other) != nil {
+		return false
+	}
+	return other.FastMode
+}
+
 // ParseReasoningConfig reads advanced reasoning settings from the dedicated
 // reasoning_config column with ThinkingLevel as legacy fallback.
 func (a *AgentData) ParseReasoningConfig() AgentReasoningConfig {

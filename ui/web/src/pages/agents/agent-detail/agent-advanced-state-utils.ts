@@ -28,6 +28,7 @@ export interface AdvancedDialogState {
   reasoningEffort: string;
   reasoningFallback: string;
   reasoningExpert: boolean;
+  fastMode: boolean;
   chatgptRouting: ChatGPTOAuthRoutingConfig;
   wsSharing: WorkspaceSharingConfig;
   comp: CompactionConfig;
@@ -89,6 +90,8 @@ export function deriveState(
       (hasReasoningObject ||
         !SIMPLE_REASONING_LEVELS.has(reasoningEffort) ||
         reasoningFallback !== "downgrade"),
+    fastMode:
+      (agent.other_config as Record<string, unknown> | null)?.fast_mode === true,
     chatgptRouting: draftRouting,
     // Read workspace_sharing from top-level, fallback to other_config for transition
     wsSharing: (
@@ -115,6 +118,7 @@ export interface BuildAdvancedUpdatePayloadParams {
   reasoningExpert: boolean;
   reasoningFallback: string;
   thinkingLevel: string;
+  fastMode: boolean;
   chatgptRouting: ChatGPTOAuthRoutingConfig;
   wsSharing: WorkspaceSharingConfig;
   comp: CompactionConfig;
@@ -130,7 +134,7 @@ export function buildAdvancedUpdatePayload(
   const {
     agent, currentProvider, providersLoading, providerModelsLoading,
     expertReasoningAvailable, reasoningMode, reasoningEffort, reasoningExpert,
-    reasoningFallback, thinkingLevel, chatgptRouting, wsSharing,
+    reasoningFallback, thinkingLevel, fastMode, chatgptRouting, wsSharing,
     comp, pruneEnabled, prune, sbEnabled, sb,
   } = params;
 
@@ -139,6 +143,17 @@ export function buildAdvancedUpdatePayload(
     chatgptRouting,
     currentProvider?.settings,
   );
+
+  // Merge fast_mode into the preserved other_config bag (overrides the as-is
+  // copy from routingPayload). Off removes the key instead of storing false.
+  const otherConfig = {
+    ...((agent.other_config as Record<string, unknown> | null) ?? {}),
+  };
+  if (fastMode) {
+    otherConfig.fast_mode = true;
+  } else {
+    delete otherConfig.fast_mode;
+  }
 
   const capabilityResolutionPending =
     !currentProvider || providersLoading || providerModelsLoading;
@@ -150,6 +165,7 @@ export function buildAdvancedUpdatePayload(
       : { mode: "off" },
     sandbox_config: sbEnabled ? sb : null,
     ...routingPayload,
+    other_config: otherConfig,
   };
 
   // Build reasoning_config and thinking_level as top-level fields

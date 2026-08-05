@@ -47,7 +47,7 @@ func TestResolveConfiguredProviderKeepsNonCodexBase(t *testing.T) {
 		"openai-codex-backup",
 		&testTokenSource{token: "backup-token"},
 		"http://127.0.0.1",
-		"gpt-5.4",
+		"gpt-5.6-terra",
 	))
 
 	agent := &store.AgentData{
@@ -75,13 +75,13 @@ func TestResolveConfiguredProviderUsesRouterForCodexAgents(t *testing.T) {
 		"openai-codex",
 		&testTokenSource{token: "primary-token"},
 		"http://127.0.0.1",
-		"gpt-5.4",
+		"gpt-5.6-terra",
 	))
 	registry.RegisterForTenant(tenantID, providers.NewCodexProvider(
 		"openai-codex-backup",
 		&testTokenSource{token: "backup-token"},
 		"http://127.0.0.1",
-		"gpt-5.4",
+		"gpt-5.6-terra",
 	))
 
 	agent := &store.AgentData{
@@ -116,13 +116,13 @@ func TestResolveConfiguredProviderUsesProviderDefaultsWhenAgentHasNoOverride(t *
 		"openai-codex",
 		&testTokenSource{token: "primary-token"},
 		"http://127.0.0.1",
-		"gpt-5.4",
+		"gpt-5.6-terra",
 	).WithRoutingDefaults(store.ChatGPTOAuthStrategyRoundRobin, []string{"openai-codex-backup"}))
 	registry.RegisterForTenant(tenantID, providers.NewCodexProvider(
 		"openai-codex-backup",
 		&testTokenSource{token: "backup-token"},
 		"http://127.0.0.1",
-		"gpt-5.4",
+		"gpt-5.6-terra",
 	))
 
 	agent := &store.AgentData{
@@ -150,14 +150,14 @@ func TestResolveConfiguredProviderKeepsExplicitSingleAccountOverride(t *testing.
 		"openai-codex",
 		&testTokenSource{token: "primary-token"},
 		"http://127.0.0.1",
-		"gpt-5.4",
+		"gpt-5.6-terra",
 	).WithRoutingDefaults(store.ChatGPTOAuthStrategyRoundRobin, []string{"openai-codex-backup"})
 	registry.RegisterForTenant(tenantID, baseProvider)
 	registry.RegisterForTenant(tenantID, providers.NewCodexProvider(
 		"openai-codex-backup",
 		&testTokenSource{token: "backup-token"},
 		"http://127.0.0.1",
-		"gpt-5.4",
+		"gpt-5.6-terra",
 	))
 
 	agent := &store.AgentData{
@@ -200,13 +200,13 @@ func TestResolveConfiguredProviderReturnsRouterEvenWhenPrimaryNeedsFailover(t *t
 		"openai-codex",
 		&blockedTokenSource{token: "primary-token"},
 		"http://127.0.0.1",
-		"gpt-5.4",
+		"gpt-5.6-terra",
 	))
 	registry.RegisterForTenant(tenantID, providers.NewCodexProvider(
 		"openai-codex-backup",
 		&testTokenSource{token: "backup-token"},
 		"http://127.0.0.1",
-		"gpt-5.4",
+		"gpt-5.6-terra",
 	))
 
 	agent := &store.AgentData{

@@ -153,7 +153,31 @@ func (p *CodexProvider) buildRequestBody(req ChatRequest, stream bool) map[strin
 		body["reasoning"] = map[string]any{"effort": level}
 	}
 
+	if fast, ok := req.Options[OptFastMode].(bool); ok && fast && codexFastTierSupported(model) {
+		// Fast mode: ~1.5x speed at a higher credit burn. The config-facing name
+		// is "fast" but the wire value is "priority" — Codex CLI's
+		// ServiceTier::Fast.request_value() maps to "priority", and the ChatGPT
+		// backend rejects a literal "fast". Set here (not via middleware) so both
+		// CodexProvider.ChatStream and CodexAdapter.ToRequest pick it up.
+		body["service_tier"] = "priority"
+	}
+
 	return body
+}
+
+// codexFastTierSupported mirrors the Codex CLI model catalog: fast tier is
+// advertised only by the gpt-5.4 / gpt-5.5 / gpt-5.6 families. Unsupported
+// models must not send service_tier — the CLI strips it the same way.
+func codexFastTierSupported(model string) bool {
+	if idx := strings.LastIndex(model, "/"); idx >= 0 {
+		model = model[idx+1:]
+	}
+	for _, prefix := range []string{"gpt-5.4", "gpt-5.5", "gpt-5.6"} {
+		if strings.HasPrefix(model, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func codexToolChoice(choice *ToolChoice) any {
