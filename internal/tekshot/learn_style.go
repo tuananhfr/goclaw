@@ -139,7 +139,10 @@ func buildLearnStylePrompt(request map[string]any, samples []learnStyleSample) s
 
 	sb.WriteString("\n## Hard rules\n")
 	sb.WriteString("- Write the ENTIRE style guide in Vietnamese — store staff read and edit it by hand.\n")
-	sb.WriteString("- Cover, in this order: giọng văn và thái độ; cách xưng hô với khách; cấu trúc bài (mở - thân - kết); cách dùng emoji (mật độ, vị trí, bộ emoji quen thuộc); độ dài điển hình; phong cách hashtag; kiểu call-to-action đặc trưng; kết thúc bằng 1-2 trích đoạn mẫu ngắn lấy từ chính các bài trên.\n")
+	// Bài mẫu nguyên vẹn dạy giọng văn tốt hơn mô tả trừu tượng: người viết sau
+	// (thường là một agent khác) học nhịp câu và cách triển khai ý từ bài thật.
+	sb.WriteString("- Cover, in this order: giọng văn và thái độ; cách xưng hô với khách; cấu trúc bài (mở - thân - kết); cách dùng emoji (mật độ, vị trí, bộ emoji quen thuộc); độ dài điển hình; phong cách hashtag; kiểu call-to-action đặc trưng.\n")
+	sb.WriteString("- Kết thúc bằng mục \"Bài mẫu tham chiếu\" chứa 2-3 bài ĐẦY ĐỦ nguyên văn (title + content + hashtags) chọn từ những sample tiêu biểu nhất cho giọng của page. Ghi rõ đây là mẫu để học nhịp và giọng, không phải câu chữ để copy.\n")
 	sb.WriteString("- Ground EVERY observation in the samples above. Never invent products, prices, promotions or brand facts the samples do not show.\n")
 	sb.WriteString("- Reply with ONLY the style guide text: no preamble, no meta commentary, no code fences.\n")
 	return sb.String()

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"math"
 	"regexp"
 	"strings"
 	"time"
@@ -38,6 +39,8 @@ type DraftPostsTool struct {
 type SourceItem struct {
 	SourceIndex   int
 	ChecklistItem string
+	SourceTitle   string
+	SourceBrief   string
 	SourceText    string
 }
 
@@ -95,8 +98,10 @@ func (t *DraftPostsTool) Parameters() map[string]any {
 				"items": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
-						"source_index":   map[string]any{"type": "number"},
+						"source_index":   map[string]any{"type": "integer"},
 						"checklist_item": map[string]any{"type": "string"},
+						"source_title":   map[string]any{"type": "string"},
+						"source_brief":   map[string]any{"type": "string"},
 						"source_text":    map[string]any{"type": "string"},
 					},
 				},
@@ -200,7 +205,10 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 		finalReq := runReq
 		finalReq.RunID = uuid.NewString()
 		finalReq.Message = fmt.Sprintf("Submit the final Tekshot batch now by calling %s with the complete structured result. Do not answer with plain text.", finalToolName)
-		finalReq.MaxIterations = 3
+		// ToolChoice is applied on every LLM iteration. One forced iteration is
+		// enough to collect the final batch and prevents later calls overwriting a
+		// previously valid submission.
+		finalReq.MaxIterations = 1
 		finalReq.ToolChoice = &providers.ToolChoice{
 			Mode: "function",
 			Name: finalToolName,
@@ -279,7 +287,7 @@ func (t *DraftBatchCollectorTool) Parameters() map[string]any {
 						"publish_date":   map[string]any{"type": "string", "description": "Publish date. Must match 'YYYY-MM-DD' (e.g. 2026-06-21)."},
 						"publish_time":   map[string]any{"type": "string", "description": "Publish time in 24-hour format. Must match 'HH:MM' (e.g. 15:30)."},
 						"checklist_item": map[string]any{"type": "string"},
-						"source_index":   map[string]any{"type": "number", "description": "Required when source_items is provided. Must match the source_index of the checklist item used for this post."},
+						"source_index":   map[string]any{"type": "integer", "description": "Required when source_items is provided. Must match the source_index of the checklist item used for this post."},
 					},
 					"required": []string{
 						"title", "brief", "pillar", "content", "hashtags",
@@ -313,11 +321,18 @@ func (t *DraftBatchCollectorTool) Batch() map[string]any {
 }
 
 func buildPrompt(args map[string]any, timezone string) string {
+	sourceItems := sourceItemsArg(args["source_items"])
+	isSinglePost := len(sourceItems) == 1
 	var sb strings.Builder
-	sb.WriteString("You are generating Tekshot Studio draft social posts.\n")
-	sb.WriteString("Study the provided source carefully, plan the batch, and when the batch is complete you must call submit_draft_batch exactly once with the final structured result.\n")
+	if isSinglePost {
+		sb.WriteString("You are Tekshot Studio's social-content writer. Write one complete, ready-to-publish social post from the single source record below.\n")
+		sb.WriteString("When the post is complete, call submit_draft_batch exactly once with the final structured result.\n")
+	} else {
+		sb.WriteString("You are generating Tekshot Studio draft social posts.\n")
+		sb.WriteString("Study every source record carefully and call submit_draft_batch exactly once with the final structured result.\n")
+	}
 	sb.WriteString("Do not return the final batch as plain text.\n")
-	sb.WriteString("Keep every post grounded in the source material. Use empty strings for unknown optional fields, never omit required fields.\n")
+	sb.WriteString("Keep every post grounded in the source material. Use empty strings for unknown optional fields and never omit required fields.\n")
 	sb.WriteString("When business facts are needed, search the Vault first and read relevant results before drafting.\n")
 	sb.WriteString("Use web search/fetch for external or current information, and skill_search for brand voice, content, or visual guidance.\n")
 	sb.WriteString("Do not invent page, brand, product, service, policy, pricing, FAQ, availability, or promotion facts that are not supported by the provided source, Vault, or web evidence.\n")
@@ -346,18 +361,41 @@ func buildPrompt(args map[string]any, timezone string) string {
 		sb.WriteString(fileName)
 		sb.WriteString("\n")
 	}
-	if sourceText := strings.TrimSpace(stringArg(args, "source_text")); sourceText != "" {
+	// A chunked child carries its canonical source through source_items. Printing
+	// source_text as well used to make the model read the same row twice.
+	if sourceText := strings.TrimSpace(stringArg(args, "source_text")); sourceText != "" && len(sourceItems) == 0 {
 		sb.WriteString("\nResolved source text:\n")
 		sb.WriteString(sourceText)
 		sb.WriteString("\n")
 	}
-	if sourceItems := sourceItemsArg(args["source_items"]); len(sourceItems) > 0 {
-		sb.WriteString("\nExact source items for this chunk:\n")
+	if len(sourceItems) > 0 {
+		if isSinglePost {
+			sb.WriteString("\nSINGLE-POST CONTENT WRITER CONTRACT:\n")
+			sb.WriteString("- The only creative output fields are content and hashtags. Treat title, brief, checklist_item, source_index, pillar, and scheduling as source/workflow fields.\n")
+			sb.WriteString("- The content field must be the exact public caption for readers, ready to publish as-is. Do not address the operator, requester, or chat user.\n")
+			sb.WriteString("- Do not explain your process or add assistant follow-up offers. A final sentence is allowed only when it is a public CTA for the reader.\n")
+			sb.WriteString("- The title and brief FIELDS are read-only: return them exactly from the source record, never rewritten, translated or corrected. This constrains those two fields only.\n")
+			sb.WriteString("- The content field is not constrained by that rule. It must develop the title and brief into a full caption, not restate them.\n")
+			sb.WriteString("- If the brief is structured with labels such as Hook, Mở đầu, Nội dung, Benefit, or Kết & CTA, turn every applicable part into the caption. Do not flatten it into generic marketing copy and do not print the labels themselves.\n")
+			sb.WriteString("- Open in the way the source supports. Do not force an insight, contrarian claim, pain point, or question when the source already gives a stronger promotional hook.\n")
+			sb.WriteString("- Use concrete source details and a CTA that fits this exact post. Do not invent business facts, offers, prices, availability, or contact details.\n")
+			sb.WriteString("- Do not include footer/signature information or hashtags in content. Return 3-5 contextual hashtags as one space-separated hashtags string.\n")
+			// Thứ tự làm việc, không phải luật viết: nội dung luật nằm trong
+			// Content Writing Guidelines do Drupal gửi kèm instructions.
+			sb.WriteString("- Work in this order: classify the post intent and pick the framework per the instructions; research facts with the allowed tools when the source needs support; write the caption; run the instructions' self-check; only call submit_draft_batch after the self-check passes.\n")
+		}
+		sb.WriteString("\nSOURCE RECORDS:\n")
 		for _, item := range sourceItems {
-			sb.WriteString(fmt.Sprintf("- source_index=%d | checklist_item=%s", item.SourceIndex, item.ChecklistItem))
-			if item.SourceText != "" && item.SourceText != item.ChecklistItem {
-				sb.WriteString(" | source_text=")
-				sb.WriteString(item.SourceText)
+			sb.WriteString(fmt.Sprintf("- source_index: %d\n", item.SourceIndex))
+			sb.WriteString("  checklist_item (read-only): ")
+			sb.WriteString(item.ChecklistItem)
+			sb.WriteString("\n  source_title (read-only): ")
+			sb.WriteString(item.SourceTitle)
+			sb.WriteString("\n  source_brief (read-only): ")
+			sb.WriteString(item.SourceBrief)
+			if supporting := sourceSupportingText(item); supporting != "" {
+				sb.WriteString("\n  supporting_source:\n")
+				sb.WriteString(indentPromptBlock(supporting, "    "))
 			}
 			sb.WriteString("\n")
 		}
@@ -393,6 +431,38 @@ func buildPrompt(args map[string]any, timezone string) string {
 	sb.WriteString("  * publish_time must use format 'HH:MM' (e.g., 18:00).\n")
 	sb.WriteString("- If scheduling data is unavailable, set publish_at, publish_date, and publish_time to empty strings.\n")
 	return sb.String()
+}
+
+// sourceSupportingText removes the canonical title/brief prefix from the
+// labelled source row. It leaves scheduling, pillar, and other source facts
+// available without showing the editorial source twice.
+func sourceSupportingText(item SourceItem) string {
+	text := strings.TrimSpace(item.SourceText)
+	if text == "" {
+		return ""
+	}
+	prefix := ""
+	if item.SourceTitle != "" {
+		prefix += "Title: " + item.SourceTitle
+	}
+	if item.SourceBrief != "" {
+		if prefix != "" {
+			prefix += "\n"
+		}
+		prefix += "Brief: " + item.SourceBrief
+	}
+	if prefix != "" {
+		text = strings.TrimSpace(strings.TrimPrefix(text, prefix))
+	}
+	return text
+}
+
+func indentPromptBlock(value, prefix string) string {
+	lines := strings.Split(value, "\n")
+	for i, line := range lines {
+		lines[i] = prefix + line
+	}
+	return strings.Join(lines, "\n")
 }
 
 func mediaFilesArg(raw any) []bus.MediaFile {
@@ -431,8 +501,8 @@ func sourceItemsArg(raw any) []SourceItem {
 		if !ok {
 			continue
 		}
-		sourceIndex := intNumberArg(entry, "source_index")
-		if sourceIndex <= 0 {
+		sourceIndex, ok := integerNumberArg(entry, "source_index")
+		if !ok || sourceIndex <= 0 {
 			continue
 		}
 		checklistItem := strings.TrimSpace(stringArg(entry, "checklist_item"))
@@ -442,6 +512,8 @@ func sourceItemsArg(raw any) []SourceItem {
 		out = append(out, SourceItem{
 			SourceIndex:   sourceIndex,
 			ChecklistItem: checklistItem,
+			SourceTitle:   strings.TrimSpace(stringArg(entry, "source_title")),
+			SourceBrief:   strings.TrimSpace(stringArg(entry, "source_brief")),
 			SourceText:    strings.TrimSpace(stringArg(entry, "source_text")),
 		})
 	}
@@ -541,7 +613,11 @@ func validateDraftPost(post map[string]any, index int) (map[string]any, error) {
 		"checklist_item": checklistItem,
 	}
 	if _, ok := post["source_index"]; ok {
-		validated["source_index"] = intNumberArg(post, "source_index")
+		sourceIndex, valid := integerNumberArg(post, "source_index")
+		if !valid || sourceIndex <= 0 {
+			return nil, fmt.Errorf("posts[%d].source_index must be a positive integer", index)
+		}
+		validated["source_index"] = sourceIndex
 	}
 	return validated, nil
 }
@@ -564,9 +640,9 @@ func validateBatchSourceIndexes(batch map[string]any, sourceItems []SourceItem) 
 	}
 	seen := make(map[int]bool, len(sourceItems))
 	for i, post := range posts {
-		sourceIndex := intNumberArg(post, "source_index")
-		if sourceIndex <= 0 {
-			return fmt.Errorf("posts[%d].source_index is required", i)
+		sourceIndex, valid := integerNumberArg(post, "source_index")
+		if !valid || sourceIndex <= 0 {
+			return fmt.Errorf("posts[%d].source_index must be a positive integer", i)
 		}
 		if _, ok := expected[sourceIndex]; !ok {
 			return fmt.Errorf("posts[%d].source_index %d is not in source_items", i, sourceIndex)
@@ -652,27 +728,29 @@ func stringArg(values map[string]any, key string) string {
 	return value
 }
 
-func intNumberArg(values map[string]any, key string) int {
+func integerNumberArg(values map[string]any, key string) (int, bool) {
 	raw, ok := values[key]
 	if !ok || raw == nil {
-		return 0
+		return 0, false
 	}
 	switch value := raw.(type) {
 	case int:
-		return value
+		return value, true
 	case int64:
-		return int(value)
+		return int(value), int64(int(value)) == value
 	case float64:
-		return int(value)
+		if math.Trunc(value) != value {
+			return 0, false
+		}
+		return int(value), true
 	case json.Number:
-		parsed, _ := value.Int64()
-		return int(parsed)
-	case string:
-		var parsed int
-		_, _ = fmt.Sscanf(strings.TrimSpace(value), "%d", &parsed)
-		return parsed
+		parsed, err := value.Int64()
+		if err != nil || int64(int(parsed)) != parsed {
+			return 0, false
+		}
+		return int(parsed), true
 	default:
-		return 0
+		return 0, false
 	}
 }
 

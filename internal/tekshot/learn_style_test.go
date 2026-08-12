@@ -72,6 +72,8 @@ func TestBuildLearnStylePrompt(t *testing.T) {
 		"Khách quen ơi, cuối tuần ghé nha.",
 		"ENTIRE style guide in Vietnamese",
 		"ONLY the style guide text",
+		"Bài mẫu tham chiếu",
+		"2-3 bài ĐẦY ĐỦ nguyên văn",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt missing %q\n---\n%s", want, prompt)
