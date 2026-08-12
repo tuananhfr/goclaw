@@ -372,7 +372,8 @@ func buildPrompt(args map[string]any, timezone string) string {
 		if isSinglePost {
 			sb.WriteString("\nSINGLE-POST CONTENT WRITER CONTRACT:\n")
 			sb.WriteString("- The only creative output fields are content and hashtags. Treat title, brief, checklist_item, source_index, pillar, and scheduling as source/workflow fields.\n")
-			sb.WriteString("- The content field must be the exact public caption for readers, ready to publish as-is. Do not address the operator, requester, or chat user.\n")
+			sb.WriteString("- The content field must be the exact public caption for readers. Do not address the operator, requester, or chat user.\n")
+			sb.WriteString("- Do NOT start content with the title. Drupal prepends the title when publishing, so a title line inside content is printed twice on the live post. Begin content at the opening sentence.\n")
 			sb.WriteString("- Do not explain your process or add assistant follow-up offers. A final sentence is allowed only when it is a public CTA for the reader.\n")
 			sb.WriteString("- The title and brief FIELDS are read-only: return them exactly from the source record, never rewritten, translated or corrected. This constrains those two fields only.\n")
 			sb.WriteString("- The content field is not constrained by that rule. It must develop the title and brief into a full caption, not restate them.\n")
