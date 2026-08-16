@@ -297,11 +297,36 @@ func (t *DraftBatchCollectorTool) Parameters() map[string]any {
 					"type":                 "object",
 					"additionalProperties": false,
 					"properties": map[string]any{
-						"title":          map[string]any{"type": "string"},
-						"brief":          map[string]any{"type": "string"},
-						"pillar":         map[string]any{"type": "string"},
-						"content":        map[string]any{"type": "string"},
-						"hashtags":       map[string]any{"type": "string", "description": "3-5 contextual hashtags for this post, space-separated, each starting with #. Example: '#BIMFrance #DessinTechnique #DesignSupport'. Use empty string if none."},
+						// Drupal's guard accepts the title when the WORDS match the source;
+						// case changes and edge symbols pass. Without saying so here the
+						// model reads the surrounding "echo unchanged" rules literally and
+						// returns a bare copy, so the published headline carries no icon.
+						"title": map[string]any{
+							"type": "string",
+							"description": "The post headline. Keep the SAME WORDS as source_title — do not rewrite, translate, shorten or reorder them. " +
+								"You SHOULD put it in upper case and add exactly ONE icon at the very start that matches the offer (and optionally one at the very end). " +
+								"Changing the words is rejected; changing case and adding edge icons is expected.",
+						},
+						"brief":  map[string]any{"type": "string"},
+						"pillar": map[string]any{"type": "string"},
+						// The caption is the whole deliverable, yet this was the only
+						// consequential field with no spec — so the model filled it like a
+						// form cell and settled at ~537 chars regardless of how much prose
+						// guidance the prompt carried. Field descriptions bind far harder
+						// than prompt text because they attach to the slot being filled.
+						"content": map[string]any{
+							"type": "string",
+							"description": "The complete Facebook caption body, ready to publish. TARGET LENGTH 800-1000 characters — a 500-character caption is too thin and will be rejected. " +
+								"STRUCTURE: (1) an opening hook of 1-2 sentences that names a concrete moment or tension the reader recognises, containing the price or the offer; " +
+								"(2) a short lead-in that speaks to the reader as 'bạn'/'các bác' or whatever address the source uses; " +
+								"(3) the offer block — list each item on its own line led by a food/product emoji, and give every item 2-3 clauses of sensory detail (texture, temperature, aroma, taste), never a bare noun; " +
+								"(4) one energy beat that sells the feeling rather than the item; " +
+								"(5) exactly one closing CTA carrying a verb, a channel and a time or place. " +
+								"EMOJI: one leading the offer-block header, one leading each listed item, optionally one on the CTA line. Never mid-sentence, never two adjacent. " +
+								"When the source brief already supplies wording, address form, slang or a CTA sentence, KEEP them verbatim and build around them — expand and format, do not reword into neutral prose. " +
+								"Write in the language of the source. Blank line between blocks so it scans on a phone.",
+						},
+						"hashtags":       map[string]any{"type": "string", "description": "2-3 SUPPLEMENTARY hashtags for this post, space-separated, each starting with #, in the language of the source. Name what is specific to this post — the product, the offer, the occasion. The brand, branch and category tags already live in the page footer and are appended automatically, so never repeat them. Use empty string if none."},
 						"publish_at":     map[string]any{"type": "string", "description": "Publish date and time. Must strictly match 'YYYY-MM-DDTHH:MM:SS' (e.g. 2026-06-21T15:30:00). Do NOT include timezone offsets or Z suffix."},
 						"publish_date":   map[string]any{"type": "string", "description": "Publish date. Must match 'YYYY-MM-DD' (e.g. 2026-06-21)."},
 						"publish_time":   map[string]any{"type": "string", "description": "Publish time in 24-hour format. Must match 'HH:MM' (e.g. 15:30)."},
@@ -399,7 +424,7 @@ func buildPrompt(args map[string]any, timezone string) string {
 			sb.WriteString("- If the brief is structured with labels such as Hook, Mở đầu, Nội dung, Benefit, or Kết & CTA, turn every applicable part into the caption. Do not flatten it into generic marketing copy and do not print the labels themselves.\n")
 			sb.WriteString("- Open in the way the source supports. Do not force an insight, contrarian claim, pain point, or question when the source already gives a stronger promotional hook.\n")
 			sb.WriteString("- Use concrete source details and a CTA that fits this exact post. Do not invent business facts, offers, prices, availability, or contact details.\n")
-			sb.WriteString("- Do not include footer/signature information or hashtags in content. Return 3-5 contextual hashtags as one space-separated hashtags string.\n")
+			sb.WriteString("- Do not include footer/signature information or hashtags in content. Return 2-3 supplementary hashtags as one space-separated hashtags string.\n")
 			// Thứ tự làm việc, không phải luật viết: nội dung luật nằm trong
 			// Content Writing Guidelines do Drupal gửi kèm instructions.
 			sb.WriteString("- Work in this order: classify the post intent and pick the framework per the instructions; research facts with the allowed tools when the source needs support; write the caption; run the instructions' self-check; only call submit_draft_batch after the self-check passes.\n")
@@ -437,10 +462,17 @@ func buildPrompt(args map[string]any, timezone string) string {
 	}
 
 	sb.WriteString("\nIMPORTANT content rules:\n")
-	sb.WriteString("- The 'content' field must contain ONLY the core post body text. Do NOT include any footer, contact information, company address, phone number, email, website URL, or brand hashtags in the content field.\n")
+	// "ONLY the core post body text" read as a size instruction and shrank the
+	// caption; the actual intent is just to exclude the footer block, which the
+	// system appends at publish time.
+	sb.WriteString("- The 'content' field is the complete, publish-ready caption body — write it in full. Exclude only the footer block: contact information, company address, phone number, email, website URL, and brand hashtags.\n")
 	sb.WriteString("- The footer/signature block is managed separately by the system and will be appended automatically.\n")
-	sb.WriteString("- Generate 3-5 contextual hashtags relevant to each post's topic and place them in the 'hashtags' field, space-separated, each starting with #. Example: '#BIMFrance #DessinTechnique #DesignSupport'.\n")
-	sb.WriteString("- Do NOT include the brand/company hashtag (e.g. #LPCFrance) in the hashtags field — it is already in the footer.\n")
+	// The footer already ships the brand, branch and category tags, so anything
+	// generated here is supplementary — 3-5 more pushed the published post to
+	// ~8 tags. A concrete foreign-language example here also biased output, so
+	// the shape is given abstractly instead.
+	sb.WriteString("- Generate 2-3 SUPPLEMENTARY hashtags naming what is specific to this post (the product, the offer, the occasion) and place them in the 'hashtags' field, space-separated, each starting with #, in the language of the source. Shape: #<Product> #<OfferOrOccasion>.\n")
+	sb.WriteString("- The footer already carries the brand, branch and category hashtags and is appended automatically — never repeat a brand, location or generic industry tag here.\n")
 	sb.WriteString("\nFinal output schema requirements:\n")
 	sb.WriteString("- title: short batch title\n")
 	sb.WriteString("- summary: short batch summary\n")
