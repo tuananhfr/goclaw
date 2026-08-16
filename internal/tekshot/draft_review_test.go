@@ -76,6 +76,27 @@ func TestBuildReviewPromptCarriesWriterInstructionsAndCriteria(t *testing.T) {
 	}
 }
 
+// Batch 2026-08-16: reviewer cho pass sạch một bài vừa chép ý brief vừa mất
+// hook. Nguyên nhân là contract chỉ nói "trích câu phạm lỗi", trong khi hai lỗi
+// đó là quan hệ (brief↔content) và sự vắng mặt — không có "câu phạm lỗi" nào.
+// Contract phải nói rõ: trích đoạn ĐANG CÓ mà lẽ ra phải làm tròn việc đó.
+func TestBuildReviewPromptExplainsEvidenceForAbsenceAndRelationshipFailures(t *testing.T) {
+	prompt := buildReviewPrompt("rules", SourceItem{SourceTitle: "t"},
+		map[string]any{"content": "c"},
+		[]ReviewCriterion{{ID: "fold_hook", Description: "d", Critical: true}})
+
+	lower := strings.ToLower(prompt)
+	for _, want := range []string{
+		"absence",             // gọi tên loại lỗi không trích được theo cách thông thường
+		"relationship",        // loại còn lại: content phản chiếu brief
+		"fails to do its job", // luật thay thế: trích đoạn đang có
+	} {
+		if !strings.Contains(lower, want) {
+			t.Fatalf("output contract must explain evidence for absence/relationship failures, missing %q", want)
+		}
+	}
+}
+
 func TestCritiqueBuilders(t *testing.T) {
 	// Critique builders chỉ dựng mảnh nhận xét; câu "gọi lại tool nào" thuộc về
 	// buildRevisePrompt và cố ý chỉ xuất hiện một lần trong prompt cuối.

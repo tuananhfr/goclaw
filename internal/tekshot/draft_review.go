@@ -110,6 +110,10 @@ func buildReviewPrompt(instructions string, item SourceItem, post map[string]any
 	sb.WriteString("\nOUTPUT CONTRACT:\n")
 	sb.WriteString(fmt.Sprintf("- Call %s exactly once with one entry per criterion id above.\n", reviewToolName))
 	sb.WriteString("- A fail verdict REQUIRES evidence: a verbatim quote copied from the content field, character-for-character. No quote, no fail.\n")
+	// Without this, criteria about a relationship (content mirrors the brief) or
+	// an absence (no hook) simply never fire: the model looks for a single bad
+	// sentence, finds none, and passes. Quote what IS there instead.
+	sb.WriteString("- Not every failure is one bad sentence. When a criterion is about a RELATIONSHIP (the content merely rewords the source) or an ABSENCE (the opening carries no hook), quote the passage that fails to do its job — the content sentence that mirrors the source, or the opening lines exactly as written. Each criterion states what to quote when it fails; follow it.\n")
 	sb.WriteString("- Do not invent problems. When the post genuinely satisfies a criterion, pass it.\n")
 	sb.WriteString("- When any criterion fails, write revision_notes as concrete instructions the writer can act on.\n")
 	return sb.String()
