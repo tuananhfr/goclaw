@@ -3,6 +3,11 @@ package tekshot
 import (
 	"fmt"
 	"strings"
+
+	"github.com/google/uuid"
+	"github.com/nextlevelbuilder/goclaw/internal/agent"
+	"github.com/nextlevelbuilder/goclaw/internal/providers"
+	"github.com/nextlevelbuilder/goclaw/internal/tools"
 )
 
 // reviewConfig mirrors the `review` block Drupal ships in the job request.
@@ -138,4 +143,194 @@ func reviewCritique(res *PostReviewResult) string {
 	}
 	sb.WriteString("\nReviewer's instructions: " + res.RevisionNotes + "\n")
 	return sb.String()
+}
+
+// runAgentFunc abstracts ag.Run for the review loop: production wraps the
+// resolved agent, tests substitute a stub that fills the ephemeral collector.
+type runAgentFunc func(req agent.RunRequest) error
+
+type draftVersion struct {
+	batch  map[string]any
+	lint   []LintFinding
+	review *PostReviewResult
+}
+
+// runDraftReview executes the hidden quality loop AFTER a valid batch exists:
+// deterministic lint → (revise) → clean-context LLM review → (revise →
+// re-review) → pick the best version. It NEVER fails the job — any error
+// keeps the best batch so far and records a verdict for Drupal's result_json.
+func runDraftReview(run runAgentFunc, baseReq agent.RunRequest, args map[string]any, cfg reviewConfig, items []SourceItem, batch map[string]any) (map[string]any, map[string]any) {
+	if len(items) != 1 {
+		return batch, map[string]any{"enabled": true, "verdict": "skipped_multi_post"}
+	}
+	item := items[0]
+	instructions := stringArg(args, "instructions")
+
+	versions := []draftVersion{{batch: batch, lint: lintFirstPost(batch, item)}}
+	lintRounds, reviewRounds := 0, 0
+
+	// Lint stage: mechanical defects go straight to one revise, no LLM review
+	// wasted on what string comparison already proved.
+	if len(versions[0].lint) > 0 && cfg.MaxLintRevisions > 0 {
+		if revised, ok := reviseOnce(run, baseReq, items, lintCritique(versions[0].lint)); ok {
+			versions = append(versions, draftVersion{batch: revised, lint: lintFirstPost(revised, item)})
+			lintRounds++
+		}
+	}
+
+	// Review stage on the current best candidate.
+	current := &versions[len(versions)-1]
+	res, ok := reviewOnce(run, baseReq, instructions, item, cfg.Criteria, current.batch)
+	if !ok {
+		return current.batch, reviewMeta(versions, "review_error", lintRounds, reviewRounds)
+	}
+	current.review = res
+
+	if !res.Passed && cfg.MaxReviewRevisions > 0 {
+		if revised, ok := reviseOnce(run, baseReq, items, reviewCritique(res)); ok {
+			v := draftVersion{batch: revised, lint: lintFirstPost(revised, item)}
+			if res2, ok2 := reviewOnce(run, baseReq, instructions, item, cfg.Criteria, revised); ok2 {
+				v.review = res2
+			}
+			versions = append(versions, v)
+			reviewRounds++
+		}
+	}
+
+	best := pickBestVersion(versions)
+	verdict := "revise_exhausted"
+	if best.review != nil && best.review.Passed {
+		verdict = "pass"
+	}
+	return best.batch, reviewMeta(versions, verdict, lintRounds, reviewRounds)
+}
+
+func lintFirstPost(batch map[string]any, item SourceItem) []LintFinding {
+	post, ok := firstPostFromBatch(batch)
+	if !ok {
+		return nil
+	}
+	return LintDraftPost(post, item)
+}
+
+// firstPostFromBatch tolerates both the collector's []map[string]any and a
+// JSON round-trip's []any.
+func firstPostFromBatch(batch map[string]any) (map[string]any, bool) {
+	switch posts := batch["posts"].(type) {
+	case []map[string]any:
+		if len(posts) > 0 {
+			return posts[0], true
+		}
+	case []any:
+		if len(posts) > 0 {
+			if post, ok := posts[0].(map[string]any); ok {
+				return post, true
+			}
+		}
+	}
+	return nil, false
+}
+
+// reviseOnce sends the critique back into the WRITER's session (it keeps its
+// research context) as one forced submit_draft_batch call. Invalid or failed
+// submissions keep the previous version — a revise can only ever add a
+// candidate, never lose one.
+func reviseOnce(run runAgentFunc, baseReq agent.RunRequest, items []SourceItem, critique string) (map[string]any, bool) {
+	collector := NewDraftBatchCollectorTool(items)
+	req := baseReq
+	req.RunID = uuid.NewString()
+	req.Message = buildRevisePrompt(critique)
+	req.EphemeralTools = []tools.Tool{collector}
+	req.MaxIterations = 1
+	req.ToolChoice = &providers.ToolChoice{Mode: "function", Name: finalToolName}
+	if err := run(req); err != nil && collector.Batch() == nil {
+		return nil, false
+	}
+	revised := collector.Batch()
+	return revised, revised != nil
+}
+
+// reviewOnce judges one candidate in a FRESH session: the reviewer sees only
+// source + post + rules, never the writer's conversation — it cannot grade
+// its own homework.
+func reviewOnce(run runAgentFunc, baseReq agent.RunRequest, instructions string, item SourceItem, criteria []ReviewCriterion, batch map[string]any) (*PostReviewResult, bool) {
+	post, ok := firstPostFromBatch(batch)
+	if !ok {
+		return nil, false
+	}
+	collector := NewPostReviewCollectorTool(criteria, stringArg(post, "content"))
+	req := baseReq
+	req.SessionKey = "tekshot:review:" + uuid.NewString()
+	req.RunID = uuid.NewString()
+	req.Message = buildReviewPrompt(instructions, item, post, criteria)
+	req.EphemeralTools = []tools.Tool{collector}
+	req.MaxIterations = 1
+	req.ToolChoice = &providers.ToolChoice{Mode: "function", Name: reviewToolName}
+	if err := run(req); err != nil && collector.Result() == nil {
+		return nil, false
+	}
+	result := collector.Result()
+	return result, result != nil
+}
+
+// pickBestVersion: deterministic ladder — reviewed-and-passed beats anything,
+// then fewer failed critical criteria (unreviewed counts as 99), then fewer
+// lint findings, then the later version. A revise pass can therefore never
+// make the outcome worse than the version it started from.
+func pickBestVersion(versions []draftVersion) *draftVersion {
+	best := &versions[0]
+	for i := range versions[1:] {
+		v := &versions[i+1]
+		if betterVersion(v, best) {
+			best = v
+		}
+	}
+	return best
+}
+
+func betterVersion(a, b *draftVersion) bool {
+	aPass, bPass := a.review != nil && a.review.Passed, b.review != nil && b.review.Passed
+	if aPass != bPass {
+		return aPass
+	}
+	aCrit, bCrit := criticalFailCount(a), criticalFailCount(b)
+	if aCrit != bCrit {
+		return aCrit < bCrit
+	}
+	if len(a.lint) != len(b.lint) {
+		return len(a.lint) < len(b.lint)
+	}
+	return true // sau thắng khi hoà — caller duyệt theo thứ tự tạo
+}
+
+func criticalFailCount(v *draftVersion) int {
+	if v.review == nil {
+		return 99
+	}
+	return len(v.review.FailedCritical)
+}
+
+func reviewMeta(versions []draftVersion, verdict string, lintRounds, reviewRounds int) map[string]any {
+	best := pickBestVersion(versions)
+	entries := make([]map[string]any, 0, len(versions))
+	for i := range versions {
+		v := &versions[i]
+		codes := make([]string, 0, len(v.lint))
+		for _, f := range v.lint {
+			codes = append(codes, f.Code)
+		}
+		entry := map[string]any{"lint": codes, "chosen": v == best}
+		if v.review != nil {
+			entry["review_failed"] = v.review.FailedCritical
+			entry["review_passed"] = v.review.Passed
+		}
+		entries = append(entries, entry)
+	}
+	return map[string]any{
+		"enabled":       true,
+		"verdict":       verdict,
+		"lint_rounds":   lintRounds,
+		"review_rounds": reviewRounds,
+		"versions":      entries,
+	}
 }

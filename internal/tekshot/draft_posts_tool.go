@@ -223,6 +223,25 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 		return tools.ErrorResult("MODEL_OUTPUT_INVALID: agent did not submit a valid structured draft batch")
 	}
 
+	// Hidden quality loop (spec: docs/superpowers/specs/2026-08-16-draft-review-loop-design.md
+	// in the Drupal module). Runs ONLY when Drupal ships review.enabled=true;
+	// default-off keeps this deploy dark. Deterministic orchestration around
+	// separate one-shot forced calls — the MaxIterations=1 discipline above
+	// applies to every call the loop makes.
+	if cfg := reviewConfigFromArgs(args); cfg.Enabled {
+		runFn := func(req agent.RunRequest) error {
+			_, runErr := ag.Run(ctx, req)
+			return runErr
+		}
+		var reviewInfo map[string]any
+		batch, reviewInfo = runDraftReview(runFn, runReq, args, cfg, sourceItemsArg(args["source_items"]), batch)
+		if reviewInfo != nil {
+			// Extra top-level key: Drupal's postsFromResult() reads only
+			// `posts`; result_json keeps the metadata for SQL measurement.
+			batch["review"] = reviewInfo
+		}
+	}
+
 	encoded, err := json.Marshal(batch)
 	if err != nil {
 		return tools.ErrorResult(fmt.Sprintf("failed to encode structured draft batch: %v", err))
