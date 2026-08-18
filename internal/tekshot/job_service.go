@@ -35,6 +35,7 @@ const (
 	TekshotJobTypeLearnStyle       = "learn_style"
 	TekshotJobTypeDescribeImage    = "describe_image"
 	TekshotJobTypeSeedComments     = "seed_comments"
+	TekshotJobTypeAutoImage        = "auto_image"
 
 	defaultJobPollInterval = 2 * time.Second
 	defaultJobLockTTL      = 10 * time.Minute
@@ -309,6 +310,8 @@ func (s *JobService) process(ctx context.Context, job *store.TekshotJob) error {
 		result, progress, err = s.runDraftPosts(ctx, job, request)
 	case TekshotJobTypePostChat, TekshotJobTypeImageChat:
 		result, progress, err = s.runChat(ctx, job, request)
+	case TekshotJobTypeAutoImage:
+		result, progress, err = s.runAutoImage(ctx, job, request)
 	case TekshotJobTypeMarketResearch:
 		result, progress, err = s.runMarketResearch(ctx, job, request)
 	case TekshotJobTypeContentChecklist:
@@ -561,7 +564,7 @@ func (s *JobService) notify() {
 
 func isSupportedTekshotJobType(jobType string) bool {
 	switch jobType {
-	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle, TekshotJobTypeDescribeImage, TekshotJobTypeSeedComments:
+	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeAutoImage, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle, TekshotJobTypeDescribeImage, TekshotJobTypeSeedComments:
 		return true
 	default:
 		return false
