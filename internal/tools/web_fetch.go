@@ -23,7 +23,10 @@ const (
 	defaultFetchMaxRedirect = 3
 	defaultErrorMaxChars    = 4000
 	fetchTimeoutSeconds     = 30
-	fetchUserAgent          = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+	// FetchUserAgent is shared outside this package by internal/tekshot's
+	// knowledge_extract probe, so a source it clears is guaranteed fetchable
+	// by web_fetch too.
+	FetchUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
 
 // WebFetchTool implements the web_fetch tool matching TS src/agents/tools/web-fetch.ts.
@@ -286,7 +289,7 @@ func (t *WebFetchTool) fetchRawContent(ctx context.Context, rawURL, extractMode 
 	if err != nil {
 		return fetchRawResult{}, fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Set("User-Agent", fetchUserAgent)
+	req.Header.Set("User-Agent", FetchUserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
 	redirectCount := 0

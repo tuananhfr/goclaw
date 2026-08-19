@@ -72,7 +72,7 @@ func (d *DefuddleExtractor) Extract(ctx context.Context, rawURL string) (string,
 	if err != nil {
 		return "", fmt.Errorf("create defuddle request: %w", err)
 	}
-	req.Header.Set("User-Agent", fetchUserAgent)
+	req.Header.Set("User-Agent", FetchUserAgent)
 
 	resp, err := d.client.Do(req)
 	if err != nil {
