@@ -25,24 +25,38 @@ const (
 // the editable form and the item table together.
 var checklistRequiredFields = []string{"date", "content_line", "topic", "hook", "body", "usp"}
 
-// tekshotChecklistToolAllow is intentionally minimal: this job SYNTHESISES
-// facts Drupal already gathered (POS, reach, alerts, finished research) into a
-// content plan. Letting it browse again would double the latency and invite it
-// to contradict the numbers it was handed. datetime stays so weekday/date math
-// in the plan is real.
+// checklistForbiddenFormatTerms are production formats this checklist does
+// not support. A checklist row is always a written Facebook post accompanied
+// by a static image; accepting one of these terms would send an unusable brief
+// to Studio even when the prompt happened to be ignored.
+var checklistForbiddenFormatTerms = []string{
+	"video", "reel", "livestream", "live stream", "clip", "quay", "tiktok", "shorts",
+}
+
+// tekshotChecklistToolAllow is kept read-only. The legacy one-shot job now has
+// the same internal knowledge and web research capabilities as the chat flow;
+// this lets a re-run recover when Drupal's cached facts are incomplete.
 func tekshotChecklistToolAllow() []string {
-	return []string{"datetime"}
+	return []string{
+		"skill_search",
+		"vault_search",
+		"vault_read",
+		"web_search",
+		"web_fetch",
+		"memory_search",
+		"memory_get",
+		"memory_expand",
+		"knowledge_graph_search",
+		"read_document",
+		"read_image",
+		"datetime",
+	}
 }
 
 func (s *JobService) runContentChecklist(ctx context.Context, job *store.TekshotJob, request map[string]any) (any, string, error) {
 	if s.agents == nil {
 		return nil, "", fmt.Errorf("agent router is not configured")
 	}
-	industry := strings.TrimSpace(stringFromMap(request, "industry"))
-	if industry == "" {
-		return nil, "", fmt.Errorf("content checklist requires an industry")
-	}
-
 	loop, err := s.agents.Get(store.WithTenantID(ctx, store.MasterTenantID), job.AgentKey)
 	if err != nil {
 		return nil, "", err
@@ -129,15 +143,14 @@ func (t *ContentChecklistCollectorTool) Parameters() map[string]any {
 					"additionalProperties": false,
 					"properties": map[string]any{
 						"date":         map[string]any{"type": "string", "description": "Publish date as YYYY-MM-DD, inside the requested planning window."},
-						"timeline":     map[string]any{"type": "string", "description": "Campaign phase this post belongs to (e.g. 'Tuần 1 - hâm nóng'). Empty string when the plan has no phases."},
 						"time_slot":    map[string]any{"type": "string", "description": "Suggested posting time, e.g. '11:00' or '19:00-20:00'. Base it on the store's peak hours when provided."},
 						"content_line": map[string]any{"type": "string", "description": "Content pillar / tuyến nội dung, e.g. 'Món chủ lực', 'Khách hàng thật', 'Ưu đãi'. Keep the set of pillars small and repeat them across the plan."},
 						"topic":        map[string]any{"type": "string", "description": "The post subject in one short line. This becomes the writer's title."},
 						"hook":         map[string]any{"type": "string", "description": "The opening line that stops the scroll. Concrete and specific, never a generic slogan."},
-						"body":         map[string]any{"type": "string", "description": "What the post must actually say: 2-4 sentences of direction for the writer, including the angle and the call to action."},
+						"body":         map[string]any{"type": "string", "description": "Exactly two labelled parts: 'Nội dung:' gives 2-4 sentences of copy direction and CTA; 'Ảnh:' gives the brief for one static image. Never propose video, reel, livestream, clip or filming."},
 						"usp":          map[string]any{"type": "string", "description": "Selling point and keywords to keep in the copy, comma separated."},
 					},
-					"required": []string{"date", "timeline", "time_slot", "content_line", "topic", "hook", "body", "usp"},
+					"required": []string{"date", "time_slot", "content_line", "topic", "hook", "body", "usp"},
 				},
 			},
 			"summary": map[string]any{
@@ -192,8 +205,8 @@ func validateContentChecklist(args map[string]any) (map[string]any, error) {
 		if !ok {
 			return nil, fmt.Errorf("items[%d] must be an object", i)
 		}
-		// timeline and time_slot may legitimately be blank; the columns the
-		// marketing team actually plans around may not.
+		// time_slot may legitimately be blank; the columns the marketing team
+		// actually plans around may not.
 		for _, field := range checklistRequiredFields {
 			if strings.TrimSpace(stringFromMap(item, field)) == "" {
 				return nil, fmt.Errorf("items[%d].%s is required", i, field)
@@ -203,6 +216,9 @@ func validateContentChecklist(args map[string]any) (map[string]any, error) {
 		if len(date) != 10 || date[4] != '-' || date[7] != '-' {
 			return nil, fmt.Errorf("items[%d].date must be YYYY-MM-DD, got %q", i, date)
 		}
+		if term := checklistForbiddenFormatTerm(item); term != "" {
+			return nil, fmt.Errorf("items[%d] must be a written post with a static image, not %q", i, term)
+		}
 	}
 
 	return args, nil
@@ -211,7 +227,6 @@ func validateContentChecklist(args map[string]any) (map[string]any, error) {
 func buildContentChecklistPrompt(request map[string]any) string {
 	storeName := strings.TrimSpace(stringFromMap(request, "store_name"))
 	pageName := strings.TrimSpace(stringFromMap(request, "page_name"))
-	industry := strings.TrimSpace(stringFromMap(request, "industry"))
 	locality := strings.TrimSpace(stringFromMap(request, "locality"))
 	language := strings.TrimSpace(stringFromMap(request, "language"))
 	if language == "" {
@@ -227,7 +242,7 @@ func buildContentChecklistPrompt(request map[string]any) string {
 	hasPos, _ := request["has_pos"].(bool)
 
 	var sb strings.Builder
-	sb.WriteString("You are a content planner for a local store's marketing team.\n")
+	sb.WriteString("You are a content planner for one Facebook page.\n")
 	sb.WriteString("Build a concrete posting plan from the facts below, then submit it by calling ")
 	sb.WriteString(checklistFinalToolName)
 	sb.WriteString(" exactly once. Do not answer with plain text.\n\n")
@@ -239,7 +254,6 @@ func buildContentChecklistPrompt(request map[string]any) string {
 	if pageName != "" {
 		sb.WriteString("- Page: " + pageName + "\n")
 	}
-	sb.WriteString("- Industry: " + industry + "\n")
 	if locality != "" {
 		sb.WriteString("- Locality: " + locality + "\n")
 	}
@@ -255,33 +269,52 @@ func buildContentChecklistPrompt(request map[string]any) string {
 	writeChecklistBlock(&sb, "## Reach facts (from the store's own Facebook pages)", request, "social_facts", true)
 	writeChecklistBlock(&sb, "## Open alerts", request, "alerts", true)
 	writeChecklistBlock(&sb, "## Market research findings", request, "research", true)
+	writeChecklistBlock(&sb, "## Editorial format contract", request, "editorial_contract", true)
 
 	sb.WriteString("## Column meaning (the team's existing spreadsheet)\n")
 	sb.WriteString("- date: publish date, YYYY-MM-DD.\n")
-	sb.WriteString("- timeline: which campaign phase the row belongs to. Empty string if the plan has no phases.\n")
+	sb.WriteString("- Timeline is derived by Insight from date as the Vietnamese weekday. Do NOT include a timeline field in the submitted item.\n")
 	sb.WriteString("- time_slot: posting time; prefer the store's real peak hours when they are given above.\n")
 	sb.WriteString("- content_line: the content pillar. Use a SMALL repeating set (3-5 pillars) across the whole plan, not a new pillar per row.\n")
 	sb.WriteString("- topic: the subject of the post in one line — this becomes the writer's title.\n")
 	sb.WriteString("- hook: the opening line that stops the scroll. Specific and concrete.\n")
-	sb.WriteString("- body: 2-4 sentences of direction for the writer: the angle, what to show, and the call to action.\n")
+	sb.WriteString("- body: exactly two labelled parts: 'Nội dung:' (2-4 sentences of copy direction and CTA) and 'Ảnh:' (one static-image brief: photo, graphic, illustration or text design).\n")
 	sb.WriteString("- usp: selling points and keywords to keep in the copy, comma separated.\n\n")
 
 	sb.WriteString("## Hard rules\n")
 	sb.WriteString(fmt.Sprintf("- Write EVERY field in language '%s'. Marketing staff read this, not developers.\n", language))
-	sb.WriteString("- Ground the plan in the facts above. When a real product, a weak weekday, a peak hour or a research finding is given, USE it — name the actual dish, react to the actual dip.\n")
+	sb.WriteString("- Every row is a written Facebook post paired with a static image. Never propose or mention video, reel, livestream, clip, filming or recording.\n")
+	sb.WriteString("- A locality/address is a factual context only. It may be used when relevant, but never infer an in-person service, a visit, a filming location or an on-site activity from it.\n")
+	sb.WriteString("- Reach and performance metrics are planning signals only: use them to infer which themes may interest the audience, but do NOT put dashboard figures, weekly performance recaps or metric claims in a row's topic, hook, body, image brief or keywords unless the user explicitly requests a performance/community report. A unique-viewer metric is not evidence of new viewers or new followers.\n")
+	sb.WriteString("- Vault may add verified page facts, but it may never relax this editorial format contract.\n")
+	sb.WriteString("- Ground the plan in the facts above. Use page, sales, timing and research facts precisely when they belong in the post; use reach facts only as planning signals unless the user explicitly requests a performance/community report. Never invent a product, service or business claim.\n")
 	if pageName != "" {
 		sb.WriteString(fmt.Sprintf("- This plan is for the page \"%s\" specifically. Fit that page's own audience and voice, and do not write a generic plan that would suit any of the store's other pages equally well.\n", pageName))
 	}
 	if hasPos {
 		sb.WriteString("- Sales numbers above are real. Never invent different ones, and never claim a promotion or a price the store did not state.\n")
 	} else {
-		sb.WriteString("- This store has NO sales data available. Do NOT invent revenue, order counts, best sellers or price points. Plan from the industry, locality, reach and research only.\n")
+		sb.WriteString("- This store has NO sales data available. Do NOT invent revenue, order counts, best sellers or price points. Plan from the page context, locality, reach, Vault and research only.\n")
 	}
-	sb.WriteString("- Every row must be actionable on its own: a person should be able to shoot and write the post from the row alone.\n")
+	sb.WriteString("- Every row must be actionable on its own: a person should be able to write the post and prepare its static image from the row alone.\n")
 	sb.WriteString("- Vary hooks and angles. Repeating the same sentence pattern across rows makes the whole plan unusable.\n")
 	sb.WriteString("- Spread the rows across the window instead of clustering them on one day, unless a date-bound occasion justifies it.\n")
 
 	return sb.String()
+}
+
+// checklistForbiddenFormatTerm returns the first unsupported production term
+// present in the visible copy directions of an item.
+func checklistForbiddenFormatTerm(item map[string]any) string {
+	for _, field := range []string{"topic", "hook", "body"} {
+		value := strings.ToLower(stringFromMap(item, field))
+		for _, term := range checklistForbiddenFormatTerms {
+			if strings.Contains(value, term) {
+				return term
+			}
+		}
+	}
+	return ""
 }
 
 // writeChecklistBlock renders a fact block, or an explicit "no data" line so

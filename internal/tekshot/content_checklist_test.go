@@ -9,12 +9,11 @@ import (
 func validChecklistItem() map[string]any {
 	return map[string]any{
 		"date":         "2026-08-03",
-		"timeline":     "Tuần 1 - hâm nóng",
 		"time_slot":    "19:00-20:00",
 		"content_line": "Món chủ lực",
 		"topic":        "Pizza 4 vị phô mai cho bữa tối cuối tuần",
 		"hook":         "4 loại phô mai kéo sợi trong một miếng bánh",
-		"body":         "Quay cận cảnh lúc cắt miếng đầu tiên, nhấn phần phô mai kéo sợi. Chốt bằng lời mời đặt bàn tối thứ Bảy.",
+		"body":         "Nội dung: Nhấn phần phô mai kéo sợi và chốt bằng lời mời đặt bàn tối thứ Bảy. Ảnh: Cận cảnh một miếng pizza phô mai kéo sợi trên nền bàn gỗ.",
 		"usp":          "phô mai kéo sợi, nướng lửa, giao nhanh",
 	}
 }
@@ -65,11 +64,10 @@ func TestValidateContentChecklistRequiresPlanningColumns(t *testing.T) {
 }
 
 func TestValidateContentChecklistAllowsBlankOptionalColumns(t *testing.T) {
-	// timeline and time_slot are coordination columns the team often leaves
-	// empty; blocking on them would make honest plans fail validation.
+	// time_slot is a coordination field the team often leaves empty; blocking
+	// on it would make honest plans fail validation.
 	report := validChecklistReport()
 	item := validChecklistItem()
-	item["timeline"] = ""
 	item["time_slot"] = ""
 	report["items"] = []any{item}
 	if _, err := validateContentChecklist(report); err != nil {
@@ -190,8 +188,8 @@ func TestBuildContentChecklistPromptWithoutPageNameOmitsPageContextAndRule(t *te
 	if !strings.Contains(prompt, "- Store: Pizza Hip'S\n") {
 		t.Fatal("expected the store line to still be present")
 	}
-	if !strings.Contains(prompt, "- Industry: Pizza / đồ ăn nhanh\n") {
-		t.Fatal("expected the industry line to still be present")
+	if strings.Contains(prompt, "Industry:") || strings.Contains(prompt, "industry") {
+		t.Fatal("expected the prompt to have no industry dependency")
 	}
 	if !strings.Contains(prompt, "## Hard rules\n") {
 		t.Fatal("expected the hard rules section to still be present")

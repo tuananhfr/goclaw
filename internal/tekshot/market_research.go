@@ -39,11 +39,6 @@ func (s *JobService) runMarketResearch(ctx context.Context, job *store.TekshotJo
 	if s.agents == nil {
 		return nil, "", fmt.Errorf("agent router is not configured")
 	}
-	industry := strings.TrimSpace(stringFromMap(request, "industry"))
-	if industry == "" {
-		return nil, "", fmt.Errorf("market research requires an industry")
-	}
-
 	loop, err := s.agents.Get(store.WithTenantID(ctx, store.MasterTenantID), job.AgentKey)
 	if err != nil {
 		return nil, "", err
@@ -149,7 +144,7 @@ func (t *MarketResearchCollectorTool) Parameters() map[string]any {
 						"properties": map[string]any{
 							"title":            map[string]any{"type": "string"},
 							"summary":          map[string]any{"type": "string", "description": "2-3 sentences, written in the requested output language."},
-							"why_it_matters":   map[string]any{"type": "string", "description": "Why this matters for THIS store (industry + locality)."},
+							"why_it_matters":   map[string]any{"type": "string", "description": "Why this matters for THIS store (business context + locality)."},
 							"suggested_action": map[string]any{"type": "string", "description": "Concrete next step for the marketing team (post idea, campaign, timing)."},
 							"sources":          map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Real URLs actually read via web_search/web_fetch. At least one. Never invent URLs."},
 						},
@@ -168,7 +163,7 @@ func (t *MarketResearchCollectorTool) Parameters() map[string]any {
 				"type":                 "object",
 				"additionalProperties": false,
 				"properties": map[string]any{
-					"trends":         sectionSchema("Content/product trends in this industry, relevant to the store's market."),
+					"trends":         sectionSchema("Content/product trends relevant to the store's market and current context."),
 					"seasonal_hooks": sectionSchema("Upcoming holidays, occasions and seasonal angles within the horizon."),
 					"local_signals":  sectionSchema("Local market signals around the store's locality: openings, closures, events."),
 				},
@@ -278,7 +273,7 @@ func validateMarketResearchReport(args map[string]any) (map[string]any, error) {
 
 	// The "silent empty report" guard: a report where EVERY section is empty
 	// while tools are claimed healthy is almost always a lazy or failed run
-	// (seasonal hooks alone are never truly empty for a real industry). Force
+	// (seasonal hooks alone are rarely empty for a real business). Force
 	// the agent to either research harder or admit the tool failure.
 	if emptyCount == len(researchSectionKeys) && webHealth == "ok" {
 		return nil, fmt.Errorf("all sections are empty while tool_health.web_search is 'ok' — either research produced findings (seasonal hooks rarely have none) or web tools failed and web_search must be 'degraded' or 'dead'")
@@ -350,7 +345,6 @@ func writeKnownCompetitors(sb *strings.Builder, request map[string]any) {
 }
 
 func buildMarketResearchPrompt(request map[string]any) string {
-	industry := strings.TrimSpace(stringFromMap(request, "industry"))
 	locality := strings.TrimSpace(stringFromMap(request, "locality"))
 	storeName := strings.TrimSpace(stringFromMap(request, "store_name"))
 	language := strings.TrimSpace(stringFromMap(request, "language"))
@@ -373,7 +367,7 @@ func buildMarketResearchPrompt(request map[string]any) string {
 	if storeName != "" {
 		sb.WriteString("- Store: " + storeName + "\n")
 	}
-	sb.WriteString("- Industry: " + industry + "\n")
+	sb.WriteString("- Business profile: derive only from the supplied store/page context, Vault and verified web evidence.\n")
 	if locality != "" {
 		sb.WriteString("- Locality: " + locality + "\n")
 	}
@@ -385,8 +379,8 @@ func buildMarketResearchPrompt(request map[string]any) string {
 	writeKnownCompetitors(&sb, request)
 
 	sb.WriteString("## What to research (three sections, all required)\n")
-	sb.WriteString("1. trends — what is currently trending in this industry in Vietnam: products, menu items, content formats, campaign styles. Prefer signals from the last 60 days.\n")
-	sb.WriteString(fmt.Sprintf("2. seasonal_hooks — holidays, occasions and seasonal angles inside the next %d weeks that this industry can build campaigns around, with enough lead time to prepare content BEFORE the date.\n", horizonWeeks))
+	sb.WriteString("1. trends — what is currently trending for this store's supplied business context in Vietnam: products, content formats, campaign styles. Prefer signals from the last 60 days.\n")
+	sb.WriteString(fmt.Sprintf("2. seasonal_hooks — holidays, occasions and seasonal angles inside the next %d weeks that this store can build campaigns around, with enough lead time to prepare content BEFORE the date.\n", horizonWeeks))
 	sb.WriteString("3. local_signals — news around the store's locality that affects foot traffic or competition: notable openings/closures, local events, festivals, road works. If the locality is too small to yield news, widen to its district/city and say so in the summary.\n\n")
 
 	sb.WriteString("## Hard rules\n")

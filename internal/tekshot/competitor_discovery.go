@@ -41,11 +41,6 @@ func (s *JobService) runCompetitorDiscovery(ctx context.Context, job *store.Teks
 	if s.agents == nil {
 		return nil, "", fmt.Errorf("agent router is not configured")
 	}
-	industry := strings.TrimSpace(stringFromMap(request, "industry"))
-	if industry == "" {
-		return nil, "", fmt.Errorf("competitor discovery requires an industry")
-	}
-
 	loop, err := s.agents.Get(store.WithTenantID(ctx, store.MasterTenantID), job.AgentKey)
 	if err != nil {
 		return nil, "", err
@@ -266,7 +261,6 @@ func containsString(haystack []string, needle string) bool {
 
 func buildCompetitorDiscoveryPrompt(request map[string]any) string {
 	storeName := strings.TrimSpace(stringFromMap(request, "store_name"))
-	industry := strings.TrimSpace(stringFromMap(request, "industry"))
 	locality := strings.TrimSpace(stringFromMap(request, "locality"))
 	language := strings.TrimSpace(stringFromMap(request, "language"))
 	if language == "" {
@@ -284,7 +278,7 @@ func buildCompetitorDiscoveryPrompt(request map[string]any) string {
 	if storeName != "" {
 		sb.WriteString("- Store: " + storeName + "\n")
 	}
-	sb.WriteString("- Industry: " + industry + "\n")
+	sb.WriteString("- Business profile: infer only from supplied store context and verified web evidence.\n")
 	if locality != "" {
 		sb.WriteString("- Locality: " + locality + "\n")
 	}

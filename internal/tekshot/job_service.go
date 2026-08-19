@@ -30,6 +30,7 @@ const (
 	TekshotJobTypeImageChat        = "image_chat"
 	TekshotJobTypeMarketResearch   = "market_research"
 	TekshotJobTypeContentChecklist = "content_checklist"
+	TekshotJobTypeChecklistChat    = "content_checklist_chat"
 	TekshotJobTypeCompetitorDisc   = "competitor_discovery"
 	TekshotJobTypeCompetitorAds    = "competitor_ads"
 	TekshotJobTypeLearnStyle       = "learn_style"
@@ -316,6 +317,8 @@ func (s *JobService) process(ctx context.Context, job *store.TekshotJob) error {
 		result, progress, err = s.runMarketResearch(ctx, job, request)
 	case TekshotJobTypeContentChecklist:
 		result, progress, err = s.runContentChecklist(ctx, job, request)
+	case TekshotJobTypeChecklistChat:
+		result, progress, err = s.runContentChecklistChat(ctx, job, request)
 	case TekshotJobTypeCompetitorDisc:
 		result, progress, err = s.runCompetitorDiscovery(ctx, job, request)
 	case TekshotJobTypeCompetitorAds:
@@ -564,7 +567,7 @@ func (s *JobService) notify() {
 
 func isSupportedTekshotJobType(jobType string) bool {
 	switch jobType {
-	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeAutoImage, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle, TekshotJobTypeDescribeImage, TekshotJobTypeSeedComments:
+	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeAutoImage, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeChecklistChat, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle, TekshotJobTypeDescribeImage, TekshotJobTypeSeedComments:
 		return true
 	default:
 		return false
