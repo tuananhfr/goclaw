@@ -101,3 +101,7 @@ docker-compose.frpc.yml
 frpc.toml
 
 .agent/*
+
+# Python bytecode from the tekshot knowledge extractor (internal/tekshot/knowledge_extract.py)
+__pycache__/
+*.pyc

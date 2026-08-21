@@ -85,17 +85,6 @@ func TestValidateKnowledgeExtractReportRejectsMissingToolHealth(t *testing.T) {
 	}
 }
 
-func TestKnowledgeExtractPromptMentionsFileURL(t *testing.T) {
-	prompt := buildKnowledgeExtractPrompt(map[string]any{
-		"file_url": "https://tekshot.localhost/sites/default/files/studio/knowledge/12/bang-gia.pdf",
-		"mime":     "application/pdf",
-		"filename": "bang-gia.pdf",
-	})
-	if !strings.Contains(prompt, "markitdown") || !strings.Contains(prompt, knowledgeFinalToolName) {
-		t.Fatal("prompt must instruct markitdown strategy and name the collector tool")
-	}
-}
-
 func TestKnowledgeExtractPromptWebsiteUsesWebFetch(t *testing.T) {
 	prompt := buildKnowledgeExtractPrompt(map[string]any{
 		"website_url": "https://example.com/bai-viet",

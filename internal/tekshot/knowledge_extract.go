@@ -11,8 +11,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/nextlevelbuilder/goclaw/internal/agent"
-	"github.com/nextlevelbuilder/goclaw/internal/bus"
-	"github.com/nextlevelbuilder/goclaw/internal/channels/media"
 	"github.com/nextlevelbuilder/goclaw/internal/providers"
 	"github.com/nextlevelbuilder/goclaw/internal/security"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
@@ -24,7 +22,9 @@ const (
 	// 45 fits: entry + sitemap probes + 20 page fetches + splits + submit.
 	// web_fetch also halves its own char budget past 50% of this (web_fetch.go).
 	knowledgeExtractMaxIterations = 45
-	knowledgeExtractMaxScanPages  = 20
+	// Scanned PDF pages rendered per job by knowledge_extract.py; each page is
+	// one vision read, so this is the cost brake.
+	knowledgeExtractMaxScanPages = 300
 	// The binding limit is NOT MaxIterations: the loop kills a run after 36
 	// consecutive read-only tool calls (readOnlyExplorationCritical in
 	// internal/agent/toolloop.go) and web_fetch is read-only. 12 pages plus
@@ -35,10 +35,9 @@ const (
 	knowledgeExtractMaxTotalChars = 40000
 )
 
-// knowledgeExtractToolAllow: exec drives markitdown/pdfplumber/pdftoppm,
-// read_image covers scanned pages (routed to the tenant's codex vision),
-// web_fetch covers website imports. read_document is deliberately absent:
-// its provider chain has no codex entry, so it is dead on this tenant.
+// knowledgeExtractToolAllow is the website crawl's tool list: web_fetch reads
+// pages and exec reads web_fetch's spill files (cat <path>). File sources never
+// reach this run — they branch off to runKnowledgeExtractFile.
 func knowledgeExtractToolAllow() []string {
 	return []string{"exec", "read_image", "web_fetch", "datetime"}
 }
@@ -256,10 +255,10 @@ func validateKnowledgeExtractReport(args map[string]any, websiteSource bool) (ma
 	return args, nil
 }
 
+// buildKnowledgeExtractPrompt drives the website crawl. A file source never
+// gets here — runKnowledgeExtractFile extracts it without an agent.
 func buildKnowledgeExtractPrompt(request map[string]any) string {
 	websiteURL := strings.TrimSpace(stringFromMap(request, "website_url"))
-	mime := strings.TrimSpace(stringFromMap(request, "mime"))
-	filename := strings.TrimSpace(stringFromMap(request, "filename"))
 
 	var sb strings.Builder
 	sb.WriteString("Extract the content of the attached source into clean Vietnamese-friendly Markdown for a store knowledge base.\n")
@@ -286,37 +285,21 @@ func buildKnowledgeExtractPrompt(request map[string]any) string {
 		sb.WriteString("- Drop nav menus, cookie banners, share widgets, pagination controls and related-post teasers.\n")
 		sb.WriteString("- KEEP the contact block wherever it sits, footer included: địa chỉ, số điện thoại, email, mã số thuế, giờ mở cửa, danh sách chi nhánh. That is what the assistant gets asked about.\n")
 		sb.WriteString("- A teaser the site itself cut with \"…\" is worth nothing: open the linked page and take the full text, or leave the teaser out.\n\n")
-	} else {
-		sb.WriteString("## Source: file attached to this message\n")
-		if filename != "" {
-			sb.WriteString("- Filename: " + filename + "\n")
-		}
-		if mime != "" {
-			sb.WriteString("- MIME: " + mime + "\n")
-		}
-		sb.WriteString("- The file was downloaded into this run's workspace; its path is stamped on the message media tag.\n\n")
-		sb.WriteString("## Extraction strategy (follow in order)\n")
-		sb.WriteString("1. Office files (docx/xlsx/pptx): run `markitdown <path>` via exec. Keep sheet names as `## <sheet>` headings; tables stay Markdown tables.\n")
-		sb.WriteString("2. PDF: try text first — `pdftotext <path> -` via exec (or python3 with pdfplumber for tables).\n")
-		sb.WriteString(fmt.Sprintf("3. PDF with an empty text layer (scan): render pages with `pdftoppm -r 150 -png <path> page` via exec, then read each page image with read_image. Hard cap: %d pages — past it, stop and set truncated=true.\n", knowledgeExtractMaxScanPages))
-		sb.WriteString("4. Image files: read the image directly (it is attached; use read_image if it is not visible inline). Transcribe ALL text, prices and tables you see.\n\n")
 	}
 
 	sb.WriteString("## Hard rules\n")
 	sb.WriteString("- Copy numbers, prices and units VERBATIM. Never round, never convert currencies.\n")
 	sb.WriteString("- Keep the source's own language for content; headings may be Vietnamese.\n")
-	sb.WriteString("- PDF pages become `## Trang N` sections.\n")
 	sb.WriteString("- Do NOT invent content. A blank source is submitted as status='empty' with an honest reason.\n")
 	sb.WriteString("- web_fetch spills anything past its char limit into a temp file and names the path: read the rest with exec (`cat <path>`). read_file is NOT available in this run, so skipping that step silently loses the tail.\n")
-	sb.WriteString("- When every conversion tool fails, submit tool_health.exec='dead' — do not hand-write a fake extraction.\n")
+	sb.WriteString("- When web_fetch itself is unusable, submit tool_health.exec='dead' — do not hand-write a fake extraction.\n")
 	sb.WriteString(fmt.Sprintf("- Finish by calling %s exactly once with the full result. Do not answer with plain text.\n", knowledgeFinalToolName))
 	return sb.String()
 }
 
-// runKnowledgeExtract turns one uploaded file (Drupal public URL) or one
-// website URL into a validated Markdown knowledge report. The file arrives as
-// a URL; the agent loop's persistMedia downloads URL media into the run
-// workspace, so no download code lives here (same as describe_image).
+// runKnowledgeExtract validates the source, then splits: a file goes to
+// runKnowledgeExtractFile (deterministic extraction, never through an agent
+// run), a website into the crawl below.
 func (s *JobService) runKnowledgeExtract(ctx context.Context, job *store.TekshotJob, request map[string]any) (any, string, error) {
 	if s.agents == nil {
 		return nil, "", fmt.Errorf("agent router is not configured")
@@ -376,6 +359,10 @@ func (s *JobService) runKnowledgeExtract(ctx context.Context, job *store.Tekshot
 		return nil, "", fmt.Errorf("knowledge_extract: source returned HTTP %d", probeResp.StatusCode)
 	}
 
+	if fileURL != "" {
+		return s.runKnowledgeExtractFile(ctx, job, request, fileURL, pinnedIP)
+	}
+
 	loop, err := s.agents.Get(store.WithTenantID(ctx, store.MasterTenantID), job.AgentKey)
 	if err != nil {
 		return nil, "", err
@@ -407,33 +394,7 @@ func (s *JobService) runKnowledgeExtract(ctx context.Context, job *store.Tekshot
 		TraceTags:      []string{"tekshot", "knowledge_extract"},
 	}
 
-	// File sources ride the media pipeline so persistMedia drops the file
-	// into the run workspace where exec can reach it. Website sources carry
-	// no media — web_fetch reads the URL from the prompt.
-	if fileURL != "" {
-		mime := strings.TrimSpace(stringFromMap(request, "mime"))
-		filename := strings.TrimSpace(stringFromMap(request, "filename"))
-		if filename == "" {
-			filename = "knowledge-source"
-		}
-		mediaType := media.TypeDocument
-		if strings.HasPrefix(mime, "image/") {
-			mediaType = media.TypeImage
-		}
-		if tags := media.BuildMediaTags([]media.MediaInfo{{
-			Type:        mediaType,
-			FilePath:    fileURL,
-			ContentType: mime,
-			FileName:    filename,
-		}}); tags != "" {
-			runReq.Message = tags + "\n\n" + message
-		}
-		runReq.Media = []bus.MediaFile{{
-			Path:     fileURL,
-			Filename: filename,
-		}}
-	}
-
+	// The website run carries no media: web_fetch reads the URL from the prompt.
 	if _, err := loop.Run(runCtx, runReq); err != nil && collector.Report() == nil {
 		return nil, "", err
 	}
