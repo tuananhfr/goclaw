@@ -83,3 +83,16 @@ func buildReferenceLibraryBlock(items []referenceLibraryItem) string {
 	sb.WriteString("- When EDITING an existing image: keep reference_image_path empty so the image being edited stays the base; library images then act only as additional style references.\n")
 	return sb.String()
 }
+
+// buildChosenReferenceBlock names the one library image the selection pass
+// already picked. The path indirection is deliberate: the runner cannot know
+// the persisted path up front (persistMedia appends a random suffix), but the
+// pipeline's enrichImageIDs stamps the real path onto the <media:image> tag.
+func buildChosenReferenceBlock(item referenceLibraryItem) string {
+	var sb strings.Builder
+	sb.WriteString("## Reference image from the store library (attached)\n")
+	sb.WriteString(fmt.Sprintf("One image was pre-selected from the store's curated library for this brief: ref-lib-%d.\n", item.ID))
+	sb.WriteString("Catalogue description: " + item.Description + "\n")
+	sb.WriteString("When calling create_image, set reference_image_path to the path=\"...\" value of the <media:image> tag whose path contains \"ref-lib-\".\n")
+	return sb.String()
+}

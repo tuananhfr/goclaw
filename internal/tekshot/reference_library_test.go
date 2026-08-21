@@ -112,3 +112,27 @@ func TestBuildReferenceLibraryBlock(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildChosenReferenceBlock(t *testing.T) {
+	block := buildChosenReferenceBlock(referenceLibraryItem{
+		ID: 12, URL: "https://x/a.jpg", Description: "Tô bún bò trên bàn gỗ.",
+	})
+	for _, want := range []string{
+		"ref-lib-12",
+		"Tô bún bò trên bàn gỗ.",
+		"reference_image_path",
+		"<media:image>",
+	} {
+		if !strings.Contains(block, want) {
+			t.Fatalf("block missing %q\n---\n%s", want, block)
+		}
+	}
+	// Ảnh đã được chọn sẵn — không được mời agent chọn lại, và không được
+	// gợi ý để trống path (path rỗng = create_image dùng MỌI ảnh trong context).
+	if strings.Contains(block, "at most ONE") {
+		t.Fatalf("block must not re-open the choice\n---\n%s", block)
+	}
+	if strings.Contains(block, "all attached images") {
+		t.Fatalf("block must not invite the use-everything branch\n---\n%s", block)
+	}
+}
