@@ -66,24 +66,6 @@ func referenceLibraryMediaFiles(items []referenceLibraryItem) []bus.MediaFile {
 	return files
 }
 
-// buildReferenceLibraryBlock renders the manifest the agent picks from. The
-// path indirection is deliberate: the runner cannot know the persisted path
-// up front (persistMedia appends a random suffix), but the pipeline's
-// enrichImageIDs stamps the real path onto each image's <media:image> tag, so
-// the block teaches the agent to read it from there.
-func buildReferenceLibraryBlock(items []referenceLibraryItem) string {
-	var sb strings.Builder
-	sb.WriteString("## Reference image library (attached)\n")
-	sb.WriteString("The attached images whose filenames start with \"ref-lib-\" come from the store's curated reference library. Catalogue descriptions:\n")
-	for _, item := range items {
-		sb.WriteString(fmt.Sprintf("- ref-lib-%d: %s\n", item.ID, item.Description))
-	}
-	sb.WriteString("Library rules:\n")
-	sb.WriteString("- When GENERATING a new image: if one library image fits the brief, call create_image with reference_image_path set to the path=\"...\" value of that image's <media:image> tag (the path contains \"ref-lib-<id>-\"). Pick at most ONE library image; if none fits, ignore the library.\n")
-	sb.WriteString("- When EDITING an existing image: keep reference_image_path empty so the image being edited stays the base; library images then act only as additional style references.\n")
-	return sb.String()
-}
-
 // buildChosenReferenceBlock names the one library image the selection pass
 // already picked. The path indirection is deliberate: the runner cannot know
 // the persisted path up front (persistMedia appends a random suffix), but the

@@ -95,24 +95,6 @@ func TestDraftBuildPromptOmitsEmptyReferenceLibrary(t *testing.T) {
 	}
 }
 
-func TestBuildReferenceLibraryBlock(t *testing.T) {
-	items := []referenceLibraryItem{
-		{ID: 12, URL: "https://x/a.jpg", Description: "Tô bún bò trên bàn gỗ."},
-	}
-	block := buildReferenceLibraryBlock(items)
-	for _, want := range []string{
-		"ref-lib-12: Tô bún bò trên bàn gỗ.",
-		"reference_image_path",
-		"<media:image>",
-		"at most ONE",
-		"EDITING",
-	} {
-		if !strings.Contains(block, want) {
-			t.Fatalf("block missing %q\n---\n%s", want, block)
-		}
-	}
-}
-
 func TestBuildChosenReferenceBlock(t *testing.T) {
 	block := buildChosenReferenceBlock(referenceLibraryItem{
 		ID: 12, URL: "https://x/a.jpg", Description: "Tô bún bò trên bàn gỗ.",

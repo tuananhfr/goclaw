@@ -1,10 +1,17 @@
 package tekshot
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/google/uuid"
+
+	"github.com/nextlevelbuilder/goclaw/internal/agent"
+	"github.com/nextlevelbuilder/goclaw/internal/store"
 )
 
 // referenceChoiceMaxItems is the last-resort ceiling on the catalogue handed to
@@ -59,4 +66,61 @@ func parseReferenceChoice(reply string, items []referenceLibraryItem) int {
 		}
 	}
 	return 0
+}
+
+// chooseReferenceImage runs one text-only turn that reads the catalogue and
+// names a single library image. No media and no tools: this turn exists to
+// decide WHICH file is worth downloading, so attaching the library here would
+// defeat it. Any failure degrades to "no library image", never to a guess.
+func (s *JobService) chooseReferenceImage(
+	ctx context.Context,
+	loop agent.Agent,
+	job *store.TekshotJob,
+	brief string,
+	items []referenceLibraryItem,
+) referenceLibraryItem {
+	if len(items) == 0 {
+		return referenceLibraryItem{}
+	}
+	shortlist := capReferenceItems(items, referenceChoiceMaxItems)
+	userID := "tekshot-" + job.ExternalUserID
+	runID := uuid.NewString()
+	result, err := loop.Run(ctx, agent.RunRequest{
+		// Fresh session per run: a reused choice session would accumulate the
+		// previous answers and bias (or bloat) every later pick.
+		SessionKey:  job.SessionKey + ":ref-choice:" + runID,
+		Message:     buildReferenceChoicePrompt(brief, shortlist),
+		Channel:     "tekshot_job",
+		ChannelType: "tekshot",
+		ChatID:      userID,
+		PeerKind:    "direct",
+		Addressed:   true,
+		RunID:       runID,
+		UserID:      userID,
+		SenderID:    userID,
+		// An empty slice is NOT "no tools": policy.go's group-allow step only
+		// gates on len(ToolAllow) > 0, so []string{} is indistinguishable from
+		// nil and would grant the full toolset. "datetime" is the harmless
+		// allowlist used for the same reason in knowledgeLabelToolAllow.
+		ToolAllow:     []string{"datetime"},
+		MaxIterations: 1,
+		TraceName:     "tekshot reference choice",
+		TraceTags:     []string{"tekshot", "reference_choice"},
+	})
+	if err != nil || result == nil {
+		slog.Warn("tekshot: reference choice failed, generating without a library image",
+			"job", job.ID.String(), "error", err)
+		return referenceLibraryItem{}
+	}
+	chosenID := parseReferenceChoice(result.Content, shortlist)
+	for _, item := range shortlist {
+		if item.ID == chosenID {
+			slog.Info("tekshot: reference image chosen",
+				"job", job.ID.String(), "reference_image_id", item.ID, "catalogue_size", len(items))
+			return item
+		}
+	}
+	slog.Info("tekshot: no library image fits the brief",
+		"job", job.ID.String(), "catalogue_size", len(items))
+	return referenceLibraryItem{}
 }

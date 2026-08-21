@@ -392,15 +392,33 @@ func (s *JobService) runChat(ctx context.Context, job *store.TekshotJob, request
 	if strings.TrimSpace(message) == "" {
 		return nil, "", fmt.Errorf("chat message is required")
 	}
+	loop, err := s.agents.Get(store.WithTenantID(ctx, store.MasterTenantID), job.AgentKey)
+	if err != nil {
+		return nil, "", err
+	}
+	userID := "tekshot-" + job.ExternalUserID
+	runCtx := store.WithTenantID(ctx, store.MasterTenantID)
+	runCtx = store.WithUserID(runCtx, userID)
+	runCtx = store.WithAgentKey(runCtx, job.AgentKey)
+
 	mediaFiles := mediaFromJobRequest(request)
-	// Reference library only applies to image generation; post_chat shares this
-	// runner and must not suddenly grow image attachments.
+	isEdit := numberFromMap(request, "edit_media_id") > 0
+	// Reference library only applies to GENERATING a new image; post_chat shares
+	// this runner and must not grow image attachments, and an EDIT keeps the
+	// edited image as its only base — the library never joins an edit.
 	refLibrary := referenceLibraryFromRequest(request)
-	if job.JobType != TekshotJobTypeImageChat {
+	if job.JobType != TekshotJobTypeImageChat || isEdit {
 		refLibrary = nil
 	}
+	// Only the chosen image is downloaded. Attaching the whole library would
+	// also hand create_image every one of them whenever the model leaves
+	// reference_image_path empty.
+	var chosenRef referenceLibraryItem
 	if len(refLibrary) > 0 {
-		mediaFiles = append(mediaFiles, referenceLibraryMediaFiles(refLibrary)...)
+		chosenRef = s.chooseReferenceImage(runCtx, loop, job, message, refLibrary)
+		if chosenRef.ID > 0 {
+			mediaFiles = append(mediaFiles, referenceLibraryMediaFiles([]referenceLibraryItem{chosenRef})...)
+		}
 	}
 	if len(mediaFiles) > 0 {
 		mediaInfos := make([]media.MediaInfo, 0, len(mediaFiles))
@@ -420,18 +438,10 @@ func (s *JobService) runChat(ctx context.Context, job *store.TekshotJob, request
 			message = tags + "\n\n" + message
 		}
 	}
-	if len(refLibrary) > 0 {
-		message = message + "\n\n" + buildReferenceLibraryBlock(refLibrary)
+	if chosenRef.ID > 0 {
+		message = message + "\n\n" + buildChosenReferenceBlock(chosenRef)
 	}
 
-	loop, err := s.agents.Get(store.WithTenantID(ctx, store.MasterTenantID), job.AgentKey)
-	if err != nil {
-		return nil, "", err
-	}
-	userID := "tekshot-" + job.ExternalUserID
-	runCtx := store.WithTenantID(ctx, store.MasterTenantID)
-	runCtx = store.WithUserID(runCtx, userID)
-	runCtx = store.WithAgentKey(runCtx, job.AgentKey)
 	runReq := agent.RunRequest{
 		SessionKey:  job.SessionKey,
 		Message:     message,
@@ -473,7 +483,6 @@ func (s *JobService) runChat(ctx context.Context, job *store.TekshotJob, request
 		// scratch (losing the subject of the image being edited). The original
 		// request — including its EDIT instruction — is still in the session
 		// history, so the forced turn only needs to re-assert intent.
-		isEdit := numberFromMap(request, "edit_media_id") > 0
 		finalReq := runReq
 		finalReq.RunID = uuid.NewString()
 		finalReq.MaxIterations = 1
@@ -483,12 +492,11 @@ func (s *JobService) runChat(ctx context.Context, job *store.TekshotJob, request
 				"Follow the EDIT instruction from the request above: the base image is already attached, " +
 				"so preserve its composition, subject and identity, and apply ONLY the changes that were " +
 				"requested. Do not describe a brand-new image. Leave reference_image_path empty."
-		} else if len(refLibrary) > 0 {
+		} else if chosenRef.ID > 0 {
 			finalReq.Message = "[System] You must call create_image now — do not reply with plain text. " +
 				"Build the prompt from the post context and image brief in the request above. " +
-				"If one attached library image (filename starting with \"ref-lib-\") fits the brief, set " +
-				"reference_image_path to the path=\"...\" value of its <media:image> tag; otherwise leave " +
-				"reference_image_path empty so all attached images are used."
+				"Set reference_image_path to the path=\"...\" value of the <media:image> tag whose path " +
+				"contains \"ref-lib-\" — that image was pre-selected for this brief."
 		} else {
 			finalReq.Message = "[System] You must call create_image now — do not reply with plain text. " +
 				"Build the prompt from the post context and image brief in the request above. " +
