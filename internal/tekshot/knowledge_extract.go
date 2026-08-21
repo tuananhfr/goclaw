@@ -20,9 +20,19 @@ import (
 )
 
 const (
-	knowledgeFinalToolName        = "submit_knowledge_markdown"
-	knowledgeExtractMaxIterations = 30
+	knowledgeFinalToolName = "submit_knowledge_markdown"
+	// 45 fits: entry + sitemap probes + 20 page fetches + splits + submit.
+	// web_fetch also halves its own char budget past 50% of this (web_fetch.go).
+	knowledgeExtractMaxIterations = 45
 	knowledgeExtractMaxScanPages  = 20
+	// The binding limit is NOT MaxIterations: the loop kills a run after 36
+	// consecutive read-only tool calls (readOnlyExplorationCritical in
+	// internal/agent/toolloop.go) and web_fetch is read-only. 12 pages plus
+	// sitemap probes stays clear of that ceiling.
+	knowledgeExtractMaxSitePages = 12
+	// One tool call carries the whole submission, so the pages together must
+	// stay inside the model's output budget.
+	knowledgeExtractMaxTotalChars = 40000
 )
 
 // knowledgeExtractToolAllow: exec drives markitdown/pdfplumber/pdftoppm,
@@ -35,10 +45,13 @@ func knowledgeExtractToolAllow() []string {
 
 type KnowledgeExtractCollectorTool struct {
 	report map[string]any
+	// Website sources submit per-page entries instead of one markdown blob: the
+	// vault indexes and reads whole documents, so a page is the unit that fits.
+	websiteSource bool
 }
 
-func NewKnowledgeExtractCollectorTool() *KnowledgeExtractCollectorTool {
-	return &KnowledgeExtractCollectorTool{}
+func NewKnowledgeExtractCollectorTool(websiteSource bool) *KnowledgeExtractCollectorTool {
+	return &KnowledgeExtractCollectorTool{websiteSource: websiteSource}
 }
 
 func (t *KnowledgeExtractCollectorTool) Name() string { return knowledgeFinalToolName }
@@ -58,7 +71,7 @@ func (t *KnowledgeExtractCollectorTool) Parameters() map[string]any {
 			},
 			"markdown": map[string]any{
 				"type":        "string",
-				"description": "The full extracted content as clean Markdown. Tables stay Markdown tables with values copied VERBATIM — never round or reformat numbers. Keep sheet names as `## <sheet>` headings, PDF pages as `## Trang N`. NO frontmatter — the caller adds it.",
+				"description": "File sources ONLY: the full extracted content as clean Markdown. Tables stay Markdown tables with values copied VERBATIM — never round or reformat numbers. Keep sheet names as `## <sheet>` headings, PDF pages as `## Trang N`. NO frontmatter — the caller adds it. Website sources leave this empty and submit `pages` instead.",
 			},
 			"language": map[string]any{"type": "string", "description": "Primary language of the extracted content, e.g. 'vi'."},
 			"status": map[string]any{
@@ -70,7 +83,28 @@ func (t *KnowledgeExtractCollectorTool) Parameters() map[string]any {
 				"description": "Required when status is 'empty': short honest Vietnamese reason (e.g. blank pages, image contains no text).",
 			},
 			"source_pages": map[string]any{"type": "string", "description": "Page range actually extracted, e.g. '1-4'. Empty for non-paged sources."},
-			"truncated":    map[string]any{"type": "boolean", "description": "true when the source had more pages than the 20-page scan cap."},
+			"pages": map[string]any{
+				"type":        "array",
+				"description": "Website sources ONLY: one entry per content page you extracted, in read order. File sources leave this empty and use markdown instead.",
+				"items": map[string]any{
+					"type":                 "object",
+					"additionalProperties": false,
+					"properties": map[string]any{
+						"url":     map[string]any{"type": "string", "description": "The page URL you fetched."},
+						"title":   map[string]any{"type": "string", "description": "Specific Vietnamese title naming brand + topic (+ time/version when the page has one), e.g. 'Cát Tường – Bảng giá NOXH Smart City (đợt 3/2026)'. Never submit the site's bare generic H1."},
+						"summary": map[string]any{"type": "string", "description": "One Vietnamese sentence: what facts this page holds."},
+						"keywords": map[string]any{
+							"type":        "array",
+							"items":       map[string]any{"type": "string"},
+							"description": "3-8 terms a person would search for: product/project names, price words, unit codes, phone numbers, policy terms.",
+						},
+						"markdown": map[string]any{"type": "string", "description": "The page content as clean Markdown, numbers VERBATIM. Target 1500-6000 characters."},
+					},
+					"required": []string{"url", "title", "markdown"},
+				},
+			},
+			"total_pages_discovered": map[string]any{"type": "number", "description": "Website sources: how many candidate content pages you discovered (sitemap or internal links), including ones you did not read."},
+			"truncated":              map[string]any{"type": "boolean", "description": "true when the source had more than you could read: more PDF pages than the 20-page scan cap, or more site pages than the 20-page crawl cap."},
 			"tool_health": map[string]any{
 				"type":                 "object",
 				"additionalProperties": false,
@@ -86,7 +120,7 @@ func (t *KnowledgeExtractCollectorTool) Parameters() map[string]any {
 }
 
 func (t *KnowledgeExtractCollectorTool) Execute(_ context.Context, args map[string]any) *tools.Result {
-	report, err := validateKnowledgeExtractReport(args)
+	report, err := validateKnowledgeExtractReport(args, t.websiteSource)
 	if err != nil {
 		return tools.ErrorResult("MODEL_OUTPUT_INVALID: " + err.Error())
 	}
@@ -109,7 +143,71 @@ func (t *KnowledgeExtractCollectorTool) Report() map[string]any {
 	return clone
 }
 
-func validateKnowledgeExtractReport(args map[string]any) (map[string]any, error) {
+// normalizePages validates and canonicalizes the per-page entries a website
+// extraction submits: trims, dedupes by url (first wins), caps keywords at 8.
+func normalizePages(raw any) ([]map[string]any, error) {
+	items, ok := raw.([]any)
+	if !ok {
+		return nil, nil
+	}
+	seen := make(map[string]bool, len(items))
+	pages := make([]map[string]any, 0, len(items))
+	for i, item := range items {
+		entry, isMap := item.(map[string]any)
+		if !isMap {
+			return nil, fmt.Errorf("pages[%d] must be an object", i)
+		}
+		url := strings.TrimSpace(stringFromMap(entry, "url"))
+		if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+			return nil, fmt.Errorf("pages[%d].url must be an http(s) URL", i)
+		}
+		if seen[url] {
+			continue
+		}
+		title := strings.TrimSpace(stringFromMap(entry, "title"))
+		if title == "" {
+			return nil, fmt.Errorf("pages[%d].title is required", i)
+		}
+		md := strings.TrimSpace(stringFromMap(entry, "markdown"))
+		if md == "" {
+			return nil, fmt.Errorf("pages[%d].markdown is required", i)
+		}
+		seen[url] = true
+		pages = append(pages, map[string]any{
+			"url":      url,
+			"title":    title,
+			"summary":  strings.TrimSpace(stringFromMap(entry, "summary")),
+			"keywords": normalizeKeywords(entry["keywords"]),
+			"markdown": md,
+		})
+	}
+	return pages, nil
+}
+
+func normalizeKeywords(raw any) []string {
+	items, ok := raw.([]any)
+	if !ok {
+		return []string{}
+	}
+	out := make([]string, 0, 8)
+	for _, item := range items {
+		s, isString := item.(string)
+		if !isString {
+			continue
+		}
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		out = append(out, s)
+		if len(out) == 8 {
+			break
+		}
+	}
+	return out
+}
+
+func validateKnowledgeExtractReport(args map[string]any, websiteSource bool) (map[string]any, error) {
 	status := strings.TrimSpace(stringFromMap(args, "status"))
 	if status != "ok" && status != "empty" {
 		return nil, fmt.Errorf("status must be 'ok' or 'empty', got %q", status)
@@ -119,9 +217,6 @@ func validateKnowledgeExtractReport(args map[string]any) (map[string]any, error)
 		return nil, fmt.Errorf("title is required")
 	}
 	markdown := strings.TrimSpace(stringFromMap(args, "markdown"))
-	if status == "ok" && markdown == "" {
-		return nil, fmt.Errorf("markdown must be non-empty when status is 'ok'")
-	}
 	if status == "empty" && strings.TrimSpace(stringFromMap(args, "reason")) == "" {
 		return nil, fmt.Errorf("reason is required when status is 'empty'")
 	}
@@ -137,6 +232,27 @@ func validateKnowledgeExtractReport(args map[string]any) (map[string]any, error)
 	if vision != "ok" && vision != "dead" && vision != "unused" {
 		return nil, fmt.Errorf("tool_health.vision must be 'ok', 'dead' or 'unused', got %q", vision)
 	}
+	if websiteSource {
+		pages, pagesErr := normalizePages(args["pages"])
+		if pagesErr != nil {
+			return nil, pagesErr
+		}
+		if status == "ok" && len(pages) == 0 {
+			return nil, fmt.Errorf("pages must hold at least one extracted page for a website source")
+		}
+		args["pages"] = pages
+		urls := make([]string, 0, len(pages))
+		for _, page := range pages {
+			urls = append(urls, page["url"].(string))
+		}
+		args["pages_fetched"] = urls
+	} else {
+		if status == "ok" && markdown == "" {
+			return nil, fmt.Errorf("markdown must be non-empty when status is 'ok'")
+		}
+		delete(args, "pages")
+		delete(args, "pages_fetched")
+	}
 	return args, nil
 }
 
@@ -151,8 +267,25 @@ func buildKnowledgeExtractPrompt(request map[string]any) string {
 
 	if websiteURL != "" {
 		sb.WriteString("## Source: website\n")
-		sb.WriteString("- URL: " + websiteURL + "\n")
-		sb.WriteString("- Read it with web_fetch. Extract the main content only: no navigation, no footer, no cookie banners.\n\n")
+		sb.WriteString("- Entry URL: " + websiteURL + "\n")
+		sb.WriteString("- This imports the SITE, not one page. Each content page becomes its own knowledge document, so submit each page as its own entry.\n\n")
+		sb.WriteString("## Crawl strategy (follow in order)\n")
+		sb.WriteString("1. web_fetch the entry URL. Use it to discover the site; include it as a content page ONLY when it carries unique facts no subpage has.\n")
+		sb.WriteString("2. Build the page list. Try `<origin>/sitemap.xml` (then `/sitemap_index.xml`) first — the cheapest full list. No sitemap: internal links of the entry page, same host only.\n")
+		sb.WriteString("3. Rank by fact density: bảng giá / sản phẩm / dịch vụ / dự án / giới thiệu / liên hệ / chính sách, then article pages. Skip tag, category, author, search and pagination URLs.\n")
+		sb.WriteString("   HTML pages only. NEVER web_fetch an attachment or binary URL — .pdf, .doc(x), .xls(x), .ppt(x), .zip, .jpg, .png, /wp-content/uploads/ and the like. Fetching one wastes the whole iteration budget on binary noise. A page that links an attachment: keep the link inside that page's markdown as `[tên file](url)` and move on.\n")
+		sb.WriteString(fmt.Sprintf("4. web_fetch the ranked pages, up to %d content pages. Never fetch the same URL twice.\n", knowledgeExtractMaxSitePages))
+		sb.WriteString("5. Submit each page as one entry in `pages`: its own rewritten title, a one-sentence summary, 3-8 business keywords, and its full Markdown.\n")
+		sb.WriteString("6. Set total_pages_discovered to how many candidate content pages you found. Stopped at the cap, out of fetches or over the size budget → set truncated=true.\n\n")
+		sb.WriteString("## Budget — the run is killed if you overrun it\n")
+		sb.WriteString("- You get about 30 web_fetch calls TOTAL, sitemap probes included. Spend them on content pages and submit while you still have budget: a run that keeps reading is killed before it can submit, and the whole extraction is lost.\n")
+		sb.WriteString(fmt.Sprintf("- The whole submission travels in ONE tool call, so keep every page's markdown together under ~%d characters. Over budget: keep the highest-value pages (giá, sản phẩm/dự án, điều kiện, liên hệ), drop the rest and set truncated=true.\n\n", knowledgeExtractMaxTotalChars))
+		sb.WriteString("## Per-page contract\n")
+		sb.WriteString("- title: specific and self-describing — brand + topic (+ time/version when the page has one). A reader must know what the page holds from the title alone; never submit a bare generic H1 like \"406 CĂN HỘ\".\n")
+		sb.WriteString("- markdown: target 1500-6000 characters. A page over ~8000 characters: split it by its H2 sections into two entries titled \"... (phần 1/2)\" and \"... (phần 2/2)\", same url on both.\n")
+		sb.WriteString("- Drop nav menus, cookie banners, share widgets, pagination controls and related-post teasers.\n")
+		sb.WriteString("- KEEP the contact block wherever it sits, footer included: địa chỉ, số điện thoại, email, mã số thuế, giờ mở cửa, danh sách chi nhánh. That is what the assistant gets asked about.\n")
+		sb.WriteString("- A teaser the site itself cut with \"…\" is worth nothing: open the linked page and take the full text, or leave the teaser out.\n\n")
 	} else {
 		sb.WriteString("## Source: file attached to this message\n")
 		if filename != "" {
@@ -174,6 +307,7 @@ func buildKnowledgeExtractPrompt(request map[string]any) string {
 	sb.WriteString("- Keep the source's own language for content; headings may be Vietnamese.\n")
 	sb.WriteString("- PDF pages become `## Trang N` sections.\n")
 	sb.WriteString("- Do NOT invent content. A blank source is submitted as status='empty' with an honest reason.\n")
+	sb.WriteString("- web_fetch spills anything past its char limit into a temp file and names the path: read the rest with exec (`cat <path>`). read_file is NOT available in this run, so skipping that step silently loses the tail.\n")
 	sb.WriteString("- When every conversion tool fails, submit tool_health.exec='dead' — do not hand-write a fake extraction.\n")
 	sb.WriteString(fmt.Sprintf("- Finish by calling %s exactly once with the full result. Do not answer with plain text.\n", knowledgeFinalToolName))
 	return sb.String()
@@ -252,7 +386,7 @@ func (s *JobService) runKnowledgeExtract(ctx context.Context, job *store.Tekshot
 	runCtx = store.WithUserID(runCtx, userID)
 	runCtx = store.WithAgentKey(runCtx, job.AgentKey)
 
-	collector := NewKnowledgeExtractCollectorTool()
+	collector := NewKnowledgeExtractCollectorTool(websiteURL != "")
 	message := buildKnowledgeExtractPrompt(request)
 
 	runReq := agent.RunRequest{
