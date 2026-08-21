@@ -132,9 +132,11 @@ func (h *VaultHandler) handleUpload(w http.ResponseWriter, r *http.Request) {
 	var pendingEvents []eventbus.DomainEvent
 
 	for _, fh := range files {
-		// Sanitize filename — basename only, no path traversal.
-		name := filepath.Base(fh.Filename)
-		if name == "." || name == ".." || name == "" {
+		// Sanitize the client name into a relative path: one subfolder at most,
+		// no traversal. Callers that group an import into its own folder rely
+		// on the subfolder surviving; everything else collapses to a basename.
+		name, ok := safeUploadRelPath(fh.Filename)
+		if !ok {
 			results = append(results, uploadResult{Error: "invalid filename: " + fh.Filename})
 			continue
 		}
@@ -159,8 +161,15 @@ func (h *VaultHandler) handleUpload(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Write to workspace.
+		// Write to workspace. name may carry one subfolder, so create it first;
+		// safeUploadRelPath has already ruled out anything that could climb out
+		// of targetDir.
 		dstPath := filepath.Join(targetDir, name)
+		if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
+			src.Close()
+			results = append(results, uploadResult{Error: "failed to write: " + name})
+			continue
+		}
 		dst, err := os.Create(dstPath)
 		if err != nil {
 			src.Close()

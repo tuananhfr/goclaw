@@ -31,13 +31,14 @@ func (f *fakeVaultContentStore) GetDocumentByID(ctx context.Context, tenantID, i
 	return f.doc, nil
 }
 
-func (f *fakeVaultContentStore) UpdateDocumentAfterContentWrite(ctx context.Context, tenantID, docID, title, docType string, metadata map[string]any, contentHash string) (*store.VaultDocument, error) {
+func (f *fakeVaultContentStore) UpdateDocumentAfterContentWrite(ctx context.Context, tenantID, docID, title, docType string, metadata map[string]any, contentHash string, contentExcerpt string) (*store.VaultDocument, error) {
 	f.updateCalled = true
 	doc := *f.doc
 	doc.Title = title
 	doc.DocType = docType
 	doc.Metadata = metadata
 	doc.ContentHash = contentHash
+	doc.ContentExcerpt = contentExcerpt
 	doc.Summary = ""
 	doc.UpdatedAt = time.Now().UTC()
 	f.updatedDoc = &doc
