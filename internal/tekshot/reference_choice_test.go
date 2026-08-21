@@ -1,8 +1,13 @@
 package tekshot
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/nextlevelbuilder/goclaw/internal/agent"
+	"github.com/nextlevelbuilder/goclaw/internal/store"
 )
 
 func choiceFixture() []referenceLibraryItem {
@@ -67,5 +72,90 @@ func TestParseReferenceChoiceHandlesNoFit(t *testing.T) {
 		if got := parseReferenceChoice(reply, choiceFixture()); got != 0 {
 			t.Fatalf("reply %q must yield 0, got %d", reply, got)
 		}
+	}
+}
+
+// referenceChoiceMaxItems has a twin on the Drupal side: MANIFEST_MAX_ITEMS in
+// StudioReferenceImageRepository.php, pinned by StudioReferenceManifestCapTest.
+// The two caps must stay equal or one side trims a list the other kept.
+func TestReferenceChoiceMaxItemsMatchesDrupalCap(t *testing.T) {
+	if referenceChoiceMaxItems != 60 {
+		t.Fatalf("referenceChoiceMaxItems must stay 60 to match MANIFEST_MAX_ITEMS in StudioReferenceImageRepository.php, got %d", referenceChoiceMaxItems)
+	}
+}
+
+// fakeChoiceAgent captures the RunRequest. Embedding agent.Agent satisfies the
+// methods this test never calls.
+type fakeChoiceAgent struct {
+	agent.Agent
+	captured agent.RunRequest
+	result   *agent.RunResult
+	err      error
+}
+
+func (f *fakeChoiceAgent) Run(_ context.Context, req agent.RunRequest) (*agent.RunResult, error) {
+	f.captured = req
+	return f.result, f.err
+}
+
+func choiceJob() *store.TekshotJob {
+	return &store.TekshotJob{
+		SessionKey:      "tekshot:sess-1",
+		ExternalUserID:  "7",
+		ExternalJobUUID: "job-uuid-1",
+	}
+}
+
+func TestChooseReferenceImageRestrictsTools(t *testing.T) {
+	fake := &fakeChoiceAgent{result: &agent.RunResult{Content: `{"id": 12}`}}
+	job := choiceJob()
+	(&JobService{}).chooseReferenceImage(context.Background(), fake, job, "Ảnh combo buổi sáng", choiceFixture())
+
+	req := fake.captured
+	// An EMPTY ToolAllow is not "no tools": policy.go's group-allow step gates on
+	// len(groupToolAllow) > 0, so []string{} reads the same as nil and grants the
+	// full toolset — create_image included, burning a discarded generation.
+	if len(req.ToolAllow) == 0 {
+		t.Fatalf("ToolAllow must be non-empty, got %#v", req.ToolAllow)
+	}
+	if req.MaxIterations != 1 {
+		t.Fatalf("expected MaxIterations 1, got %d", req.MaxIterations)
+	}
+	if len(req.Media) != 0 {
+		t.Fatalf("the selection pass must attach nothing, got %d media files", len(req.Media))
+	}
+	if req.SessionKey == job.SessionKey {
+		t.Fatalf("the selection pass must not reuse the job session, got %q", req.SessionKey)
+	}
+	// Cheap turn: the agent's image skill and context files would drown the JSON.
+	if req.SkillFilter == nil || len(req.SkillFilter) != 0 {
+		t.Fatalf("SkillFilter must be an empty (not nil) slice, got %#v", req.SkillFilter)
+	}
+	if !req.LightContext || req.HistoryLimit != 1 {
+		t.Fatalf("expected LightContext=true HistoryLimit=1, got %v/%d", req.LightContext, req.HistoryLimit)
+	}
+}
+
+func TestChooseReferenceImageDegradesOnError(t *testing.T) {
+	fake := &fakeChoiceAgent{err: errors.New("provider exploded")}
+	got := (&JobService{}).chooseReferenceImage(context.Background(), fake, choiceJob(), "brief", choiceFixture())
+	if got.ID != 0 {
+		t.Fatalf("a failed selection must degrade to no image, got %+v", got)
+	}
+}
+
+func TestChooseReferenceImageRejectsHallucinatedID(t *testing.T) {
+	fake := &fakeChoiceAgent{result: &agent.RunResult{Content: `{"id": 999}`}}
+	got := (&JobService{}).chooseReferenceImage(context.Background(), fake, choiceJob(), "brief", choiceFixture())
+	if got.ID != 0 {
+		t.Fatalf("an id outside the shortlist must not be downloaded, got %+v", got)
+	}
+}
+
+func TestChooseReferenceImagePicksNamedItem(t *testing.T) {
+	fake := &fakeChoiceAgent{result: &agent.RunResult{Content: "Chọn ảnh này.\n```json\n{\"id\": 15}\n```"}}
+	got := (&JobService{}).chooseReferenceImage(context.Background(), fake, choiceJob(), "brief", choiceFixture())
+	if got.ID != 15 || got.URL != "https://x/b.jpg" {
+		t.Fatalf("expected item 15, got %+v", got)
 	}
 }

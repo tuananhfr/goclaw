@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -18,6 +19,10 @@ import (
 // the selection pass. Drupal caps the manifest first; this only guards against
 // a studio whose library grew past what one prompt can usefully hold.
 const referenceChoiceMaxItems = 60
+
+// referenceChoiceTimeout bounds this pass on its own: it runs inside the job's
+// 12-minute deadline, which the main image turn still needs after it.
+const referenceChoiceTimeout = 90 * time.Second
 
 // referenceChoiceIDPattern reads the id out of the selection reply. A regex
 // rather than json.Unmarshal because models wrap the object in prose or fences.
@@ -48,16 +53,27 @@ func buildReferenceChoicePrompt(brief string, items []referenceLibraryItem) stri
 	return sb.String()
 }
 
+// referenceChoiceRawID reports the id the reply actually carried, and whether
+// it carried one at all. Only the logging needs the distinction: {"id": 0} is a
+// judgement, an unreadable reply is a malfunction.
+func referenceChoiceRawID(reply string) (int, bool) {
+	match := referenceChoiceIDPattern.FindStringSubmatch(reply)
+	if match == nil {
+		return 0, false
+	}
+	id, err := strconv.Atoi(match[1])
+	if err != nil {
+		return 0, false
+	}
+	return id, true
+}
+
 // parseReferenceChoice returns the chosen library id, or 0 for "no image fits".
 // An id outside the manifest is refused: a hallucinated number must not decide
 // which file gets downloaded.
 func parseReferenceChoice(reply string, items []referenceLibraryItem) int {
-	match := referenceChoiceIDPattern.FindStringSubmatch(reply)
-	if match == nil {
-		return 0
-	}
-	id, err := strconv.Atoi(match[1])
-	if err != nil || id <= 0 {
+	id, ok := referenceChoiceRawID(reply)
+	if !ok || id <= 0 {
 		return 0
 	}
 	for _, item := range items {
@@ -85,7 +101,9 @@ func (s *JobService) chooseReferenceImage(
 	shortlist := capReferenceItems(items, referenceChoiceMaxItems)
 	userID := "tekshot-" + job.ExternalUserID
 	runID := uuid.NewString()
-	result, err := loop.Run(ctx, agent.RunRequest{
+	choiceCtx, cancel := context.WithTimeout(ctx, referenceChoiceTimeout)
+	defer cancel()
+	result, err := loop.Run(choiceCtx, agent.RunRequest{
 		// Fresh session per run: a reused choice session would accumulate the
 		// previous answers and bias (or bloat) every later pick.
 		SessionKey:  job.SessionKey + ":ref-choice:" + runID,
@@ -104,23 +122,47 @@ func (s *JobService) chooseReferenceImage(
 		// allowlist used for the same reason in knowledgeLabelToolAllow.
 		ToolAllow:     []string{"datetime"},
 		MaxIterations: 1,
-		TraceName:     "tekshot reference choice",
-		TraceTags:     []string{"tekshot", "reference_choice"},
+		// Keep the pass cheap and literal: the agent's own image skill ("always
+		// call create_image") pushes the model into prose instead of the JSON
+		// this parser needs.
+		SkillFilter:  []string{},
+		LightContext: true,
+		HistoryLimit: 1,
+		TraceName:    "tekshot reference choice",
+		TraceTags:    []string{"tekshot", "reference_choice"},
 	})
 	if err != nil || result == nil {
+		reason := "agent returned no result"
+		if err != nil {
+			reason = err.Error()
+		}
 		slog.Warn("tekshot: reference choice failed, generating without a library image",
-			"job", job.ID.String(), "error", err)
+			"job", job.ID.String(), "external", job.ExternalJobUUID, "reason", reason)
 		return referenceLibraryItem{}
 	}
 	chosenID := parseReferenceChoice(result.Content, shortlist)
 	for _, item := range shortlist {
 		if item.ID == chosenID {
 			slog.Info("tekshot: reference image chosen",
-				"job", job.ID.String(), "reference_image_id", item.ID, "catalogue_size", len(items))
+				"job", job.ID.String(), "external", job.ExternalJobUUID,
+				"reference_image_id", item.ID, "catalogue_size", len(items))
 			return item
 		}
 	}
-	slog.Info("tekshot: no library image fits the brief",
-		"job", job.ID.String(), "catalogue_size", len(items))
+	// Three different outcomes land here; an operator must be able to tell the
+	// model's judgement apart from the model failing to answer the question.
+	rawID, parsed := referenceChoiceRawID(result.Content)
+	switch {
+	case !parsed:
+		slog.Warn("tekshot: reference choice reply carried no id, generating without a library image",
+			"job", job.ID.String(), "external", job.ExternalJobUUID, "catalogue_size", len(items))
+	case rawID > 0:
+		slog.Warn("tekshot: reference choice named an id outside the catalogue, generating without a library image",
+			"job", job.ID.String(), "external", job.ExternalJobUUID,
+			"reference_image_id", rawID, "catalogue_size", len(items))
+	default:
+		slog.Info("tekshot: no library image fits the brief",
+			"job", job.ID.String(), "external", job.ExternalJobUUID, "catalogue_size", len(items))
+	}
 	return referenceLibraryItem{}
 }
