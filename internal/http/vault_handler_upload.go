@@ -100,6 +100,18 @@ func (h *VaultHandler) handleUpload(w http.ResponseWriter, r *http.Request) {
 		scope = "shared"
 	}
 
+	// Optional single subfolder, so a caller can group one import together.
+	// It travels as its own form field because mime/multipart strips any
+	// directory from the filename before this handler runs.
+	folder, folderOK := safeUploadFolder(r.FormValue("folder"))
+	if !folderOK {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid folder"})
+		return
+	}
+	if folder != "" {
+		subDir = filepath.Join(subDir, folder)
+	}
+
 	wsPath := h.resolveTenantWorkspace(r.Context())
 	if wsPath == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace not available"})
@@ -132,11 +144,10 @@ func (h *VaultHandler) handleUpload(w http.ResponseWriter, r *http.Request) {
 	var pendingEvents []eventbus.DomainEvent
 
 	for _, fh := range files {
-		// Sanitize the client name into a relative path: one subfolder at most,
-		// no traversal. Callers that group an import into its own folder rely
-		// on the subfolder surviving; everything else collapses to a basename.
-		name, ok := safeUploadRelPath(fh.Filename)
-		if !ok {
+		// Filename is already a basename — mime/multipart applies filepath.Base
+		// before we see it. Grouping comes from the "folder" field above.
+		name := filepath.Base(fh.Filename)
+		if name == "." || name == ".." || name == "" {
 			results = append(results, uploadResult{Error: "invalid filename: " + fh.Filename})
 			continue
 		}
@@ -161,15 +172,8 @@ func (h *VaultHandler) handleUpload(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Write to workspace. name may carry one subfolder, so create it first;
-		// safeUploadRelPath has already ruled out anything that could climb out
-		// of targetDir.
+		// Write to workspace; targetDir already includes the optional folder.
 		dstPath := filepath.Join(targetDir, name)
-		if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
-			src.Close()
-			results = append(results, uploadResult{Error: "failed to write: " + name})
-			continue
-		}
 		dst, err := os.Create(dstPath)
 		if err != nil {
 			src.Close()
