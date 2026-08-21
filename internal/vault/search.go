@@ -80,6 +80,7 @@ func (s *VaultSearchService) Search(ctx context.Context, opts UnifiedSearchOptio
 	if opts.Weights == (SearchWeights{}) {
 		opts.Weights = DefaultSearchWeights()
 	}
+	opts.Scope = store.NormalizeScope(opts.Scope)
 
 	var mu sync.Mutex
 	var wg sync.WaitGroup

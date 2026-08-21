@@ -58,11 +58,11 @@ func (t *VaultSearchTool) Parameters() map[string]any {
 			},
 			"scope": map[string]any{
 				"type":        "string",
-				"description": "Scope filter: personal, team, or shared (default: all)",
+				"description": "Scope filter: personal, team, or shared. OMIT it to search every scope — \"all\" is not a scope value.",
 			},
 			"types": map[string]any{
 				"type":        "string",
-				"description": "Comma-separated doc types: context, memory, note, skill, episodic, kg (default: all sources)",
+				"description": "Comma-separated doc types: context, memory, note, skill, episodic, kg. Omit to search every source.",
 			},
 			"maxResults": map[string]any{
 				"type":        "number",
