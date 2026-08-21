@@ -303,7 +303,8 @@ func (s *SQLiteVaultStore) UpdateHash(ctx context.Context, tenantID, id, newHash
 
 // UpdateDocumentAfterContentWrite updates metadata derived from an already-written file.
 // It intentionally updates by document ID and clears summary so enrichment cannot reuse stale content.
-func (s *SQLiteVaultStore) UpdateDocumentAfterContentWrite(ctx context.Context, tenantID, docID, title, docType string, metadata map[string]any, contentHash string) (*store.VaultDocument, error) {
+// contentExcerpt is ignored: lite edition searches title+path with LIKE, it has no FTS column.
+func (s *SQLiteVaultStore) UpdateDocumentAfterContentWrite(ctx context.Context, tenantID, docID, title, docType string, metadata map[string]any, contentHash string, contentExcerpt string) (*store.VaultDocument, error) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	meta, err := json.Marshal(metadata)
 	if err != nil {

@@ -91,15 +91,16 @@ func RescanWorkspace(ctx context.Context, params RescanParams, vs store.VaultSto
 		}
 
 		doc := &store.VaultDocument{
-			TenantID:    params.TenantID,
-			AgentID:     agentID,
-			TeamID:      teamID,
-			ChatID:      chatID,
-			Scope:       scope,
-			Path:        relPath,
-			Title:       InferTitle(relPath),
-			DocType:     InferDocType(relPath),
-			ContentHash: hash,
+			TenantID:       params.TenantID,
+			AgentID:        agentID,
+			TeamID:         teamID,
+			ChatID:         chatID,
+			Scope:          scope,
+			Path:           relPath,
+			Title:          InferTitle(relPath),
+			DocType:        InferDocType(relPath),
+			ContentHash:    hash,
+			ContentExcerpt: ExcerptFromFile(entry.AbsPath),
 		}
 
 		if err := vs.UpsertDocument(ctx, doc); err != nil {

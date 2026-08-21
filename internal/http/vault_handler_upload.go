@@ -189,12 +189,13 @@ func (h *VaultHandler) handleUpload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		doc := &store.VaultDocument{
-			TenantID:    tenantIDStr,
-			Path:        relPath,
-			Title:       vault.InferTitle(relPath),
-			DocType:     vault.InferDocType(relPath),
-			ContentHash: hash,
-			Scope:       scope,
+			TenantID:       tenantIDStr,
+			Path:           relPath,
+			Title:          vault.InferTitle(relPath),
+			DocType:        vault.InferDocType(relPath),
+			ContentHash:    hash,
+			Scope:          scope,
+			ContentExcerpt: vault.ExcerptFromFile(dstPath),
 		}
 		if agentIDStr != "" {
 			doc.AgentID = &agentIDStr

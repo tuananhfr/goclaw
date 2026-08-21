@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/nextlevelbuilder/goclaw/internal/eventbus"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
+	"github.com/nextlevelbuilder/goclaw/internal/vault"
 )
 
 const vaultContentMaxBytes = 1_048_576
@@ -167,7 +168,7 @@ func (h *VaultHandler) handleUpdateDocumentContent(w http.ResponseWriter, r *htt
 		return
 	}
 
-	updated, err := h.store.UpdateDocumentAfterContentWrite(r.Context(), tenantIDStr, doc.ID, title, docType, metadata, hash)
+	updated, err := h.store.UpdateDocumentAfterContentWrite(r.Context(), tenantIDStr, doc.ID, title, docType, metadata, hash, vault.ExcerptFromBytes([]byte(*body.Content)))
 	if err != nil {
 		slog.Warn("vault.content.update store failed", "doc_id", doc.ID, "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})

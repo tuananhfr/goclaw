@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
@@ -20,7 +21,10 @@ type VaultDocument struct {
 	DocType      string         `json:"doc_type" db:"doc_type"`         // context, memory, note, skill, episodic, media, document
 	ContentHash  string         `json:"content_hash" db:"content_hash"` // SHA-256 hex digest
 	Summary      string         `json:"summary" db:"summary"`           // LLM-generated or synthesized summary for embedding/search
-	Metadata     map[string]any `json:"metadata,omitempty" db:"metadata"`
+	// First 16KB of content, PG FTS only (migration 000065). json:"-" — 16KB
+	// must not ride along in every list/search response.
+	ContentExcerpt string         `json:"-" db:"content_excerpt"`
+	Metadata       map[string]any `json:"metadata,omitempty" db:"metadata"`
 	CreatedAt    time.Time      `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at" db:"updated_at"`
 }
@@ -43,6 +47,22 @@ type VaultBacklink struct {
 	Title     string  `json:"title"`
 	Path      string  `json:"path"`
 	TeamID    *string `json:"team_id,omitempty"`
+}
+
+// NormalizeScope maps the "every scope" spellings a caller may send onto the
+// empty string the stores read as "no scope filter". Without it a literal
+// scope="all" becomes `WHERE scope = 'all'`, matches nothing, and the vault
+// goes silently invisible while episodic/kg results still fill the answer.
+// Callers reach the store from three directions (agent tool, both HTTP search
+// endpoints, fan-out service), so this belongs in the store, not in one caller.
+func NormalizeScope(scope string) string {
+	trimmed := strings.TrimSpace(scope)
+	switch strings.ToLower(trimmed) {
+	case "all", "any", "*":
+		return ""
+	default:
+		return trimmed
+	}
 }
 
 // VaultSearchResult is a single result from vault search.
@@ -110,7 +130,7 @@ type VaultStore interface {
 	ListDocuments(ctx context.Context, tenantID, agentID string, opts VaultListOptions) ([]VaultDocument, error)
 	CountDocuments(ctx context.Context, tenantID, agentID string, opts VaultListOptions) (int, error)
 	UpdateHash(ctx context.Context, tenantID, id, newHash string) error
-	UpdateDocumentAfterContentWrite(ctx context.Context, tenantID, docID, title, docType string, metadata map[string]any, contentHash string) (*VaultDocument, error)
+	UpdateDocumentAfterContentWrite(ctx context.Context, tenantID, docID, title, docType string, metadata map[string]any, contentHash string, contentExcerpt string) (*VaultDocument, error)
 
 	// ListTreeEntries returns immediate children (files + virtual folders) under the given path prefix.
 	ListTreeEntries(ctx context.Context, tenantID string, opts VaultTreeOptions) ([]VaultTreeEntry, error)

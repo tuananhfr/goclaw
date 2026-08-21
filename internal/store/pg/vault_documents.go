@@ -121,8 +121,8 @@ func (s *PGVaultStore) UpsertDocument(ctx context.Context, doc *store.VaultDocum
 
 	err = s.db.QueryRowContext(ctx, `
 		INSERT INTO vault_documents
-			(id, tenant_id, agent_id, team_id, chat_id, scope, custom_scope, path, title, doc_type, content_hash, summary, embedding, metadata, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $15)
+			(id, tenant_id, agent_id, team_id, chat_id, scope, custom_scope, path, title, doc_type, content_hash, summary, embedding, metadata, content_excerpt, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16)
 		ON CONFLICT (tenant_id, COALESCE(agent_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(team_id, '00000000-0000-0000-0000-000000000000'::uuid), scope, path) DO UPDATE SET
 			title        = EXCLUDED.title,
 			doc_type     = EXCLUDED.doc_type,
@@ -130,12 +130,14 @@ func (s *PGVaultStore) UpsertDocument(ctx context.Context, doc *store.VaultDocum
 			summary      = EXCLUDED.summary,
 			embedding    = COALESCE(EXCLUDED.embedding, vault_documents.embedding),
 			metadata     = EXCLUDED.metadata,
+			-- Callers that only register metadata pass "" — must not wipe the excerpt.
+			content_excerpt = CASE WHEN EXCLUDED.content_excerpt <> '' THEN EXCLUDED.content_excerpt ELSE vault_documents.content_excerpt END,
 			chat_id      = COALESCE(EXCLUDED.chat_id, vault_documents.chat_id),
 			tenant_id    = EXCLUDED.tenant_id,
 			updated_at   = EXCLUDED.updated_at
 		RETURNING id`,
 		id, tid, aid, teamID, chatID, doc.Scope, doc.CustomScope, doc.Path, doc.Title, doc.DocType,
-		doc.ContentHash, doc.Summary, embStr, meta, now,
+		doc.ContentHash, doc.Summary, embStr, meta, doc.ContentExcerpt, now,
 	).Scan(&actualID)
 	if err != nil {
 		return fmt.Errorf("vault upsert document: %w", err)
@@ -439,7 +441,7 @@ func (s *PGVaultStore) UpdateHash(ctx context.Context, tenantID, id, newHash str
 
 // UpdateDocumentAfterContentWrite updates metadata derived from an already-written file.
 // It intentionally updates by document ID and clears summary/embedding so enrichment uses fresh content.
-func (s *PGVaultStore) UpdateDocumentAfterContentWrite(ctx context.Context, tenantID, docID, title, docType string, metadata map[string]any, contentHash string) (*store.VaultDocument, error) {
+func (s *PGVaultStore) UpdateDocumentAfterContentWrite(ctx context.Context, tenantID, docID, title, docType string, metadata map[string]any, contentHash string, contentExcerpt string) (*store.VaultDocument, error) {
 	uid, err := parseUUID(docID)
 	if err != nil {
 		return nil, fmt.Errorf("vault update content state: id: %w", err)
@@ -456,10 +458,10 @@ func (s *PGVaultStore) UpdateDocumentAfterContentWrite(ctx context.Context, tena
 	var row vaultDocRow
 	err = s.db.QueryRowContext(ctx, `
 		UPDATE vault_documents
-		SET title = $1, doc_type = $2, content_hash = $3, summary = '', embedding = NULL, metadata = $4, updated_at = $5
-		WHERE id = $6 AND tenant_id = $7
+		SET title = $1, doc_type = $2, content_hash = $3, summary = '', embedding = NULL, metadata = $4, content_excerpt = $5, updated_at = $6
+		WHERE id = $7 AND tenant_id = $8
 		RETURNING id, tenant_id, agent_id, team_id, chat_id, scope, custom_scope, path, path_basename, title, doc_type, content_hash, summary, metadata, created_at, updated_at`,
-		title, docType, contentHash, meta, time.Now().UTC(), uid, tid,
+		title, docType, contentHash, meta, contentExcerpt, time.Now().UTC(), uid, tid,
 	).Scan(&row.ID, &row.TenantID, &row.AgentID, &row.TeamID, &row.ChatID, &row.Scope, &row.CustomScope,
 		&row.Path, &row.PathBasename, &row.Title, &row.DocType, &row.ContentHash, &row.Summary,
 		&row.MetaJSON, &row.CreatedAt, &row.UpdatedAt)
@@ -475,6 +477,7 @@ func (s *PGVaultStore) UpdateDocumentAfterContentWrite(ctx context.Context, tena
 
 // Search performs hybrid FTS + vector search on vault_documents.
 func (s *PGVaultStore) Search(ctx context.Context, opts store.VaultSearchOptions) ([]store.VaultSearchResult, error) {
+	opts.Scope = store.NormalizeScope(opts.Scope)
 	tid, err := parseUUID(opts.TenantID)
 	if err != nil {
 		return nil, fmt.Errorf("vault search: tenant: %w", err)
