@@ -259,6 +259,60 @@ func containsString(haystack []string, needle string) bool {
 	return slices.Contains(haystack, needle)
 }
 
+// discoveryTarget says who counts as a rival. Without a declared goal this
+// used to hardcode "same kind of food/service", which is wrong for every
+// subject that is not a restaurant.
+func discoveryTarget(goal string) string {
+	switch goal {
+	case goalRecruit:
+		return "Employers competing for the SAME candidates: hiring similar roles, at a similar level, close enough that an applicant would pick one over the other."
+	case goalLeads:
+		return "Businesses competing for the SAME sign-ups: running comparable offers to partners, franchisees or enquirers in this niche."
+	case goalBrand, goalCommunity:
+		return "Pages and outlets competing for the SAME audience attention in this niche: publishers, communities and brands the audience already follows."
+	default:
+		return "Businesses that compete for the SAME customers: comparable products or services, close enough that a customer would choose one over the other."
+	}
+}
+
+// discoveryLabels keeps direct/reference meaningful per goal — a community
+// page has almost no direct rivals, and pretending otherwise fills the
+// approval queue with noise.
+func discoveryLabels(goal string) string {
+	switch goal {
+	case goalBrand, goalCommunity:
+		return "Label 'reference' by default here — this subject competes for attention, not for orders. Reserve 'direct' for outlets genuinely chasing the exact same audience with the same offer."
+	case goalRecruit:
+		return "Label 'direct' when they hire the same roles from the same pool; 'reference' when their employer content is worth learning from but they do not compete for these candidates."
+	default:
+		return "Label 'direct' when they take the same customers; 'reference' when they are too far or too different to compete, but do content worth learning from."
+	}
+}
+
+// discoveryReach turns the declared geography into a search strategy. The
+// mode matters more than the radius: "nearby" is meaningless for a
+// nationwide subject, and this is where a wrong assumption costs the whole run.
+func discoveryReach(profile businessProfile) string {
+	switch profile.geoMode {
+	case "nationwide":
+		return "This subject has NO physical catchment: search the niche nationwide and by topic, not by neighbourhood. Proximity is irrelevant — relevance to the same audience is what counts."
+	case "area":
+		area := profile.geoArea
+		if area == "" {
+			area = "the declared operating region"
+		}
+		return "Search across " + area + " as a whole. This subject serves a region, not a street, so a business one district away can be a real rival while a neighbour in a different trade is not."
+	case "local":
+		radius := profile.geoRadiusKm
+		if radius <= 0 {
+			radius = 3
+		}
+		return fmt.Sprintf("Stay within roughly %.1f km of the subject's location, its own ward/district first, then widen only if needed — a chain across the city is rarely a real competitor for a neighbourhood business.", radius)
+	default:
+		return "Prefer the store's own ward/district first, then widen to the surrounding district only if needed — a chain across the city is rarely a real competitor for a neighbourhood store."
+	}
+}
+
 func buildCompetitorDiscoveryPrompt(request map[string]any) string {
 	storeName := strings.TrimSpace(stringFromMap(request, "store_name"))
 	locality := strings.TrimSpace(stringFromMap(request, "locality"))
@@ -274,11 +328,15 @@ func buildCompetitorDiscoveryPrompt(request map[string]any) string {
 	sb.WriteString(competitorFinalToolName)
 	sb.WriteString(" exactly once. Do not answer with plain text.\n\n")
 
+	profile := readBusinessProfile(request)
+
 	sb.WriteString("## Store context\n")
-	if storeName != "" {
-		sb.WriteString("- Store: " + storeName + "\n")
+	if subject := profile.subjectName(storeName); subject != "" {
+		sb.WriteString("- Subject: " + subject + "\n")
 	}
-	sb.WriteString("- Business profile: infer only from supplied store context and verified web evidence.\n")
+	if !profile.writeProfile(&sb) {
+		sb.WriteString("- Business profile: infer only from supplied store context and verified web evidence.\n")
+	}
 	if locality != "" {
 		sb.WriteString("- Locality: " + locality + "\n")
 	}
@@ -314,9 +372,9 @@ func buildCompetitorDiscoveryPrompt(request map[string]any) string {
 	}
 
 	sb.WriteString("## What to find\n")
-	sb.WriteString("- Businesses that compete for the SAME customers: same kind of food/service, close enough that a customer would choose one over the other.\n")
-	sb.WriteString("- Label 'direct' when they take the same customers; 'reference' when they are too far or too different to compete, but do content worth learning from.\n")
-	sb.WriteString("- Prefer the store's own ward/district first, then widen to the surrounding district only if needed — a chain across the city is rarely a real competitor for a neighbourhood store.\n\n")
+	sb.WriteString("- " + discoveryTarget(profile.goal) + "\n")
+	sb.WriteString("- " + discoveryLabels(profile.goal) + "\n")
+	sb.WriteString("- " + discoveryReach(profile) + "\n\n")
 
 	sb.WriteString("## Hard rules\n")
 	sb.WriteString(fmt.Sprintf("- Write why_relevant and locality in language '%s'. A marketer reads this, not a developer.\n", language))

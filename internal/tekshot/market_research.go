@@ -344,6 +344,35 @@ func writeKnownCompetitors(sb *strings.Builder, request map[string]any) {
 	sb.WriteString("\n")
 }
 
+// researchTrendsFocus points the trends section at what the subject actually
+// does. A recruiting page researching food trends is wasted budget.
+func researchTrendsFocus(goal string) string {
+	switch goal {
+	case goalRecruit:
+		return "what is currently moving in the Vietnamese labour market for these roles: pay levels, hiring seasons, benefits candidates ask for, employer-branding content that works."
+	case goalLeads:
+		return "what is currently working to collect leads in this niche in Vietnam: offers, lead magnets, campaign formats, and what partners/franchisees are asking about."
+	case goalBrand, goalCommunity:
+		return "what content is currently gaining traction in this niche in Vietnam: formats, angles, recurring topics and the discussions the audience is having."
+	default:
+		return "what is currently trending for this subject's declared business in Vietnam: products, content formats, campaign styles."
+	}
+}
+
+// researchLocalSignalsFocus keeps the third section meaningful for subjects
+// that have no catchment at all — "news near the shop" is nonsense for a
+// nationwide page.
+func researchLocalSignalsFocus(profile businessProfile) string {
+	switch profile.geoMode {
+	case "nationwide":
+		return "signals across the whole niche rather than one neighbourhood: notable entrants, closures, national campaigns and policy or platform changes that affect this subject. There is no catchment to survey — do not invent one."
+	case "area":
+		return "signals across the declared operating region: notable openings/closures, sector events, trade fairs, infrastructure or policy changes. Cover the region, not a single street."
+	default:
+		return "news around the subject's locality that affects foot traffic or competition: notable openings/closures, local events, festivals, road works. If the locality is too small to yield news, widen to its district/city and say so in the summary."
+	}
+}
+
 func buildMarketResearchPrompt(request map[string]any) string {
 	locality := strings.TrimSpace(stringFromMap(request, "locality"))
 	storeName := strings.TrimSpace(stringFromMap(request, "store_name"))
@@ -363,11 +392,18 @@ func buildMarketResearchPrompt(request map[string]any) string {
 	sb.WriteString(researchFinalToolName)
 	sb.WriteString(" exactly once. Do not return the report as plain text.\n\n")
 
+	profile := readBusinessProfile(request)
+
 	sb.WriteString("## Store context\n")
-	if storeName != "" {
-		sb.WriteString("- Store: " + storeName + "\n")
+	if subject := profile.subjectName(storeName); subject != "" {
+		sb.WriteString("- Subject: " + subject + "\n")
 	}
-	sb.WriteString("- Business profile: derive only from the supplied store/page context, Vault and verified web evidence.\n")
+	// A declared profile replaces the guesswork. Without one the agent only
+	// has the store name, which is often an internal category rather than a
+	// business — hence the fallback wording, not a removal.
+	if !profile.writeProfile(&sb) {
+		sb.WriteString("- Business profile: derive only from the supplied store context and verified web evidence.\n")
+	}
 	if locality != "" {
 		sb.WriteString("- Locality: " + locality + "\n")
 	}
@@ -379,9 +415,9 @@ func buildMarketResearchPrompt(request map[string]any) string {
 	writeKnownCompetitors(&sb, request)
 
 	sb.WriteString("## What to research (three sections, all required)\n")
-	sb.WriteString("1. trends — what is currently trending for this store's supplied business context in Vietnam: products, content formats, campaign styles. Prefer signals from the last 60 days.\n")
-	sb.WriteString(fmt.Sprintf("2. seasonal_hooks — holidays, occasions and seasonal angles inside the next %d weeks that this store can build campaigns around, with enough lead time to prepare content BEFORE the date.\n", horizonWeeks))
-	sb.WriteString("3. local_signals — news around the store's locality that affects foot traffic or competition: notable openings/closures, local events, festivals, road works. If the locality is too small to yield news, widen to its district/city and say so in the summary.\n\n")
+	sb.WriteString("1. trends — " + researchTrendsFocus(profile.goal) + " Prefer signals from the last 60 days.\n")
+	sb.WriteString(fmt.Sprintf("2. seasonal_hooks — holidays, occasions and seasonal angles inside the next %d weeks that this subject can build campaigns around, with enough lead time to prepare content BEFORE the date.\n", horizonWeeks))
+	sb.WriteString("3. local_signals — " + researchLocalSignalsFocus(profile) + "\n\n")
 
 	sb.WriteString("## Hard rules\n")
 	sb.WriteString(fmt.Sprintf("- Write ALL user-facing text (title, summary, why_it_matters, suggested_action) in language '%s'. It is read by marketing staff, not developers.\n", language))

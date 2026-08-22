@@ -416,10 +416,13 @@ func buildCompetitorAdsPrompt(request map[string]any) string {
 	sb.WriteString(competitorAdsFinalToolName)
 	sb.WriteString(" exactly once. Do not answer with plain text.\n\n")
 
+	profile := readBusinessProfile(request)
+
 	sb.WriteString("## Store context\n")
-	if storeName != "" {
-		sb.WriteString("- Store: " + storeName + "\n")
+	if subject := profile.subjectName(storeName); subject != "" {
+		sb.WriteString("- Subject: " + subject + "\n")
 	}
+	profile.writeProfile(&sb)
 	if industry != "" {
 		sb.WriteString("- Industry: " + industry + "\n")
 	}
