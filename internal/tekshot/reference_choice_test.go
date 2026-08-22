@@ -37,6 +37,7 @@ func TestBuildReferenceChoicePromptListsEveryItem(t *testing.T) {
 		"id 12: Tô bún bò trên bàn gỗ.",
 		"id 15: Mặt tiền quán buổi tối.",
 		`{"id": 0}`,
+		"Do not call any tools",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt missing %q\n---\n%s", want, prompt)
@@ -64,6 +65,35 @@ func TestParseReferenceChoiceAcceptsFencedJSON(t *testing.T) {
 func TestParseReferenceChoiceRejectsUnknownID(t *testing.T) {
 	if got := parseReferenceChoice(`{"id": 99}`, choiceFixture()); got != 0 {
 		t.Fatalf("an id outside the manifest must be refused, got %d", got)
+	}
+}
+
+func TestParseReferenceChoiceAcceptsUnquotedKey(t *testing.T) {
+	// Codex-family models often emit JS-style objects without quoted keys.
+	if got := parseReferenceChoice(`{id: 12}`, choiceFixture()); got != 12 {
+		t.Fatalf("expected 12 for an unquoted key, got %d", got)
+	}
+	if got := parseReferenceChoice(`id: 15`, choiceFixture()); got != 15 {
+		t.Fatalf("expected 15 for a bare key, got %d", got)
+	}
+}
+
+func TestParseReferenceChoiceIgnoresWordsEndingInID(t *testing.T) {
+	// Asserted on the raw reader so it holds whatever the fixture contains:
+	// the word boundary, not the manifest check, is what must reject this.
+	if _, parsed := referenceChoiceRawID(`candid: 9`); parsed {
+		t.Fatal("a word merely ending in 'id' must not parse as the id key")
+	}
+	if _, parsed := referenceChoiceRawID(`{"reference_image_id": 9}`); parsed {
+		t.Fatal("a longer key ending in '_id' must not parse as the id key")
+	}
+}
+
+func TestParseReferenceChoiceHandlesDotsFallback(t *testing.T) {
+	// loop_finalize.go substitutes "..." when the model returns empty content,
+	// which is what a tool-call-only turn produces.
+	if got := parseReferenceChoice("...", choiceFixture()); got != 0 {
+		t.Fatalf("expected 0 for the dots fallback, got %d", got)
 	}
 }
 
@@ -112,11 +142,14 @@ func TestChooseReferenceImageRestrictsTools(t *testing.T) {
 	(&JobService{}).chooseReferenceImage(context.Background(), fake, job, "Ảnh combo buổi sáng", choiceFixture())
 
 	req := fake.captured
-	// An EMPTY ToolAllow is not "no tools": policy.go's group-allow step gates on
-	// len(groupToolAllow) > 0, so []string{} reads the same as nil and grants the
-	// full toolset — create_image included, burning a discarded generation.
-	if len(req.ToolAllow) == 0 {
-		t.Fatalf("ToolAllow must be non-empty, got %#v", req.ToolAllow)
+	// Two traps stack here. (1) An EMPTY ToolAllow is not "no tools": policy.go's
+	// group-allow step gates on len(groupToolAllow) > 0, so []string{} reads the
+	// same as nil and grants the full toolset. (2) Any REAL tool named here gets
+	// called — gpt-5.4-mini spent its single iteration calling datetime instead
+	// of answering. The sentinel is non-empty for the gate yet resolves to no
+	// tool, so the provider request carries none.
+	if len(req.ToolAllow) != 1 || req.ToolAllow[0] != referenceChoiceNoTools {
+		t.Fatalf("ToolAllow must be exactly the no-tools sentinel, got %#v", req.ToolAllow)
 	}
 	if req.MaxIterations != 1 {
 		t.Fatalf("expected MaxIterations 1, got %d", req.MaxIterations)

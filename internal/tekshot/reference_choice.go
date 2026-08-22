@@ -24,9 +24,20 @@ const referenceChoiceMaxItems = 60
 // 12-minute deadline, which the main image turn still needs after it.
 const referenceChoiceTimeout = 90 * time.Second
 
+// referenceChoiceNoTools is a deliberately unresolvable tool name. An empty
+// allowlist is NOT "no tools" — policy.go's group-allow step gates on
+// len(ToolAllow) > 0, so []string{} grants the full toolset — and any real tool
+// named here gets called instead of answered with: the model spent its single
+// iteration on datetime. A name matching nothing empties that intersection, and
+// all three providers omit tools/tool_choice when the list is empty, so the
+// model cannot emit a tool call at all. Caveat: a runtime alsoAllow config
+// unions tools back in AFTER that step; the prompt's no-tools line covers it.
+const referenceChoiceNoTools = "ref-choice/no-tools"
+
 // referenceChoiceIDPattern reads the id out of the selection reply. A regex
-// rather than json.Unmarshal because models wrap the object in prose or fences.
-var referenceChoiceIDPattern = regexp.MustCompile(`"id"\s*:\s*(\d+)`)
+// rather than json.Unmarshal because models wrap the object in prose, fences,
+// or JS-style unquoted keys. \b keeps "candid: 9" and "..._id": 9 from matching.
+var referenceChoiceIDPattern = regexp.MustCompile(`["']?\bid\b["']?\s*:\s*(\d+)`)
 
 func capReferenceItems(items []referenceLibraryItem, max int) []referenceLibraryItem {
 	if max <= 0 || len(items) <= max {
@@ -50,6 +61,7 @@ func buildReferenceChoicePrompt(brief string, items []referenceLibraryItem) stri
 	sb.WriteString("\n## Answer format\n")
 	sb.WriteString("Reply with ONLY this JSON object and nothing else: {\"id\": <chosen id>}\n")
 	sb.WriteString("Answer {\"id\": 0} when no entry genuinely fits. Never force a choice.\n")
+	sb.WriteString("Do not call any tools. Reply with the JSON object as plain text.\n")
 	return sb.String()
 }
 
@@ -116,11 +128,9 @@ func (s *JobService) chooseReferenceImage(
 		RunID:       runID,
 		UserID:      userID,
 		SenderID:    userID,
-		// An empty slice is NOT "no tools": policy.go's group-allow step only
-		// gates on len(ToolAllow) > 0, so []string{} is indistinguishable from
-		// nil and would grant the full toolset. "datetime" is the harmless
-		// allowlist used for the same reason in knowledgeLabelToolAllow.
-		ToolAllow:     []string{"datetime"},
+		// Sentinel, not a real tool — see referenceChoiceNoTools. With no tools
+		// on the wire the single iteration can only produce text.
+		ToolAllow:     []string{referenceChoiceNoTools},
 		MaxIterations: 1,
 		// Keep the pass cheap and literal: the agent's own image skill ("always
 		// call create_image") pushes the model into prose instead of the JSON
