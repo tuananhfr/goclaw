@@ -132,9 +132,11 @@ func (t *SeedCommentsCollectorTool) Parameters() map[string]any {
 						"message": map[string]any{
 							"type": "string",
 							"description": "A public comment posted under the post, shown under the PAGE's own name. " +
-								"Write as the shop owner adding practical information a reader would want next: full menu, prices, branch address, opening hours, how to order or book. " +
+								"Write as the shop owner speaking up under their own post: open with one warm human sentence — greet the reader, invite them in, or pick up the thread of the caption — then add the practical information they would want next: full menu, prices, branch address, opening hours, how to order or book. " +
 								"NEVER pretend to be a customer asking about the product or praising it. " +
-								"1-2 sentences. Do not repeat any sentence already in the post. " +
+								"Address the reader exactly as the post does (bạn / các bác / anh chị …) — never fall back to neutral notice-board prose. " +
+								"EMOJI: exactly one leading the comment, plus optionally one on the closing call-to-action. Never mid-sentence, never two adjacent. " +
+								"1-3 sentences. Do not repeat any sentence already in the post. " +
 								"Use only facts present in the post or found in the Vault — never invent prices, addresses, promotions or opening hours. " +
 								"Write in the same language as the post.",
 						},
