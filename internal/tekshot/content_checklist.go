@@ -247,13 +247,18 @@ func buildContentChecklistPrompt(request map[string]any) string {
 	sb.WriteString(checklistFinalToolName)
 	sb.WriteString(" exactly once. Do not answer with plain text.\n\n")
 
+	// A declared profile outranks the store name: half of these stores are
+	// internal categories ("Xây dựng") holding unrelated brand pages.
+	profile := readBusinessProfile(request)
+
 	sb.WriteString("## Store context\n")
-	if storeName != "" {
-		sb.WriteString("- Store: " + storeName + "\n")
+	if subject := profile.subjectName(storeName); subject != "" {
+		sb.WriteString("- Store: " + subject + "\n")
 	}
 	if pageName != "" {
 		sb.WriteString("- Page: " + pageName + "\n")
 	}
+	profile.writeProfile(&sb)
 	if locality != "" {
 		sb.WriteString("- Locality: " + locality + "\n")
 	}
@@ -269,6 +274,7 @@ func buildContentChecklistPrompt(request map[string]any) string {
 	writeChecklistBlock(&sb, "## Reach facts (from the store's own Facebook pages)", request, "social_facts", true)
 	writeChecklistBlock(&sb, "## Open alerts", request, "alerts", true)
 	writeChecklistBlock(&sb, "## Market research findings", request, "research", true)
+	writeKnownCompetitors(&sb, request)
 	writeChecklistBlock(&sb, "## Editorial format contract", request, "editorial_contract", true)
 
 	sb.WriteString("## Column meaning (the team's existing spreadsheet)\n")
@@ -290,6 +296,10 @@ func buildContentChecklistPrompt(request map[string]any) string {
 	sb.WriteString("- Ground the plan in the facts above. Use page, sales, timing and research facts precisely when they belong in the post; use reach facts only as planning signals unless the user explicitly requests a performance/community report. Never invent a product, service or business claim.\n")
 	if pageName != "" {
 		sb.WriteString(fmt.Sprintf("- This plan is for the page \"%s\" specifically. Fit that page's own audience and voice, and do not write a generic plan that would suit any of the store's other pages equally well.\n", pageName))
+	}
+	if hasKnownCompetitors(request) {
+		// The store's own team vetted that list — it is for differentiating, not for naming.
+		sb.WriteString("- The competitor list above was approved by the store's own team. Use it to differentiate this page's angles from theirs, and never name a competitor in a post.\n")
 	}
 	if hasPos {
 		sb.WriteString("- Sales numbers above are real. Never invent different ones, and never claim a promotion or a price the store did not state.\n")

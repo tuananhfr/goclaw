@@ -201,3 +201,104 @@ func TestBuildContentChecklistPromptWithoutPageNameOmitsPageContextAndRule(t *te
 		t.Fatal("expected the submission instruction to still reference the collector tool")
 	}
 }
+
+func TestBuildContentChecklistPromptCarriesTheDeclaredProfile(t *testing.T) {
+	request := map[string]any{
+		"store_name": "Xây dựng",
+		"page_name":  "Pizza Hip'S Đại Áng",
+		"plan_from":  "2026-08-01",
+		"plan_to":    "2026-08-07",
+		"item_count": float64(7),
+		"has_pos":    true,
+		"business_profile": map[string]any{
+			"name":        "Pizza Hip'S",
+			"goal":        "sell",
+			"kind":        "Chuỗi pizza",
+			"description": "Pizza và mì cay mang đi",
+			"offerings":   []any{"Pizza", "Mì cay"},
+			"geography":   map[string]any{"mode": "local", "area": "Thanh Trì", "radius_km": float64(5)},
+		},
+	}
+
+	prompt := buildContentChecklistPrompt(request)
+
+	if !strings.Contains(prompt, "- Store: Pizza Hip'S\n") {
+		t.Fatal("expected the declared business name to replace the store category name")
+	}
+	if !strings.Contains(prompt, "- Business: Pizza và mì cay mang đi\n") {
+		t.Fatal("expected the declared description in the store context")
+	}
+	if !strings.Contains(prompt, "Pizza; Mì cay") {
+		t.Fatal("expected the declared offerings in the store context")
+	}
+	if !strings.Contains(prompt, "- Operating area: ") {
+		t.Fatal("expected the declared geography in the store context")
+	}
+}
+
+func TestBuildContentChecklistPromptWithoutProfileKeepsTheOldStoreLine(t *testing.T) {
+	request := map[string]any{
+		"store_name": "Pizza Hip'S Đại Áng",
+		"plan_from":  "2026-08-01",
+		"plan_to":    "2026-08-07",
+		"item_count": float64(7),
+		"has_pos":    true,
+	}
+
+	prompt := buildContentChecklistPrompt(request)
+
+	if !strings.Contains(prompt, "- Store: Pizza Hip'S Đại Áng\n") {
+		t.Fatal("expected the store name to survive when no profile was declared")
+	}
+	if strings.Contains(prompt, "- Business: ") {
+		t.Fatal("expected no profile lines when Drupal declared none")
+	}
+}
+
+func TestBuildContentChecklistPromptListsApprovedCompetitors(t *testing.T) {
+	request := map[string]any{
+		"store_name": "Pizza Hip'S",
+		"plan_from":  "2026-08-01",
+		"plan_to":    "2026-08-07",
+		"item_count": float64(7),
+		"has_pos":    true,
+		"competitors": []any{
+			map[string]any{"name": "Pizza Home", "label": "direct", "facebook_url": "https://fb.com/pizzahome"},
+			map[string]any{"name": "Mì cay Sasin", "label": "reference"},
+		},
+	}
+
+	prompt := buildContentChecklistPrompt(request)
+
+	if !strings.Contains(prompt, "## Competitors the store's team has confirmed\n") {
+		t.Fatal("expected the approved competitor section")
+	}
+	if !strings.Contains(prompt, "- Pizza Home (direct competitor) https://fb.com/pizzahome\n") {
+		t.Fatal("expected the direct competitor line with its link")
+	}
+	if !strings.Contains(prompt, "- Mì cay Sasin (watch for content ideas only)\n") {
+		t.Fatal("expected the reference competitor line")
+	}
+	if !strings.Contains(prompt, "never name a competitor") {
+		t.Fatal("expected the differentiation rule that goes with the list")
+	}
+}
+
+func TestBuildContentChecklistPromptWithoutCompetitorsOmitsTheSection(t *testing.T) {
+	request := map[string]any{
+		"store_name": "Pizza Hip'S",
+		"plan_from":  "2026-08-01",
+		"plan_to":    "2026-08-07",
+		"item_count": float64(7),
+		"has_pos":    true,
+	}
+
+	prompt := buildContentChecklistPrompt(request)
+
+	if strings.Contains(prompt, "Competitors the store's team has confirmed") {
+		t.Fatal("expected no competitor section when Drupal sent none")
+	}
+	if strings.Contains(prompt, "never name a competitor") {
+		t.Fatal("expected no competitor rule when there is no list")
+	}
+}
