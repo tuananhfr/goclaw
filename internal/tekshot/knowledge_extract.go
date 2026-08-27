@@ -360,7 +360,18 @@ func (s *JobService) runKnowledgeExtract(ctx context.Context, job *store.Tekshot
 	}
 
 	if fileURL != "" {
-		return s.runKnowledgeExtractFile(ctx, job, request, fileURL, pinnedIP)
+		fileReport, message, fileErr := s.runKnowledgeExtractFile(ctx, job, request, fileURL, pinnedIP)
+		if fileErr != nil {
+			return nil, "", fileErr
+		}
+		// Prompt E chạy trên cả hai nhánh: không trang nào vào vault mà chưa
+		// qua thẩm định, dù nó đến từ file hay từ crawl.
+		screened, ok := fileReport.(map[string]any)
+		if !ok {
+			return fileReport, message, nil
+		}
+		screened = s.applyKnowledgeScreening(ctx, job, request, screened)
+		return screened, knowledgeScreenMessage(screened, message), nil
 	}
 
 	loop, err := s.agents.Get(store.WithTenantID(ctx, store.MasterTenantID), job.AgentKey)
@@ -432,5 +443,31 @@ func (s *JobService) runKnowledgeExtract(ctx context.Context, job *store.Tekshot
 		}
 	}
 
-	return report, "Knowledge extracted", nil
+	report = s.applyKnowledgeScreening(ctx, job, request, report)
+	return report, knowledgeScreenMessage(report, "Knowledge extracted"), nil
+}
+
+// knowledgeScreenMessage nói thẳng số trang bị giữ lại trong dòng trạng thái
+// job, để panel không phải mở khối screening mới biết import bị cắt bớt.
+func knowledgeScreenMessage(report map[string]any, fallback string) string {
+	screening, ok := report["screening"].(map[string]any)
+	if !ok {
+		return fallback
+	}
+	held := intFromAny(screening["held"])
+	if held == 0 {
+		return fallback
+	}
+	return fmt.Sprintf("%s — %d tài liệu bị giữ lại chờ duyệt", fallback, held)
+}
+
+func intFromAny(value any) int {
+	switch v := value.(type) {
+	case int:
+		return v
+	case float64:
+		return int(v)
+	default:
+		return 0
+	}
 }

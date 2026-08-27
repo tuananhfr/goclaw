@@ -392,6 +392,11 @@ func (s *JobService) runChat(ctx context.Context, job *store.TekshotJob, request
 	if strings.TrimSpace(message) == "" {
 		return nil, "", fmt.Errorf("chat message is required")
 	}
+	// Luat anh la lop XUYEN SUOT: cam o day nen phu ca auto_image (no boc
+	// runChat) va moi duong sinh anh them sau nay. Rong khi trang chua bat luat.
+	if job.JobType == TekshotJobTypeImageChat {
+		message += imageGuidanceFor(request)
+	}
 	loop, err := s.agents.Get(store.WithTenantID(ctx, store.MasterTenantID), job.AgentKey)
 	if err != nil {
 		return nil, "", err

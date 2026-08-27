@@ -179,10 +179,11 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 		timezone = defaultTimezone
 	}
 
-	collector := NewDraftBatchCollectorTool(sourceItemsArg(args["source_items"]))
+	profile := pageProfileFromRequest(args)
+	collector := NewDraftBatchCollectorTool(sourceItemsArg(args["source_items"])).withProfile(profile)
 	runReq := agent.RunRequest{
 		SessionKey:     sessionKey,
-		Message:        buildPrompt(args, timezone),
+		Message:        buildPrompt(args, timezone) + buildGovernancePrompt(profile),
 		Media:          mediaFilesArg(args["source_media"]),
 		Channel:        "http",
 		ChatID:         "api",
@@ -223,6 +224,11 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 		return tools.ErrorResult("MODEL_OUTPUT_INVALID: agent did not submit a valid structured draft batch")
 	}
 
+	// Prompt D: lop kiem tra THU HAI, tach khoi luot viet. Chi chay khi trang
+	// da bat luat va bai khong phai thuan thong tin — bai THONG_TIN khong mang
+	// nghia vu quang cao nen khong co gi de soat.
+	applyComplianceOverlay(ctx, ag, sessionKey, store.UserIDFromContext(ctx), profile, batch)
+
 	encoded, err := json.Marshal(batch)
 	if err != nil {
 		return tools.ErrorResult(fmt.Sprintf("failed to encode structured draft batch: %v", err))
@@ -243,6 +249,10 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 type DraftBatchCollectorTool struct {
 	batch       map[string]any
 	sourceItems []SourceItem
+	// nil = page chua co PAGE_PROFILE: schema va validator giu nguyen hinh
+	// dang cu, bai viet ra y het truoc. Do la cach luat moi len ma khong vo
+	// page dang chay.
+	profile *pageProfile
 }
 
 func NewDraftBatchCollectorTool(sourceItems ...[]SourceItem) *DraftBatchCollectorTool {
@@ -253,6 +263,12 @@ func NewDraftBatchCollectorTool(sourceItems ...[]SourceItem) *DraftBatchCollecto
 	return &DraftBatchCollectorTool{sourceItems: items}
 }
 
+// withProfile bat lop tuan thu cho lot viet nay.
+func (t *DraftBatchCollectorTool) withProfile(profile *pageProfile) *DraftBatchCollectorTool {
+	t.profile = profile
+	return t
+}
+
 func (t *DraftBatchCollectorTool) Name() string { return finalToolName }
 
 func (t *DraftBatchCollectorTool) Description() string {
@@ -260,6 +276,33 @@ func (t *DraftBatchCollectorTool) Description() string {
 }
 
 func (t *DraftBatchCollectorTool) Parameters() map[string]any {
+	schema := t.baseParameters()
+	if t.profile == nil {
+		return schema
+	}
+	// Page da bat luat: gan them truong tuan thu vao TUNG bai. Description cua
+	// truong rang buoc manh hon van prompt, nen day moi la cho dat luat.
+	posts, ok := schema["properties"].(map[string]any)["posts"].(map[string]any)
+	if !ok {
+		return schema
+	}
+	items, ok := posts["items"].(map[string]any)
+	if !ok {
+		return schema
+	}
+	props, ok := items["properties"].(map[string]any)
+	if !ok {
+		return schema
+	}
+	for key, definition := range governancePostProperties() {
+		props[key] = definition
+	}
+	required, _ := items["required"].([]string)
+	items["required"] = append(append([]string{}, required...), governanceRequiredFields()...)
+	return schema
+}
+
+func (t *DraftBatchCollectorTool) baseParameters() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -327,7 +370,7 @@ func (t *DraftBatchCollectorTool) Parameters() map[string]any {
 }
 
 func (t *DraftBatchCollectorTool) Execute(_ context.Context, args map[string]any) *tools.Result {
-	batch, err := validateDraftBatch(args)
+	batch, err := validateDraftBatch(args, t.profile != nil)
 	if err != nil {
 		return tools.ErrorResult("MODEL_OUTPUT_INVALID: " + err.Error())
 	}
@@ -553,7 +596,7 @@ func sourceItemsArg(raw any) []SourceItem {
 	return out
 }
 
-func validateDraftBatch(args map[string]any) (map[string]any, error) {
+func validateDraftBatch(args map[string]any, governed bool) (map[string]any, error) {
 	requiredRootKeys := map[string]bool{
 		"title": true, "summary": true, "posts": true,
 	}
@@ -584,7 +627,7 @@ func validateDraftBatch(args map[string]any) (map[string]any, error) {
 		if !ok {
 			return nil, fmt.Errorf("posts[%d] must be an object", index)
 		}
-		post, err := validateDraftPost(postMap, index)
+		post, err := validateDraftPost(postMap, index, governed)
 		if err != nil {
 			return nil, err
 		}
@@ -598,13 +641,19 @@ func validateDraftBatch(args map[string]any) (map[string]any, error) {
 	}, nil
 }
 
-func validateDraftPost(post map[string]any, index int) (map[string]any, error) {
+func validateDraftPost(post map[string]any, index int, governed bool) (map[string]any, error) {
 	requiredPostKeys := map[string]bool{
 		"title": true, "brief": true, "pillar": true, "content": true, "hashtags": true,
 		"publish_at": true, "publish_date": true, "publish_time": true, "checklist_item": true,
 	}
+	optionalPostKeys := map[string]bool{"source_index": true}
+	if governed {
+		for key := range governancePostProperties() {
+			optionalPostKeys[key] = true
+		}
+	}
 	for key := range post {
-		if !requiredPostKeys[key] && key != "source_index" {
+		if !requiredPostKeys[key] && !optionalPostKeys[key] {
 			return nil, fmt.Errorf("posts[%d] contains unsupported field %q", index, key)
 		}
 	}
@@ -617,10 +666,14 @@ func validateDraftPost(post map[string]any, index int) (map[string]any, error) {
 	title := strings.TrimSpace(stringArg(post, "title"))
 	content := strings.TrimSpace(stringArg(post, "content"))
 	checklistItem := strings.TrimSpace(stringArg(post, "checklist_item"))
+	// Bai cham lan ranh la KET QUA hop le, khong phai loi: no ve voi exception
+	// va content rong, de nguoi duyet chon phuong an.
+	exception, hasException := post["exception"].(map[string]any)
+	blocked := governed && hasException && len(exception) > 0
 	if title == "" {
 		return nil, fmt.Errorf("posts[%d].title is required", index)
 	}
-	if content == "" {
+	if content == "" && !blocked {
 		return nil, fmt.Errorf("posts[%d].content is required", index)
 	}
 	if checklistItem == "" {
@@ -651,6 +704,16 @@ func validateDraftPost(post map[string]any, index int) (map[string]any, error) {
 			return nil, fmt.Errorf("posts[%d].source_index must be a positive integer", index)
 		}
 		validated["source_index"] = sourceIndex
+	}
+	if governed {
+		if err := validateGovernanceFields(post, index); err != nil {
+			return nil, err
+		}
+		for key := range governancePostProperties() {
+			if value, ok := post[key]; ok {
+				validated[key] = value
+			}
+		}
 	}
 	return validated, nil
 }

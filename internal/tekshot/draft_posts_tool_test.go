@@ -22,7 +22,7 @@ func TestValidateDraftBatchAcceptsValidPayload(t *testing.T) {
 				"checklist_item": "Original row summary",
 			},
 		},
-	})
+	}, false)
 	if err != nil {
 		t.Fatalf("validateDraftBatch returned error: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestValidateDraftBatchRejectsExtraKeys(t *testing.T) {
 				"unexpected":     "nope",
 			},
 		},
-	})
+	}, false)
 	if err == nil {
 		t.Fatal("expected validation error for unexpected post key")
 	}
@@ -63,7 +63,7 @@ func TestValidateBatchSourceIndexesAcceptsExactMatch(t *testing.T) {
 			validPost(2),
 			validPost(1),
 		},
-	})
+	}, false)
 	if err != nil {
 		t.Fatalf("validateDraftBatch returned error: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestValidateBatchSourceIndexesRejectsMissingIndex(t *testing.T) {
 		"posts": []any{
 			validPost(1),
 		},
-	})
+	}, false)
 	if err != nil {
 		t.Fatalf("validateDraftBatch returned error: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestValidateBatchSourceIndexesRejectsDuplicateIndex(t *testing.T) {
 			validPost(1),
 			validPost(1),
 		},
-	})
+	}, false)
 	if err != nil {
 		t.Fatalf("validateDraftBatch returned error: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestValidateBatchSourceIndexesRejectsOutsideIndex(t *testing.T) {
 		"posts": []any{
 			validPost(99),
 		},
-	})
+	}, false)
 	if err != nil {
 		t.Fatalf("validateDraftBatch returned error: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestValidateDraftBatchRejectsFractionalSourceIndex(t *testing.T) {
 		"title":   "Chunk 1",
 		"summary": "1 post",
 		"posts":   []any{post},
-	})
+	}, false)
 	if err == nil {
 		t.Fatal("expected fractional source_index to be rejected")
 	}
