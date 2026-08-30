@@ -420,7 +420,7 @@ func (s *JobService) runChat(ctx context.Context, job *store.TekshotJob, request
 	// reference_image_path empty.
 	var chosenRef referenceLibraryItem
 	if len(refLibrary) > 0 {
-		chosenRef = s.chooseReferenceImage(runCtx, loop, job, message, refLibrary)
+		chosenRef = s.chooseReferenceImage(runCtx, loop, job, referenceChoiceBrief(request, message), refLibrary)
 		if chosenRef.ID > 0 {
 			mediaFiles = append(mediaFiles, referenceLibraryMediaFiles([]referenceLibraryItem{chosenRef})...)
 		}
@@ -493,10 +493,15 @@ func (s *JobService) runChat(ctx context.Context, job *store.TekshotJob, request
 		finalReq.MaxIterations = 1
 		finalReq.ToolChoice = &providers.ToolChoice{Mode: "function", Name: "create_image"}
 		if isEdit {
+			// base-edit là marker Drupal gắn vào filename ảnh gốc; trỏ path vào nó
+			// để CHỈ ảnh gốc vào lượt sinh — path rỗng kéo mọi ảnh đính kèm vào
+			// ngang hàng và ảnh sửa ra thành blend.
 			finalReq.Message = "[System] You must call create_image now — do not reply with plain text. " +
-				"Follow the EDIT instruction from the request above: the base image is already attached, " +
-				"so preserve its composition, subject and identity, and apply ONLY the changes that were " +
-				"requested. Do not describe a brand-new image. Leave reference_image_path empty."
+				"Follow the EDIT instruction from the request above: preserve the base image's composition, " +
+				"subject and identity, and apply ONLY the changes that were requested. " +
+				"Set reference_image_path to the path=\"...\" value of the <media:image> tag whose path " +
+				"contains \"base-edit\" — that is the image being edited. Pass the \"Base image aspect ratio\" " +
+				"value from the request as aspect_ratio when present. Do not describe a brand-new image."
 		} else if chosenRef.ID > 0 {
 			finalReq.Message = "[System] You must call create_image now — do not reply with plain text. " +
 				"Build the prompt from the post context and image brief in the request above. " +

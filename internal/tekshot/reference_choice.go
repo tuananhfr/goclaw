@@ -37,13 +37,45 @@ const referenceChoiceNoTools = "ref-choice/no-tools"
 // referenceChoiceIDPattern reads the id out of the selection reply. A regex
 // rather than json.Unmarshal because models wrap the object in prose, fences,
 // or JS-style unquoted keys. \b keeps "candid: 9" and "..._id": 9 from matching.
-var referenceChoiceIDPattern = regexp.MustCompile(`["']?\bid\b["']?\s*:\s*(\d+)`)
+// "[: ]" thay vì ":" vì model trả cả dạng văn xuôi "Chọn: id 81" (đo 2026-08-30);
+// id sai vẫn bị parseReferenceChoice loại vì không khớp catalogue.
+var referenceChoiceIDPattern = regexp.MustCompile(`["']?\bid\b["']?\s*[:\s]\s*(\d+)`)
 
 func capReferenceItems(items []referenceLibraryItem, max int) []referenceLibraryItem {
 	if max <= 0 || len(items) <= max {
 		return items
 	}
 	return items[:max]
+}
+
+// referenceChoiceBrief keeps the selection prompt small. The full chat message
+// carries the whole system prompt and image rules, and a bloated brief is the
+// main way the single JSON-only turn drifts into prose instead of {"id": n}.
+func referenceChoiceBrief(request map[string]any, fallback string) string {
+	var parts []string
+	appendPart := func(label, value string) {
+		if v := strings.TrimSpace(value); v != "" {
+			parts = append(parts, label+": "+v)
+		}
+	}
+	if ctxMap, ok := request["context"].(map[string]any); ok {
+		appendPart("Post title", stringFromMap(ctxMap, "post_title"))
+		appendPart("Post brief", stringFromMap(ctxMap, "post_brief"))
+		appendPart("Image prompt", stringFromMap(ctxMap, "image_prompt"))
+	}
+	if len(parts) == 0 {
+		// auto_image carries these at the top level, not under context.
+		appendPart("Post title", stringFromMap(request, "post_title"))
+		appendPart("Post brief", stringFromMap(request, "post_brief"))
+	}
+	appendPart("Request", stringFromMap(request, "message"))
+	if len(parts) > 0 {
+		return strings.Join(parts, "\n")
+	}
+	if runes := []rune(fallback); len(runes) > 1500 {
+		return string(runes[:1500])
+	}
+	return fallback
 }
 
 // buildReferenceChoicePrompt renders the descriptions-only catalogue. No URL and
@@ -62,6 +94,7 @@ func buildReferenceChoicePrompt(brief string, items []referenceLibraryItem) stri
 	sb.WriteString("Reply with ONLY this JSON object and nothing else: {\"id\": <chosen id>}\n")
 	sb.WriteString("Answer {\"id\": 0} when no entry genuinely fits. Never force a choice.\n")
 	sb.WriteString("Do not call any tools. Reply with the JSON object as plain text.\n")
+	sb.WriteString("KHÔNG giải thích, KHÔNG viết lý do, KHÔNG viết gì ngoài đúng một object JSON.\n")
 	return sb.String()
 }
 
@@ -111,6 +144,28 @@ func (s *JobService) chooseReferenceImage(
 		return referenceLibraryItem{}
 	}
 	shortlist := capReferenceItems(items, referenceChoiceMaxItems)
+	// Một lượt retry: turn 1-iteration thỉnh thoảng trả rỗng/prose; đo được
+	// trên gpt-5.4 ngày 2026-08-30 (reply không mang id nào với catalogue 60).
+	for attempt := 1; attempt <= 2; attempt++ {
+		item, retry := s.runReferenceChoiceTurn(ctx, loop, job, brief, shortlist, len(items), attempt)
+		if !retry {
+			return item
+		}
+	}
+	return referenceLibraryItem{}
+}
+
+// runReferenceChoiceTurn runs one selection turn. retry=true only when the
+// reply could not be parsed at all — a genuine {"id": 0} judgement is final.
+func (s *JobService) runReferenceChoiceTurn(
+	ctx context.Context,
+	loop agent.Agent,
+	job *store.TekshotJob,
+	brief string,
+	shortlist []referenceLibraryItem,
+	catalogueSize int,
+	attempt int,
+) (referenceLibraryItem, bool) {
 	userID := "tekshot-" + job.ExternalUserID
 	runID := uuid.NewString()
 	choiceCtx, cancel := context.WithTimeout(ctx, referenceChoiceTimeout)
@@ -147,16 +202,16 @@ func (s *JobService) chooseReferenceImage(
 			reason = err.Error()
 		}
 		slog.Warn("tekshot: reference choice failed, generating without a library image",
-			"job", job.ID.String(), "external", job.ExternalJobUUID, "reason", reason)
-		return referenceLibraryItem{}
+			"job", job.ID.String(), "external", job.ExternalJobUUID, "attempt", attempt, "reason", reason)
+		return referenceLibraryItem{}, false
 	}
 	chosenID := parseReferenceChoice(result.Content, shortlist)
 	for _, item := range shortlist {
 		if item.ID == chosenID {
 			slog.Info("tekshot: reference image chosen",
 				"job", job.ID.String(), "external", job.ExternalJobUUID,
-				"reference_image_id", item.ID, "catalogue_size", len(items))
-			return item
+				"reference_image_id", item.ID, "catalogue_size", catalogueSize, "attempt", attempt)
+			return item, false
 		}
 	}
 	// Three different outcomes land here; an operator must be able to tell the
@@ -164,15 +219,28 @@ func (s *JobService) chooseReferenceImage(
 	rawID, parsed := referenceChoiceRawID(result.Content)
 	switch {
 	case !parsed:
-		slog.Warn("tekshot: reference choice reply carried no id, generating without a library image",
-			"job", job.ID.String(), "external", job.ExternalJobUUID, "catalogue_size", len(items))
+		// Reply head trong log: không nhìn thấy reply thì không chẩn được vì
+		// sao turn JSON-only lại trượt.
+		slog.Warn("tekshot: reference choice reply carried no id",
+			"job", job.ID.String(), "external", job.ExternalJobUUID,
+			"catalogue_size", catalogueSize, "attempt", attempt,
+			"reply_head", headRunes(result.Content, 200))
+		return referenceLibraryItem{}, true
 	case rawID > 0:
 		slog.Warn("tekshot: reference choice named an id outside the catalogue, generating without a library image",
 			"job", job.ID.String(), "external", job.ExternalJobUUID,
-			"reference_image_id", rawID, "catalogue_size", len(items))
+			"reference_image_id", rawID, "catalogue_size", catalogueSize, "attempt", attempt)
 	default:
 		slog.Info("tekshot: no library image fits the brief",
-			"job", job.ID.String(), "external", job.ExternalJobUUID, "catalogue_size", len(items))
+			"job", job.ID.String(), "external", job.ExternalJobUUID, "catalogue_size", catalogueSize, "attempt", attempt)
 	}
-	return referenceLibraryItem{}
+	return referenceLibraryItem{}, false
+}
+
+func headRunes(value string, max int) string {
+	runes := []rune(strings.TrimSpace(value))
+	if len(runes) > max {
+		return string(runes[:max]) + "…"
+	}
+	return string(runes)
 }

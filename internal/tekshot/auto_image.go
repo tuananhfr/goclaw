@@ -6,7 +6,11 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
+	"github.com/google/uuid"
+
+	"github.com/nextlevelbuilder/goclaw/internal/agent"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
 )
 
@@ -44,6 +48,12 @@ func (s *JobService) runAutoImage(ctx context.Context, job *store.TekshotJob, re
 			continue
 		}
 		qa := parseAutoImageQA(stringFromMap(resultMap, "content"))
+		// An image exists but the reply carried no QA JSON (typical after the
+		// forced create_image rescue pass). Run one QA-only turn on the same
+		// session instead of discarding a paid, possibly fine image.
+		if !qa.Parsed {
+			qa = s.runAutoImageQATurn(ctx, job)
+		}
 		if qa.Passed {
 			resultMap["qa_passed"] = true
 			resultMap["qa_notes"] = qa.Notes
@@ -60,7 +70,52 @@ func (s *JobService) runAutoImage(ctx context.Context, job *store.TekshotJob, re
 	return nil, "", fmt.Errorf("automated image failed visual QA after %d attempts: %s", autoImageMaxAttempts, lastNotes)
 }
 
+// runAutoImageQATurn asks for the missing QA verdict on the image just
+// generated. It reuses the job's own session so the QA CONTRACT and the exact
+// headline from the original request are still in history; read_image is the
+// only tool on offer, so the turn cannot generate a second image. Any failure
+// degrades to "not parsed" and the attempt loop treats it as a QA fail.
+func (s *JobService) runAutoImageQATurn(ctx context.Context, job *store.TekshotJob) autoImageQA {
+	loop, err := s.agents.Get(store.WithTenantID(ctx, store.MasterTenantID), job.AgentKey)
+	if err != nil {
+		return autoImageQA{Notes: "QA follow-up could not resolve the agent: " + err.Error()}
+	}
+	userID := "tekshot-" + job.ExternalUserID
+	qaCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	result, err := loop.Run(qaCtx, agent.RunRequest{
+		SessionKey: job.SessionKey,
+		Message: "[System] The image was generated but you did not return the QA JSON. " +
+			"Perform the QA CONTRACT from the original request now: call read_image on the image you just created, " +
+			"then reply with ONLY the JSON object {\"qa_passed\":true|false,\"qa_notes\":\"...\",\"creative_plan\":{...},\"final_prompt\":\"...\"}.",
+		Channel:       "tekshot_job",
+		ChannelType:   "tekshot",
+		ChatID:        userID,
+		PeerKind:      "direct",
+		Addressed:     true,
+		RunID:         uuid.NewString(),
+		UserID:        userID,
+		SenderID:      userID,
+		ToolAllow:     []string{"read_image"},
+		MaxIterations: 3,
+		TraceName:     "tekshot auto image qa",
+		TraceTags:     []string{"tekshot", "auto_image_qa"},
+	})
+	if err != nil || result == nil {
+		reason := "agent returned no result"
+		if err != nil {
+			reason = err.Error()
+		}
+		return autoImageQA{Notes: "QA follow-up turn failed: " + reason}
+	}
+	return parseAutoImageQA(result.Content)
+}
+
 type autoImageQA struct {
+	// Parsed separates "QA genuinely failed" from "the reply carried no QA JSON
+	// at all" — the second case gets a follow-up QA turn instead of burning the
+	// attempt (the forced create_image pass returns media with no JSON).
+	Parsed       bool
 	Passed       bool
 	Notes        string
 	CreativePlan map[string]any
@@ -78,11 +133,16 @@ func parseAutoImageQA(content string) autoImageQA {
 	if json.Unmarshal([]byte(content), &decoded) != nil {
 		return autoImageQA{Notes: "The agent did not return the required JSON QA result."}
 	}
+	// qa_passed must actually be present — an arbitrary JSON blob is not a QA
+	// verdict, and reading it as one would skip the follow-up turn.
+	if _, ok := decoded["qa_passed"]; !ok {
+		return autoImageQA{Notes: "The agent did not return the required JSON QA result."}
+	}
 	passed, _ := decoded["qa_passed"].(bool)
 	notes, _ := decoded["qa_notes"].(string)
 	finalPrompt, _ := decoded["final_prompt"].(string)
 	plan, _ := decoded["creative_plan"].(map[string]any)
-	return autoImageQA{Passed: passed, Notes: strings.TrimSpace(notes), CreativePlan: plan, FinalPrompt: strings.TrimSpace(finalPrompt)}
+	return autoImageQA{Parsed: true, Passed: passed, Notes: strings.TrimSpace(notes), CreativePlan: plan, FinalPrompt: strings.TrimSpace(finalPrompt)}
 }
 
 func cloneMap(source map[string]any) map[string]any {
