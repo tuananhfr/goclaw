@@ -33,7 +33,7 @@ func (s *JobService) runAutoImage(ctx context.Context, job *store.TekshotJob, re
 		attemptRequest := cloneMap(request)
 		prompt := basePrompt
 		if lastNotes != "" {
-			prompt += "\n\nPREVIOUS QA FEEDBACK (fix this and choose a noticeably different visual route):\n" + lastNotes
+			prompt += "\n\nPREVIOUS QA FEEDBACK — keep the same concept and fix exactly this defect; do not switch to a different visual route:\n" + lastNotes
 		}
 		attemptRequest["prompt"] = prompt
 		result, _, err := s.runChat(ctx, &imageJob, attemptRequest)

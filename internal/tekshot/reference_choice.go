@@ -93,6 +93,7 @@ func buildReferenceChoicePrompt(brief string, items []referenceLibraryItem) stri
 	sb.WriteString("\n## Answer format\n")
 	sb.WriteString("Reply with ONLY this JSON object and nothing else: {\"id\": <chosen id>}\n")
 	sb.WriteString("Answer {\"id\": 0} when no entry genuinely fits. Never force a choice.\n")
+	sb.WriteString("Answer 0 as well when the post does not call for a real photo at all — an infographic, a quote card, a concept diagram or an abstract background is better built without one.\n")
 	sb.WriteString("Do not call any tools. Reply with the JSON object as plain text.\n")
 	sb.WriteString("KHÔNG giải thích, KHÔNG viết lý do, KHÔNG viết gì ngoài đúng một object JSON.\n")
 	return sb.String()
