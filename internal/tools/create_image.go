@@ -268,6 +268,9 @@ func (t *CreateImageTool) callProvider(ctx context.Context, cp credentialProvide
 				ReferenceImages: getReferenceImages(params),
 				AspectRatio:     aspectRatio,
 				OutputFormat:    "png",
+				// From the chain entry's params (builtin_tools settings), so a
+				// deployment opts in per tool config — empty keeps the default.
+				Quality: GetParamString(params, "quality", ""),
 			})
 			if err != nil {
 				return nil, nil, fmt.Errorf("native image generation: %w", err)

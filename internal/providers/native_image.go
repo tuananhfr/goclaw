@@ -67,6 +67,10 @@ type NativeImageRequest struct {
 
 	// OutputFormat is the desired image format: "png" (default), "jpg", "webp".
 	OutputFormat string
+
+	// Quality is the image_generation tool quality ("low"|"medium"|"high").
+	// Empty omits the field and keeps the provider default.
+	Quality string
 }
 
 // NativeImageResult holds the result of a native image generation call.

@@ -73,6 +73,16 @@ func (p *CodexProvider) buildNativeImageRequestBody(model string, req NativeImag
 			"image_url": fmt.Sprintf("data:%s;base64,%s", mime, img.Data),
 		})
 	}
+	imageTool := map[string]any{
+		"type":          "image_generation",
+		"action":        "generate",
+		"model":         req.ImageModel,
+		"output_format": req.OutputFormat,
+		"size":          SizeFromAspect(req.AspectRatio),
+	}
+	if req.Quality != "" {
+		imageTool["quality"] = req.Quality
+	}
 	return map[string]any{
 		"model":        model,
 		"stream":       true,
@@ -84,15 +94,7 @@ func (p *CodexProvider) buildNativeImageRequestBody(model string, req NativeImag
 				"content": content,
 			},
 		},
-		"tools": []map[string]any{
-			{
-				"type":          "image_generation",
-				"action":        "generate",
-				"model":         req.ImageModel,
-				"output_format": req.OutputFormat,
-				"size":          SizeFromAspect(req.AspectRatio),
-			},
-		},
+		"tools":       []map[string]any{imageTool},
 		"tool_choice": map[string]any{
 			"type": "image_generation",
 		},
