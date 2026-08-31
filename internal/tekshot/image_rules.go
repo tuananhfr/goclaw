@@ -44,9 +44,13 @@ AI, kể cả khi có nhãn.
 // mediaBranchRules là ràng buộc riêng theo nhánh của bài. Rỗng cho nhánh AI:
 // lớp cấm ở trên đã đủ.
 func mediaBranchRules(branch string) string {
+	// UPLOAD/REF/AI là từ vựng hiện tại; REAL/PRODUCT/INFO là của bài viết
+	// trước đợt tách trục và vẫn phải đọc được.
 	switch strings.ToUpper(strings.TrimSpace(branch)) {
-	case "REAL", "PRODUCT":
+	case "UPLOAD", "REAL", "PRODUCT":
 		return "\nBÀI NÀY CẦN ẢNH THẬT. KHÔNG sinh ảnh. Xuất brief chụp cho người đi thực địa: chủ thể cần chụp (cụ thể, không mô tả cảm xúc), bối cảnh, khung giờ ánh sáng, số ảnh tối thiểu, và những gì phải tránh.\n"
+	case "REF":
+		return "\nBÀI NÀY DỰNG TỪ ẢNH THẬT TRONG KHO. Ảnh kho được chọn sẵn là chỗ dựa về chủ thể, chất liệu và không khí — bám sát nó thay vì tưởng tượng lại từ đầu.\n"
 	case "INFO":
 		return "\nBÀI NÀY DÙNG INFOGRAPHIC. Tỷ lệ 4:5 dọc, tối đa 7 điểm dữ liệu một hình. Nhãn bắt buộc trên hình: \"Đồ họa tạo bằng AI. Nguồn số liệu: [tên nguồn].\"\n"
 	default:

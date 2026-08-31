@@ -172,9 +172,17 @@ func governancePostProperties() map[string]any {
 			"items":       map[string]any{"type": "string"},
 			"description": "Những khẳng định bạn đã viết mà KHÔNG có nguồn trỏ về. Trung thực ở đây quan trọng hơn danh sách rỗng — người duyệt cần biết chỗ nào cần kiểm.",
 		},
+		"loai_anh": map[string]any{
+			"type":        "string",
+			"description": "UPLOAD | REF | AI. Nguồn ảnh của bài. UPLOAD = phải là ảnh thật do người chụp/chọn, KHÔNG sinh ảnh (món ăn, sản phẩm, người, địa điểm, công trình có thật). REF = AI dựng nhưng lấy một ảnh thật trong kho làm tham chiếu. AI = dựng thuần, không cần ảnh thật. Checklist đã ghi sẵn thì theo checklist; không ghi thì tự phán đoán từ nội dung bài.",
+		},
+		"style_anh": map[string]any{
+			"type":        "string",
+			"description": "PHOTOREAL | POSTER | INFOGRAPHIC | QUOTE | CONCEPT. Hướng mỹ thuật của ảnh, chỉ có nghĩa khi loai_anh là REF hoặc AI. Chọn theo nội dung bài, đừng mặc định một giá trị.",
+		},
 		"media_brief": map[string]any{
 			"type":        "string",
-			"description": "CHỈ điền khi loai_anh là REAL hoặc PRODUCT: brief chụp cho người đi thực địa — chủ thể cần chụp, bối cảnh, số ảnh tối thiểu, những gì phải tránh. Bạn KHÔNG được sinh ảnh cho hai nhánh này.",
+			"description": "CHỈ điền khi loai_anh là UPLOAD: brief chụp cho người đi thực địa — chủ thể cần chụp, bối cảnh, số ảnh tối thiểu, những gì phải tránh. Bạn KHÔNG được sinh ảnh cho nhánh này.",
 		},
 		"lich_ra_soat": map[string]any{
 			"type":        "string",
