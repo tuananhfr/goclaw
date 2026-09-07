@@ -7,6 +7,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -22,8 +23,13 @@ const (
 	blogImagePlanMin      = 2
 	blogImagePlanToolName = "submit_blog_image_plan"
 	blogImagePlanNoTools  = "blog-image-plan/no-tools"
-	// Vòng 1 gọi tool bắt buộc; vòng 2 là lần ép cuối khi vòng 1 bị từ chối.
-	blogImagePlanIterations = 2
+	// Đúng một vòng: ToolChoice đã ép gọi tool ngay vòng đầu, vòng thứ hai chỉ
+	// bắt model nộp lại y hệt và đã có lần ăn hết 7 phút hạn job.
+	blogImagePlanIterations = 1
+	// Trần riêng để lượt này không bao giờ tiêu vào ngân sách vẽ ảnh.
+	blogImagePlanTimeout = 90 * time.Second
+	// Mỗi ảnh ~45s; hết ngân sách thì dừng, đừng vẽ vào một context đã chết.
+	blogImageDrawTimeout = 120 * time.Second
 )
 
 func blogImagePlanParameters() map[string]any {
@@ -144,6 +150,8 @@ func (s *JobService) planBlogImages(ctx context.Context, job *store.TekshotJob, 
 	runCtx := store.WithTenantID(ctx, store.MasterTenantID)
 	runCtx = store.WithUserID(runCtx, userID)
 	runCtx = store.WithAgentKey(runCtx, job.AgentKey)
+	runCtx, cancel := context.WithTimeout(runCtx, blogImagePlanTimeout)
+	defer cancel()
 
 	if _, err := loop.Run(runCtx, agent.RunRequest{
 		SessionKey:     job.SessionKey + ":image-plan",
@@ -209,10 +217,18 @@ func (s *JobService) generateBlogImages(ctx context.Context, job *store.TekshotJ
 		if !ok {
 			continue
 		}
+		// Ngân sách job đã hết thì mọi lượt sau chỉ fail tức thì trong vài ms —
+		// dừng hẳn để phần còn lại đi thẳng vào ảnh tạm.
+		if runCtx.Err() != nil {
+			slog.Warn("tekshot: blog images stopped, job budget spent",
+				"job", job.ID.String(), "drawn", i, "planned", len(plan), "error", runCtx.Err())
+			break
+		}
 		s.setProgress(ctx, job, fmt.Sprintf("Đang tạo ảnh %d/%d", i+1, len(plan)))
 		var media any
 		for attempt := 1; attempt <= 2 && media == nil; attempt++ {
-			result, err := loop.Run(runCtx, agent.RunRequest{
+			drawCtx, cancelDraw := context.WithTimeout(runCtx, blogImageDrawTimeout)
+			result, err := loop.Run(drawCtx, agent.RunRequest{
 				SessionKey:    job.SessionKey + ":image:" + strconv.Itoa(i),
 				Message:       buildBlogImagePrompt(entry),
 				Channel:       "tekshot_job",
@@ -230,9 +246,10 @@ func (s *JobService) generateBlogImages(ctx context.Context, job *store.TekshotJ
 				TraceName:     "tekshot blog image",
 				TraceTags:     []string{"tekshot", "blog", "image"},
 			})
+			cancelDraw()
 			if err != nil || result == nil {
 				slog.Warn("tekshot: blog image attempt failed",
-					"job", job.ID.String(), "target", stringFromMap(entry, "target"), "attempt", attempt)
+					"job", job.ID.String(), "target", stringFromMap(entry, "target"), "attempt", attempt, "error", err)
 				continue
 			}
 			media = blogImageMediaEntry(result.Media)
