@@ -41,6 +41,7 @@ const (
 	TekshotJobTypeBlogGenerate     = "blog_generate"
 	TekshotJobTypeBlogRewrite      = "blog_rewrite"
 	TekshotJobTypeBlogAudit        = "blog_audit"
+	TekshotJobTypeBlogImages       = "blog_images"
 
 	defaultJobPollInterval = 2 * time.Second
 	defaultJobLockTTL      = 10 * time.Minute
@@ -341,6 +342,8 @@ func (s *JobService) process(ctx context.Context, job *store.TekshotJob) error {
 		result, progress, err = s.runBlogRewrite(ctx, job, request)
 	case TekshotJobTypeBlogAudit:
 		result, progress, err = s.runBlogAudit(ctx, job, request)
+	case TekshotJobTypeBlogImages:
+		result, progress, err = s.runBlogImages(ctx, job, request)
 	default:
 		err = fmt.Errorf("unsupported tekshot job type: %s", job.JobType)
 	}
@@ -601,7 +604,7 @@ func (s *JobService) notify() {
 
 func isSupportedTekshotJobType(jobType string) bool {
 	switch jobType {
-	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeAutoImage, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeChecklistChat, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle, TekshotJobTypeDescribeImage, TekshotJobTypeSeedComments, TekshotJobTypeKnowledgeExtract, TekshotJobTypeBlogGenerate, TekshotJobTypeBlogRewrite, TekshotJobTypeBlogAudit:
+	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeAutoImage, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeChecklistChat, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle, TekshotJobTypeDescribeImage, TekshotJobTypeSeedComments, TekshotJobTypeKnowledgeExtract, TekshotJobTypeBlogGenerate, TekshotJobTypeBlogRewrite, TekshotJobTypeBlogAudit, TekshotJobTypeBlogImages:
 		return true
 	default:
 		return false

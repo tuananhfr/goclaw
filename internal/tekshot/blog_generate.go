@@ -45,16 +45,17 @@ func (s *JobService) runBlogGenerate(ctx context.Context, job *store.TekshotJob,
 	if err != nil {
 		return nil, "", err
 	}
-	// Ảnh đi sau bài, trong lượt riêng: agent phải đọc được bài của chính nó
-	// mới mô tả được ảnh, và một ảnh hỏng không được kéo theo cả bài.
+	// Chỉ LÊN KẾ HOẠCH ảnh ở đây, không vẽ: agent phải đọc được bài của chính
+	// nó mới mô tả được ảnh, nhưng vẽ 6 ảnh ngốn gần hết hạn 12 phút của job.
+	// Việc vẽ đi sang job blog_images để bài về tay biên tập viên ngay.
 	if document, ok := report["document"].(map[string]any); ok {
 		if loop, lerr := s.agents.Get(store.WithTenantID(ctx, store.MasterTenantID), job.AgentKey); lerr == nil {
 			s.setProgress(ctx, job, "Đang lên kế hoạch ảnh")
 			if plan := s.planBlogImages(ctx, job, loop, document); len(plan) > 0 {
-				report["image_plan"] = s.generateBlogImages(ctx, job, loop, plan)
+				report["image_plan"] = plan
 			}
 		} else {
-			slog.Warn("tekshot: blog images skipped, agent unavailable", "job", job.ID.String(), "error", lerr)
+			slog.Warn("tekshot: blog image plan skipped, agent unavailable", "job", job.ID.String(), "error", lerr)
 		}
 	}
 	if usage != nil {

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/nextlevelbuilder/goclaw/internal/agent"
+	"github.com/nextlevelbuilder/goclaw/internal/store"
 )
 
 func sectionSet() map[string]bool { return map[string]bool{"s1": true, "s2": true} }
@@ -134,6 +135,24 @@ func TestBlogImagePlanCollectorRefusesAnUnknownSection(t *testing.T) {
 	}
 	if collector.Report() != nil {
 		t.Fatal("an invalid plan must not be kept")
+	}
+}
+
+func TestRunBlogImagesRefusesARequestWithoutADocument(t *testing.T) {
+	service := &JobService{}
+	if _, _, err := service.runBlogImages(t.Context(), &store.TekshotJob{}, map[string]any{}); err == nil {
+		t.Fatal("a request with no document must be refused, not drawn blind")
+	}
+}
+
+func TestRunBlogImagesRefusesAPlanTargetingAMissingSection(t *testing.T) {
+	service := &JobService{agents: nil}
+	_, _, err := service.runBlogImages(t.Context(), &store.TekshotJob{}, map[string]any{
+		"document":   rewriteBaseDocument(),
+		"image_plan": []any{map[string]any{"target": "section:khong-co", "prompt": "x", "alt": "y", "caption": ""}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "target") {
+		t.Fatalf("the plan must be re-validated against the document: %v", err)
 	}
 }
 

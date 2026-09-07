@@ -205,6 +205,34 @@ func buildBlogImagePlanPrompt(document map[string]any) string {
 	return sb.String()
 }
 
+// runBlogImages là job vẽ ảnh, tách khỏi blog_generate để mỗi bên có trọn hạn
+// 12 phút của mình: sáu ảnh mất tới ~8 phút, gộp chung là chạm trần và cả loạt
+// ảnh fail tức thì. Plan đã được blog_generate xác thực; ở đây xác thực lại
+// theo document vì request đi qua mạng.
+func (s *JobService) runBlogImages(ctx context.Context, job *store.TekshotJob, request map[string]any) (any, string, error) {
+	// Kiểm request trước cấu hình: plan sai là lỗi của bên gọi, thiếu agent
+	// router là lỗi của mình — thông báo phải chỉ đúng chỗ.
+	document, ok := request["document"].(map[string]any)
+	if !ok || len(document) == 0 {
+		return nil, "", fmt.Errorf("document is required to draw images")
+	}
+	plan, err := validateBlogImagePlan(request["image_plan"], blogSectionIDs(document))
+	if err != nil {
+		return nil, "", err
+	}
+	if len(plan) == 0 {
+		return map[string]any{"image_plan": []any{}}, "No images planned", nil
+	}
+	if s.agents == nil {
+		return nil, "", fmt.Errorf("agent router is not configured")
+	}
+	loop, err := s.agents.Get(store.WithTenantID(ctx, store.MasterTenantID), job.AgentKey)
+	if err != nil {
+		return nil, "", err
+	}
+	return map[string]any{"image_plan": s.generateBlogImages(ctx, job, loop, plan)}, "Blog images drawn", nil
+}
+
 // generateBlogImages vẽ từng ảnh trong plan bằng một lượt create_image bắt
 // buộc. MaxIterations phải là 1: ToolChoice được áp lại mỗi vòng, N vòng là N
 // ảnh. Một ảnh hỏng không kéo cả bài — mục đó giữ media nil và Drupal trỏ vào
