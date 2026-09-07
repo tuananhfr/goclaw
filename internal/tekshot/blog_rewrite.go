@@ -15,12 +15,15 @@ const (
 	blogScopeSectionPrfx  = "section:"
 )
 
+// runBlogRewrite: scope "all" gets the whole document back from the model;
+// "section:<id>" and "presentation" only ever receive the changed part and
+// splice it into the original — the model never has to echo the article.
 func (s *JobService) runBlogRewrite(ctx context.Context, job *store.TekshotJob, request map[string]any) (any, string, error) {
 	if strings.TrimSpace(stringFromMap(request, "instruction")) == "" {
 		return nil, "", fmt.Errorf("instruction is required")
 	}
-	original, ok := request["document"].(map[string]any)
-	if !ok || len(original) == 0 {
+	rawOriginal, ok := request["document"].(map[string]any)
+	if !ok || len(rawOriginal) == 0 {
 		return nil, "", fmt.Errorf("document is required for a rewrite")
 	}
 	scope := strings.TrimSpace(stringFromMap(request, "scope"))
@@ -30,22 +33,76 @@ func (s *JobService) runBlogRewrite(ctx context.Context, job *store.TekshotJob, 
 	if err := validateBlogScope(scope); err != nil {
 		return nil, "", err
 	}
+	snap := blogSnapshotFromRequest(request)
+	original, err := validateBlogDocument(rawOriginal, snap)
+	if err != nil {
+		return nil, "", fmt.Errorf("current document is invalid: %w", err)
+	}
+	currentPresentation, err := normalizedPresentation(request["presentation"], snap)
+	if err != nil {
+		return nil, "", fmt.Errorf("current presentation is invalid: %w", err)
+	}
+	emptySEO := map[string]any{"meta_title": "", "meta_description": "", "keywords": "", "focus_keyword": ""}
+	traceTags := []string{"tekshot", "blog", "rewrite"}
 
-	report, usage, err := s.runBlogCollector(ctx, job, request, buildBlogRewritePrompt(request, scope), "tekshot blog rewrite", []string{"tekshot", "blog", "rewrite"})
+	var collector blogCollector
+	switch {
+	case scope == blogScopePresentation:
+		collector = NewBlogPresentationCollector(snap)
+	case strings.HasPrefix(scope, blogScopeSectionPrfx):
+		id := strings.TrimPrefix(scope, blogScopeSectionPrfx)
+		if !blogHasSection(original, id) {
+			return nil, "", fmt.Errorf("section %s does not exist in the document", id)
+		}
+		collector = NewBlogSectionCollector(id)
+	default:
+		collector = NewBlogDocumentCollector(snap)
+	}
+
+	report, usage, err := s.runBlogCollector(ctx, job, buildBlogRewritePrompt(request, scope), "tekshot blog rewrite", traceTags, collector)
 	if err != nil {
 		return nil, "", err
 	}
-	updated, _ := report["document"].(map[string]any)
-	if err := enforceBlogRewriteScope(original, updated, scope); err != nil {
-		return nil, "", fmt.Errorf("MODEL_OUTPUT_INVALID: %w", err)
-	}
-	if scope == blogScopePresentation && report["presentation"] == nil && len(blogSnapshotFromRequest(request).TemplateKeys) > 0 {
-		return nil, "", fmt.Errorf("MODEL_OUTPUT_INVALID: presentation scope must choose a template")
+
+	var result map[string]any
+	switch {
+	case scope == blogScopePresentation:
+		result = map[string]any{"reply": report["reply"], "document": original, "presentation": report["presentation"], "seo": emptySEO}
+	case strings.HasPrefix(scope, blogScopeSectionPrfx):
+		section, _ := report["section"].(map[string]any)
+		spliced, err := spliceBlogSection(original, section)
+		if err != nil {
+			return nil, "", fmt.Errorf("MODEL_OUTPUT_INVALID: %w", err)
+		}
+		updated, err := validateBlogDocument(spliced, snap)
+		if err != nil {
+			return nil, "", fmt.Errorf("MODEL_OUTPUT_INVALID: %w", err)
+		}
+		if err := enforceBlogRewriteScope(original, updated, scope); err != nil {
+			return nil, "", fmt.Errorf("MODEL_OUTPUT_INVALID: %w", err)
+		}
+		var presentation any
+		if currentPresentation != nil {
+			presentation = currentPresentation
+		}
+		result = map[string]any{"reply": report["reply"], "document": updated, "presentation": presentation, "seo": emptySEO}
+	default:
+		result = report
 	}
 	if usage != nil {
-		report["usage"] = usage
+		result["usage"] = usage
 	}
-	return report, "Blog document rewritten (" + scope + ")", nil
+	return result, "Blog document rewritten (" + scope + ")", nil
+}
+
+func blogHasSection(document map[string]any, id string) bool {
+	sections, _ := document["sections"].([]any)
+	for _, raw := range sections {
+		if section, ok := raw.(map[string]any); ok && stringFromMap(section, "id") == id {
+			return true
+		}
+	}
+	return false
 }
 
 func validateBlogScope(scope string) error {
@@ -147,6 +204,9 @@ func canonicalJSON(value any) string {
 }
 
 func cloneJSON(value map[string]any) map[string]any {
+	if value == nil {
+		return nil
+	}
 	encoded, err := json.Marshal(value)
 	if err != nil {
 		return nil
@@ -160,7 +220,14 @@ func cloneJSON(value map[string]any) map[string]any {
 
 func buildBlogRewritePrompt(request map[string]any, scope string) string {
 	var sb strings.Builder
-	writeBlogContract(&sb, request)
+	toolName := blogFinalToolName
+	switch {
+	case scope == blogScopePresentation:
+		toolName = blogPresentationToolName
+	case strings.HasPrefix(scope, blogScopeSectionPrfx):
+		toolName = blogSectionToolName
+	}
+	writeBlogContract(&sb, request, toolName)
 	sb.WriteString("TASK: revise an existing article according to the USER INSTRUCTION, within SCOPE.\n\n")
 	writeBlogSnapshot(&sb, request)
 	sb.WriteString("## CURRENT DOCUMENT\n")
@@ -170,10 +237,10 @@ func buildBlogRewritePrompt(request map[string]any, scope string) string {
 	sb.WriteString("\n\n## SCOPE\n")
 	switch {
 	case scope == blogScopePresentation:
-		sb.WriteString("presentation — change ONLY presentation.template. Return the CURRENT DOCUMENT byte-for-byte unchanged (same fields, same order, same text). Any textual change is rejected.\n")
+		sb.WriteString("presentation — choose the template only. Call " + blogPresentationToolName + " with presentation.template; the article text is kept exactly as it is and must not be resubmitted.\n")
 	case strings.HasPrefix(scope, blogScopeSectionPrfx):
 		id := strings.TrimPrefix(scope, blogScopeSectionPrfx)
-		sb.WriteString("section:" + id + " — rewrite ONLY the section whose id is \"" + id + "\". Return every other section and every other document field exactly as in CURRENT DOCUMENT (same ids, same order, same text). Keep presentation unless the instruction says otherwise. Changes outside that section are rejected.\n")
+		sb.WriteString("section:" + id + " — rewrite ONLY the section whose id is \"" + id + "\". Call " + blogSectionToolName + " with that single section (keep id \"" + id + "\", heading and level may change if asked). Every other section and field is kept automatically; do not resubmit them.\n")
 	default:
 		sb.WriteString("all — you may change any part of the document and the presentation, but keep existing file_id values and keep the article on the same topic unless the instruction says otherwise.\n")
 	}

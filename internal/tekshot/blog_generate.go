@@ -39,7 +39,8 @@ func (s *JobService) runBlogGenerate(ctx context.Context, job *store.TekshotJob,
 	if strings.TrimSpace(stringFromMap(request, "prompt")) == "" {
 		return nil, "", fmt.Errorf("prompt is required")
 	}
-	report, usage, err := s.runBlogCollector(ctx, job, request, buildBlogGeneratePrompt(request), "tekshot blog generate", []string{"tekshot", "blog", "generate"})
+	collector := NewBlogDocumentCollector(blogSnapshotFromRequest(request))
+	report, usage, err := s.runBlogCollector(ctx, job, buildBlogGeneratePrompt(request), "tekshot blog generate", []string{"tekshot", "blog", "generate"}, collector)
 	if err != nil {
 		return nil, "", err
 	}
@@ -49,10 +50,10 @@ func (s *JobService) runBlogGenerate(ctx context.Context, job *store.TekshotJob,
 	return report, "Blog document generated", nil
 }
 
-// runBlogCollector runs one agent pass with the document collector, then a
-// forced final pass if the model narrated instead of submitting. Nothing
-// leaves without passing validateBlogSubmission.
-func (s *JobService) runBlogCollector(ctx context.Context, job *store.TekshotJob, request map[string]any, prompt, traceName string, traceTags []string) (map[string]any, any, error) {
+// runBlogCollector runs one agent pass with the given collector, then a forced
+// final pass if the model narrated instead of submitting. Nothing leaves
+// without passing the collector's validation.
+func (s *JobService) runBlogCollector(ctx context.Context, job *store.TekshotJob, prompt, traceName string, traceTags []string, collector blogCollector) (map[string]any, any, error) {
 	if s.agents == nil {
 		return nil, nil, fmt.Errorf("agent router is not configured")
 	}
@@ -65,7 +66,6 @@ func (s *JobService) runBlogCollector(ctx context.Context, job *store.TekshotJob
 	runCtx = store.WithUserID(runCtx, userID)
 	runCtx = store.WithAgentKey(runCtx, job.AgentKey)
 
-	collector := NewBlogDocumentCollector(blogSnapshotFromRequest(request))
 	runReq := agent.RunRequest{
 		SessionKey:     job.SessionKey,
 		Message:        prompt,
@@ -97,8 +97,8 @@ func (s *JobService) runBlogCollector(ctx context.Context, job *store.TekshotJob
 		finalReq := runReq
 		finalReq.RunID = uuid.NewString()
 		finalReq.MaxIterations = 1
-		finalReq.Message = fmt.Sprintf("Submit the finished article now by calling %s exactly once. Do not answer with plain text. If a previous call was rejected, fix exactly what the error named.", blogFinalToolName)
-		finalReq.ToolChoice = &providers.ToolChoice{Mode: "function", Name: blogFinalToolName}
+		finalReq.Message = fmt.Sprintf("Submit the result now by calling %s exactly once. Do not answer with plain text. If a previous call was rejected, fix exactly what the error named.", collector.Name())
+		finalReq.ToolChoice = &providers.ToolChoice{Mode: "function", Name: collector.Name()}
 		if _, err := loop.Run(runCtx, finalReq); err != nil && collector.Report() == nil {
 			return nil, nil, fmt.Errorf("final structured submission failed: %w", err)
 		}
@@ -106,14 +106,14 @@ func (s *JobService) runBlogCollector(ctx context.Context, job *store.TekshotJob
 
 	report := collector.Report()
 	if report == nil {
-		return nil, nil, fmt.Errorf("MODEL_OUTPUT_INVALID: agent did not submit a blog document")
+		return nil, nil, fmt.Errorf("MODEL_OUTPUT_INVALID: agent did not call %s", collector.Name())
 	}
 	return report, usage, nil
 }
 
 func buildBlogGeneratePrompt(request map[string]any) string {
 	var sb strings.Builder
-	writeBlogContract(&sb, request)
+	writeBlogContract(&sb, request, blogFinalToolName)
 	sb.WriteString("TASK: write a complete new article from the USER REQUEST below.\n\n")
 	writeBlogSnapshot(&sb, request)
 	writeChecklistChatValue(&sb, "CONVERSATION", request["conversation"])
@@ -126,10 +126,10 @@ func buildBlogGeneratePrompt(request map[string]any) string {
 // writeBlogContract is the shared preamble: role, output channel, and the hard
 // rules the validator will enforce anyway — stated up front so the model does
 // not burn iterations on rejected submissions.
-func writeBlogContract(sb *strings.Builder, request map[string]any) {
+func writeBlogContract(sb *strings.Builder, request map[string]any, toolName string) {
 	language := blogSnapshotFromRequest(request).Language
 	sb.WriteString("You are the blog editor of one specific website. You research and write long-form articles for its readers.\n")
-	sb.WriteString("Deliver the result by calling " + blogFinalToolName + " exactly once. Never answer with plain text or Markdown; the tool is the only output channel.\n")
+	sb.WriteString("Deliver the result by calling " + toolName + " exactly once. Never answer with plain text or Markdown; the tool is the only output channel.\n")
 	sb.WriteString("Write in language \"" + language + "\" unless the request says otherwise.\n")
 	sb.WriteString("The document is structured, not HTML: lead (1-3 paragraphs), key_takeaways (3-5), 3-6 sections with heading level 2 (3 for sub-sections), each section 1-6 blocks (paragraph, callout, list, image, table), optional pull quote, 2-4 FAQ, one CTA, sources.\n")
 	sb.WriteString("Inline formatting inside text is limited to **bold**, *italic* and [text](https://…). No HTML tags.\n")
@@ -139,7 +139,7 @@ func writeBlogContract(sb *strings.Builder, request map[string]any) {
 	sb.WriteString("sources: only https URLs you actually fetched in this run. An empty list is acceptable.\n")
 	sb.WriteString("Respect BRAND PROFILE: tone, audience, taboo topics (never mention them), entity_names spelled exactly, and use cta_default as the CTA unless the request asks for another.\n")
 	sb.WriteString("Do not reuse a title from EXISTING TITLES. Target 900-1500 words. seo.meta_title ≤ 60 characters, seo.meta_description ≤ 160 characters, focus_keyword is one phrase that appears in the title and the lead.\n")
-	sb.WriteString("reply: 1-3 sentences to the human editor, in the article language, saying what you wrote and which template you chose and why.\n\n")
+	sb.WriteString("reply: 1-3 sentences to the human editor, in the article language, saying what you did and why.\n\n")
 }
 
 func writeBlogSnapshot(sb *strings.Builder, request map[string]any) {

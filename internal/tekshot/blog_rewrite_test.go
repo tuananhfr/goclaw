@@ -79,20 +79,34 @@ func TestEnforceBlogRewriteScopeIgnoresNumberEncoding(t *testing.T) {
 	}
 }
 
-func TestBuildBlogRewritePromptStatesScope(t *testing.T) {
-	prompt := buildBlogRewritePrompt(map[string]any{
+func TestBuildBlogRewritePromptNamesTheScopedTool(t *testing.T) {
+	request := map[string]any{
 		"instruction":  "Ngắn lại",
 		"document":     rewriteBaseDocument(),
 		"presentation": map[string]any{"template": "editorial"},
 		"snapshot":     map[string]any{"website": map[string]any{"language": "vi"}},
-	}, "section:s2")
-	for _, want := range []string{"section:s2", "CURRENT DOCUMENT", "\"id\":\"s2\"", "USER INSTRUCTION:\nNgắn lại", blogFinalToolName} {
-		if !strings.Contains(prompt, want) {
-			t.Errorf("prompt lacks %q", want)
+	}
+	section := buildBlogRewritePrompt(request, "section:s2")
+	for _, want := range []string{"section:s2", "CURRENT DOCUMENT", "\"id\":\"s2\"", "USER INSTRUCTION:\nNgắn lại", blogSectionToolName} {
+		if !strings.Contains(section, want) {
+			t.Errorf("section prompt lacks %q", want)
 		}
 	}
-	if strings.Contains(prompt, "create_image") {
-		t.Fatal("prompt must never mention image generation")
+	if strings.Contains(section, "calling "+blogFinalToolName) {
+		t.Error("section prompt must not ask for the whole document")
+	}
+	presentation := buildBlogRewritePrompt(request, "presentation")
+	if !strings.Contains(presentation, blogPresentationToolName) || strings.Contains(presentation, "calling "+blogFinalToolName) {
+		t.Error("presentation prompt must name the presentation tool only")
+	}
+	all := buildBlogRewritePrompt(request, "all")
+	if !strings.Contains(all, "calling "+blogFinalToolName) {
+		t.Error("all prompt must ask for the whole document")
+	}
+	for _, prompt := range []string{section, presentation, all} {
+		if strings.Contains(prompt, "create_image") {
+			t.Fatal("prompt must never mention image generation")
+		}
 	}
 }
 
