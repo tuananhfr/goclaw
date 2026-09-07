@@ -1,6 +1,7 @@
 package tekshot
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -56,13 +57,23 @@ func TestValidateBlogImagePlanRejects(t *testing.T) {
 	}
 }
 
-func TestValidateBlogImagePlanCapsAtSix(t *testing.T) {
+func TestValidateBlogImagePlanTrimsToSixRatherThanRefusing(t *testing.T) {
+	sections := map[string]bool{}
 	plan := []any{map[string]any{"target": "featured", "prompt": "x", "alt": "y"}}
 	for i := 0; i < 8; i++ {
-		plan = append(plan, map[string]any{"target": "section:s1", "prompt": "x", "alt": "y"})
+		id := "s" + strconv.Itoa(i)
+		sections[id] = true
+		plan = append(plan, map[string]any{"target": "section:" + id, "prompt": "x", "alt": "y"})
 	}
-	if _, err := validateBlogImagePlan(plan, sectionSet()); err == nil {
-		t.Fatal("over the cap must be rejected")
+	out, err := validateBlogImagePlan(plan, sections)
+	if err != nil {
+		t.Fatalf("over the cap must be trimmed, not refused: %v", err)
+	}
+	if len(out) != blogImagePlanMax {
+		t.Fatalf("expected %d entries, got %d", blogImagePlanMax, len(out))
+	}
+	if out[0].(map[string]any)["target"] != "featured" {
+		t.Fatal("the cover must survive the trim")
 	}
 }
 

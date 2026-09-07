@@ -23,9 +23,10 @@ const (
 	blogImagePlanMin      = 2
 	blogImagePlanToolName = "submit_blog_image_plan"
 	blogImagePlanNoTools  = "blog-image-plan/no-tools"
-	// Đúng một vòng: ToolChoice đã ép gọi tool ngay vòng đầu, vòng thứ hai chỉ
-	// bắt model nộp lại y hệt và đã có lần ăn hết 7 phút hạn job.
-	blogImagePlanIterations = 1
+	// Vòng 2 là lần nộp lại khi vòng 1 bị từ chối. Nó thường phí một lượt nộp
+	// y hệt, nhưng blogImagePlanTimeout chặn đứng lượt đó — bỏ nó đi thì một
+	// plan sai là cả bài không có ảnh nào.
+	blogImagePlanIterations = 2
 	// Trần riêng để lượt này không bao giờ tiêu vào ngân sách vẽ ảnh.
 	blogImagePlanTimeout = 90 * time.Second
 	// Mỗi ảnh ~45s; hết ngân sách thì dừng, đừng vẽ vào một context đã chết.
@@ -60,8 +61,10 @@ func validateBlogImagePlan(raw any, sectionIDs map[string]bool) ([]any, error) {
 	if !ok {
 		return nil, fmt.Errorf("image_plan must be an array")
 	}
+	// Thừa ảnh thì cắt, đừng từ chối: trần này là ngân sách thời gian, và một
+	// lượt bị từ chối là cả bài không có ảnh nào.
 	if len(list) > blogImagePlanMax {
-		return nil, fmt.Errorf("image_plan has %d entries, at most %d are allowed", len(list), blogImagePlanMax)
+		list = list[:blogImagePlanMax]
 	}
 	seen := map[string]bool{}
 	out := make([]any, 0, len(list))
