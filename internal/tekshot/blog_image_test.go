@@ -94,6 +94,54 @@ func TestBlogImageMediaEntryKeepsTheLastImage(t *testing.T) {
 	}
 }
 
+func TestBlogImagePlanCollectorPushesBackOnAThinPlanButKeepsIt(t *testing.T) {
+	collector := NewBlogImagePlanCollector(sectionSet())
+	thin := []any{map[string]any{"target": "featured", "prompt": "Ảnh bìa", "alt": "Bìa", "caption": ""}}
+	res := collector.Execute(t.Context(), map[string]any{"image_plan": thin})
+	if res == nil || !res.IsError {
+		t.Fatalf("a one-entry plan must be pushed back: %v", res)
+	}
+	if len(collector.Report()) != 1 {
+		t.Fatal("the thin plan must still be kept — one image beats none")
+	}
+
+	if res := collector.Execute(t.Context(), map[string]any{"image_plan": validPlan()}); res == nil || res.IsError {
+		t.Fatalf("a full plan must be accepted: %v", res)
+	}
+	if len(collector.Report()) != 2 {
+		t.Fatalf("the second plan must replace the first: %v", collector.Report())
+	}
+}
+
+func TestBlogImagePlanCollectorRefusesAnUnknownSection(t *testing.T) {
+	collector := NewBlogImagePlanCollector(sectionSet())
+	res := collector.Execute(t.Context(), map[string]any{"image_plan": []any{
+		map[string]any{"target": "section:zzz", "prompt": "x", "alt": "y", "caption": ""},
+	}})
+	if res == nil || !res.IsError {
+		t.Fatalf("unknown section must be refused: %v", res)
+	}
+	if collector.Report() != nil {
+		t.Fatal("an invalid plan must not be kept")
+	}
+}
+
+func TestBlogImagePlanPromptListsTheSections(t *testing.T) {
+	prompt := buildBlogImagePlanPrompt(map[string]any{
+		"title":   "Camera AI cho xưởng bánh",
+		"summary": "Giảm hao hụt nguyên liệu",
+		"sections": []any{
+			map[string]any{"id": "s1", "heading": "Hao hụt đến từ đâu"},
+			map[string]any{"id": "s2", "heading": "Cần chuẩn bị gì"},
+		},
+	})
+	for _, want := range []string{blogImagePlanToolName, "Camera AI cho xưởng bánh", "section:s1 — Hao hụt đến từ đâu", "section:s2", "3 to 5"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt lacks %q", want)
+		}
+	}
+}
+
 func TestBlogImagePromptForbidsTextAndLogos(t *testing.T) {
 	prompt := buildBlogImagePrompt(map[string]any{"prompt": "a small woodworking shop", "alt": "x"})
 	for _, want := range []string{"a small woodworking shop", "create_image", "No text", "no logo"} {

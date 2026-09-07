@@ -142,7 +142,6 @@ func blogSubmissionParameters() map[string]any {
 				"template": str("a key from TEMPLATES, or empty for the site default"),
 				"options":  map[string]any{"type": "object", "description": "reserved; send {}"},
 			}, "Presentation"),
-			"image_plan": blogImagePlanParameters(),
 			"seo": obj(map[string]any{
 				"meta_title":       str("≤ 60 chars"),
 				"meta_description": str("≤ 160 chars"),
@@ -150,7 +149,7 @@ func blogSubmissionParameters() map[string]any {
 				"focus_keyword":    str("one focus keyword"),
 			}, "SEO"),
 		},
-		"required": []string{"reply", "document", "presentation", "seo", "image_plan"},
+		"required": []string{"reply", "document", "presentation", "seo"},
 	}
 }
 
@@ -188,17 +187,19 @@ func validateBlogSubmission(args map[string]any, snap blogSnapshot) (map[string]
 	for key, limit := range map[string]int{"meta_title": 255, "meta_description": 320, "keywords": 255, "focus_keyword": 100} {
 		seo[key] = cutRunes(strings.TrimSpace(stringFromMap(rawSEO, key)), limit)
 	}
-
-	plan, err := validateBlogImagePlan(args["image_plan"], blogSectionIDs(document))
-	if err != nil {
-		return nil, err
+	// Meta trống thì suy ra từ bài: bỏ cả bài vì thiếu một dòng meta là
+	// fail-closed sai chỗ, và tiêu đề vẫn là meta_title tốt hơn ô trống.
+	if seo["meta_title"] == "" {
+		seo["meta_title"] = cutRunes(stringFromMap(document, "title"), 60)
+	}
+	if seo["meta_description"] == "" {
+		seo["meta_description"] = cutRunes(stringFromMap(document, "summary"), 160)
 	}
 
 	out := map[string]any{
-		"reply":      cutRunes(reply, 2000),
-		"document":   document,
-		"seo":        seo,
-		"image_plan": plan,
+		"reply":    cutRunes(reply, 2000),
+		"document": document,
+		"seo":      seo,
 	}
 	if presentation != nil {
 		out["presentation"] = presentation

@@ -13,10 +13,18 @@ import (
 	"github.com/nextlevelbuilder/goclaw/internal/agent"
 	"github.com/nextlevelbuilder/goclaw/internal/providers"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
+	"github.com/nextlevelbuilder/goclaw/internal/tools"
 )
 
 // Trần cứng: job GoClaw hết hạn ở 12 phút và mỗi ảnh tốn khoảng 40 giây.
-const blogImagePlanMax = 6
+const (
+	blogImagePlanMax      = 6
+	blogImagePlanMin      = 2
+	blogImagePlanToolName = "submit_blog_image_plan"
+	blogImagePlanNoTools  = "blog-image-plan/no-tools"
+	// Vòng 1 gọi tool bắt buộc; vòng 2 là lần ép cuối khi vòng 1 bị từ chối.
+	blogImagePlanIterations = 2
+)
 
 func blogImagePlanParameters() map[string]any {
 	return map[string]any{
@@ -84,6 +92,106 @@ func validateBlogImagePlan(raw any, sectionIDs map[string]bool) ([]any, error) {
 		})
 	}
 	return out, nil
+}
+
+// BlogImagePlanCollector nhận kế hoạch ảnh. Plan quá mỏng bị trả lỗi để model
+// nghĩ lại, nhưng vẫn được giữ lại: thà một ảnh còn hơn không ảnh nào.
+type BlogImagePlanCollector struct {
+	sectionIDs map[string]bool
+	plan       []any
+}
+
+func NewBlogImagePlanCollector(sectionIDs map[string]bool) *BlogImagePlanCollector {
+	return &BlogImagePlanCollector{sectionIDs: sectionIDs}
+}
+
+func (t *BlogImagePlanCollector) Name() string { return blogImagePlanToolName }
+
+func (t *BlogImagePlanCollector) Description() string {
+	return "Submit the list of images to draw for the article you just wrote: one cover plus one image for each section a reader could picture. Call exactly once."
+}
+
+func (t *BlogImagePlanCollector) Parameters() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties":           map[string]any{"image_plan": blogImagePlanParameters()},
+		"required":             []string{"image_plan"},
+	}
+}
+
+func (t *BlogImagePlanCollector) Execute(_ context.Context, args map[string]any) *tools.Result {
+	plan, err := validateBlogImagePlan(args["image_plan"], t.sectionIDs)
+	if err != nil {
+		return tools.ErrorResult("MODEL_OUTPUT_INVALID: " + err.Error())
+	}
+	t.plan = plan
+	if len(plan) < blogImagePlanMin {
+		return tools.ErrorResult(fmt.Sprintf(
+			"MODEL_OUTPUT_INVALID: image_plan has %d entry; this article is illustrated, so plan a \"featured\" cover plus one image per section a reader could picture (3 to 5 entries is the norm). Call %s again with the full list.",
+			len(plan), blogImagePlanToolName))
+	}
+	return tools.SilentResult("Image plan captured.")
+}
+
+func (t *BlogImagePlanCollector) Report() []any { return t.plan }
+
+// planBlogImages là một lượt riêng sau khi bài đã xong. Gộp vào cùng lệnh nộp
+// bài thì model viết xong 11KB rồi lên cho có đúng một ảnh.
+func (s *JobService) planBlogImages(ctx context.Context, job *store.TekshotJob, loop agent.Agent, document map[string]any) []any {
+	collector := NewBlogImagePlanCollector(blogSectionIDs(document))
+	userID := "tekshot-" + job.ExternalUserID
+	runCtx := store.WithTenantID(ctx, store.MasterTenantID)
+	runCtx = store.WithUserID(runCtx, userID)
+	runCtx = store.WithAgentKey(runCtx, job.AgentKey)
+
+	if _, err := loop.Run(runCtx, agent.RunRequest{
+		SessionKey:     job.SessionKey + ":image-plan",
+		Message:        buildBlogImagePlanPrompt(document),
+		Channel:        "tekshot_job",
+		ChannelType:    "tekshot",
+		ChatID:         userID,
+		PeerKind:       "direct",
+		Addressed:      true,
+		RunID:          uuid.NewString(),
+		UserID:         userID,
+		SenderID:       userID,
+		ToolAllow:      []string{blogImagePlanNoTools},
+		EphemeralTools: []tools.Tool{collector},
+		ToolChoice:     &providers.ToolChoice{Mode: "function", Name: blogImagePlanToolName},
+		MaxIterations:  blogImagePlanIterations,
+		SkillFilter:    []string{},
+		LightContext:   true,
+		HistoryLimit:   1,
+		TraceName:      "tekshot blog image plan",
+		TraceTags:      []string{"tekshot", "blog", "image"},
+	}); err != nil && collector.Report() == nil {
+		slog.Warn("tekshot: blog image plan failed", "job", job.ID.String(), "error", err)
+	}
+	return collector.Report()
+}
+
+// buildBlogImagePlanPrompt chỉ đưa khung bài, không đưa cả nội dung: model vừa
+// viết xong nên chỉ cần nhắc lại nó đang minh hoạ cho cái gì.
+func buildBlogImagePlanPrompt(document map[string]any) string {
+	var sb strings.Builder
+	sb.WriteString("[System] You just finished writing this article. Now plan its pictures by calling " + blogImagePlanToolName + " exactly once. Do not reply with plain text.\n")
+	sb.WriteString("Plan one \"featured\" cover, plus one image for every section below that a reader could picture — 3 to 5 entries is the norm, 6 is the ceiling. Only a pure reference table with nothing to illustrate may be left out.\n")
+	sb.WriteString("Each entry: an English drawing prompt of 20-60 words (subject, setting, framing, lighting, mood) and an alt text in the article's language. No text, no logo and no watermark in the picture.\n\n")
+	sb.WriteString("TITLE: " + stringFromMap(document, "title") + "\n")
+	if summary := stringFromMap(document, "summary"); summary != "" {
+		sb.WriteString("SUMMARY: " + summary + "\n")
+	}
+	sb.WriteString("SECTIONS:\n")
+	sections, _ := document["sections"].([]any)
+	for _, raw := range sections {
+		section, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		sb.WriteString("- section:" + stringFromMap(section, "id") + " — " + stringFromMap(section, "heading") + "\n")
+	}
+	return sb.String()
 }
 
 // generateBlogImages vẽ từng ảnh trong plan bằng một lượt create_image bắt

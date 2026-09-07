@@ -34,7 +34,6 @@ func validBlogSubmission() map[string]any {
 			"schema_type": "Article",
 		},
 		"presentation": map[string]any{"template": "editorial", "options": map[string]any{}},
-		"image_plan":   []any{},
 		"seo":          map[string]any{"meta_title": "t", "meta_description": "d", "keywords": "", "focus_keyword": "camera ai"},
 	}
 }
@@ -98,9 +97,6 @@ func TestValidateBlogSubmissionRejects(t *testing.T) {
 		},
 		"schema type":      func(m map[string]any) { m["document"].(map[string]any)["schema_type"] = "Recipe" },
 		"document missing": func(m map[string]any) { delete(m, "document") },
-		"bad image target": func(m map[string]any) {
-			m["image_plan"] = []any{map[string]any{"target": "section:zzz", "prompt": "x", "alt": "y", "caption": ""}}
-		},
 	}
 	for name, mutate := range cases {
 		m := validBlogSubmission()
@@ -120,6 +116,38 @@ func TestValidateBlogSubmissionFillsAMissingReply(t *testing.T) {
 	}
 	if got := out["reply"].(string); !strings.Contains(got, "Camera AI trong nhà máy") {
 		t.Fatalf("reply should fall back to the title, got %q", got)
+	}
+}
+
+func TestValidateBlogSubmissionDerivesEmptyMetaFromTheArticle(t *testing.T) {
+	m := validBlogSubmission()
+	m["seo"] = map[string]any{"meta_title": " ", "meta_description": "", "keywords": "", "focus_keyword": ""}
+	out, err := validateBlogSubmission(m, validBlogSnapshot())
+	if err != nil {
+		t.Fatalf("empty meta must not sink the article: %v", err)
+	}
+	seo := out["seo"].(map[string]any)
+	document := out["document"].(map[string]any)
+	if seo["meta_title"] != cutRunes(document["title"].(string), 60) {
+		t.Fatalf("meta_title should fall back to the title, got %q", seo["meta_title"])
+	}
+	if seo["meta_description"] != cutRunes(document["summary"].(string), 160) {
+		t.Fatalf("meta_description should fall back to the summary, got %q", seo["meta_description"])
+	}
+	if seo["focus_keyword"] != "" {
+		t.Fatal("focus_keyword must stay empty — the rule engine reports it, we do not guess it")
+	}
+}
+
+func TestValidateBlogSubmissionKeepsTheModelsOwnMeta(t *testing.T) {
+	m := validBlogSubmission()
+	m["seo"] = map[string]any{"meta_title": "Tiêu đề SEO riêng", "meta_description": "Mô tả riêng", "keywords": "", "focus_keyword": "camera ai"}
+	out, err := validateBlogSubmission(m, validBlogSnapshot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out["seo"].(map[string]any)["meta_title"] != "Tiêu đề SEO riêng" {
+		t.Fatal("a meta the model wrote must never be overwritten")
 	}
 }
 
