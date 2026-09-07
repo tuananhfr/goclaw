@@ -175,3 +175,24 @@ func TestMediaBranchRulesBlockGenerationForRealPhotos(t *testing.T) {
 		t.Fatal("nhánh AI đã bị lớp cấm chung phủ, không cần luật riêng")
 	}
 }
+
+// Luật ảnh chỉ đi theo đường tự động: cron sinh ảnh không ai xem. Chat tay là
+// người cố ý bấm nên runChat không gắn gì — quyết định 2026-09-07.
+func TestAutomatedImagePromptCarriesRulesOnlyWhenGoverned(t *testing.T) {
+	request := governedProfile()
+	request["loai_anh"] = "UPLOAD"
+	prompt := automatedImagePrompt("Vẽ poster khuyến mại", request)
+	if !strings.HasPrefix(prompt, "Vẽ poster khuyến mại") {
+		t.Fatal("prompt gốc phải đứng đầu, luật nối sau")
+	}
+	for _, phrase := range []string{"LUẬT ẢNH BẮT BUỘC", "KHÔNG sinh ảnh"} {
+		if !strings.Contains(prompt, phrase) {
+			t.Fatalf("đường tự động có profile phải mang %q", phrase)
+		}
+	}
+
+	bare := map[string]any{"loai_anh": "UPLOAD"}
+	if got := automatedImagePrompt("Vẽ poster khuyến mại", bare); got != "Vẽ poster khuyến mại" {
+		t.Fatalf("trang chưa bật luật thì prompt phải nguyên vẹn, nhận %q", got)
+	}
+}

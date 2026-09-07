@@ -16,6 +16,14 @@ import (
 
 const autoImageMaxAttempts = 3
 
+// automatedImagePrompt gắn luật ảnh (Prompt B) vào lượt sinh tự động.
+//
+// Chỉ đường tự động mới mang luật: không ai đứng xem cron sinh gì. Chat tay là
+// người cố ý bấm, tự chịu — runChat không gắn gì cho image_chat.
+func automatedImagePrompt(prompt string, request map[string]any) string {
+	return prompt + imageGuidanceFor(request)
+}
+
 // runAutoImage deliberately reuses the battle-tested image_chat runner for
 // media attachment, reference-library handling and create_image delivery, but
 // adds a bounded visual QA loop. The image model owns the typography: Drupal
@@ -35,7 +43,7 @@ func (s *JobService) runAutoImage(ctx context.Context, job *store.TekshotJob, re
 		if lastNotes != "" {
 			prompt += "\n\nPREVIOUS QA FEEDBACK — keep the same concept and fix exactly this defect; do not switch to a different visual route:\n" + lastNotes
 		}
-		attemptRequest["prompt"] = prompt
+		attemptRequest["prompt"] = automatedImagePrompt(prompt, attemptRequest)
 		result, _, err := s.runChat(ctx, &imageJob, attemptRequest)
 		if err != nil {
 			lastNotes = err.Error()
