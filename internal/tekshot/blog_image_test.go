@@ -1,6 +1,11 @@
 package tekshot
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/nextlevelbuilder/goclaw/internal/agent"
+)
 
 func sectionSet() map[string]bool { return map[string]bool{"s1": true, "s2": true} }
 
@@ -65,5 +70,35 @@ func TestValidateBlogImagePlanEmptyIsAllowed(t *testing.T) {
 	out, err := validateBlogImagePlan(nil, sectionSet())
 	if err != nil || len(out) != 0 {
 		t.Fatalf("empty plan must pass: %v %v", out, err)
+	}
+}
+
+func TestBlogImageMediaEntry(t *testing.T) {
+	if blogImageMediaEntry(nil) != nil {
+		t.Fatal("no media means nil")
+	}
+	entry := blogImageMediaEntry([]agent.MediaResult{{Path: "a/b.png", ContentType: "image/png"}})
+	got, ok := entry.(map[string]any)
+	if !ok {
+		t.Fatalf("expected a map, got %T", entry)
+	}
+	if got["path"] != "a/b.png" || got["mime_type"] != "image/png" || got["filename"] != "b.png" {
+		t.Fatalf("unexpected: %v", got)
+	}
+}
+
+func TestBlogImageMediaEntryKeepsTheLastImage(t *testing.T) {
+	entry := blogImageMediaEntry([]agent.MediaResult{{Path: "a.png"}, {Path: "b.png"}}).(map[string]any)
+	if entry["path"] != "b.png" {
+		t.Fatalf("expected the last image, got %v", entry["path"])
+	}
+}
+
+func TestBlogImagePromptForbidsTextAndLogos(t *testing.T) {
+	prompt := buildBlogImagePrompt(map[string]any{"prompt": "a small woodworking shop", "alt": "x"})
+	for _, want := range []string{"a small woodworking shop", "create_image", "No text", "no logo"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt lacks %q", want)
+		}
 	}
 }

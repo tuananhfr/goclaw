@@ -583,6 +583,15 @@ func (s *JobService) sendCallback(ctx context.Context, job *store.TekshotJob, st
 	}
 }
 
+// setProgress đổi dòng trạng thái của một job đang chạy để Drupal (và qua đó
+// SSE) thấy tiến độ. Lỗi ghi bị bỏ qua: đây chỉ là thông tin hiển thị.
+func (s *JobService) setProgress(ctx context.Context, job *store.TekshotJob, message string) {
+	if s == nil || s.store == nil || job == nil {
+		return
+	}
+	_ = s.store.MarkRunning(ctx, job.ID, message, defaultJobLockTTL)
+}
+
 func (s *JobService) notify() {
 	select {
 	case s.wake <- struct{}{}:
