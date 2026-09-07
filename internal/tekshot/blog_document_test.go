@@ -96,7 +96,7 @@ func TestValidateBlogSubmissionRejects(t *testing.T) {
 		"featured not in site": func(m map[string]any) {
 			m["document"].(map[string]any)["images"] = map[string]any{"featured_file_id": float64(5), "featured_alt": "x"}
 		},
-		"schema type": func(m map[string]any) { m["document"].(map[string]any)["schema_type"] = "Recipe" },
+		"schema type":      func(m map[string]any) { m["document"].(map[string]any)["schema_type"] = "Recipe" },
 		"document missing": func(m map[string]any) { delete(m, "document") },
 	}
 	for name, mutate := range cases {
