@@ -21,7 +21,7 @@ const blogImagePlanMax = 6
 func blogImagePlanParameters() map[string]any {
 	return map[string]any{
 		"type":        "array",
-		"description": "Images to draw for this article: one featured image plus one per section that genuinely benefits. Leave empty only when pictures would add nothing.",
+		"description": "Images to draw for this article. Always include one \"featured\" cover, and one image for each section a reader could picture: 3 to 5 entries is the norm, 6 the maximum. An empty list is only for a pure reference table with nothing to illustrate, and is almost never the right answer.",
 		"items": map[string]any{
 			"type":                 "object",
 			"additionalProperties": false,
