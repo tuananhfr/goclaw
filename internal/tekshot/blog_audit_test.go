@@ -67,12 +67,44 @@ func TestBuildBlogAuditPromptIsReadOnlyAndNamesTheRules(t *testing.T) {
 		"seo_rules": []any{map[string]any{"code": "no_faq"}},
 		"snapshot":  map[string]any{"website": map[string]any{"language": "vi"}},
 	})
-	for _, want := range []string{"SEO RULES", "no_faq", "## DOCUMENT", "\"id\":\"s1\"", "language \"vi\""} {
+	for _, want := range []string{"SEO RULES", "no_faq", "## DOCUMENT", "\"id\":\"s1\"", "language \"vi\"", blogAuditToolName} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt lacks %q", want)
 		}
 	}
-	if strings.Contains(prompt, "submit_blog") {
+	if strings.Contains(prompt, blogFinalToolName) {
 		t.Fatal("audit must not ask for a document tool")
+	}
+}
+
+func TestBlogAuditCollectorNormalizesAndKeepsEmptyAudits(t *testing.T) {
+	collector := NewBlogAuditCollector(map[string]bool{"s1": true})
+	if collector.Report() != nil {
+		t.Fatal("nothing submitted yet")
+	}
+	if res := collector.Execute(t.Context(), map[string]any{
+		"seo_score":            float64(88),
+		"ai_readability_score": float64(120),
+		"issues":               []any{map[string]any{"code": "", "severity": "hmm", "message": "Thiếu FAQ", "path": ""}},
+		"suggestions":          []any{map[string]any{"title": "", "instruction": "Thêm FAQ", "scope": "section:s9"}},
+	}); res == nil || res.IsError {
+		t.Fatalf("submission refused: %v", res)
+	}
+	report := collector.Report()
+	if report["seo_score"] != 88 || report["ai_readability_score"] != 100 {
+		t.Fatalf("scores not normalized: %v", report)
+	}
+	issue := report["issues"].([]any)[0].(map[string]any)
+	if issue["severity"] != "error" || issue["code"] != "ai_issue" {
+		t.Fatalf("unknown severity and missing code must fail closed: %v", issue)
+	}
+	if report["suggestions"].([]any)[0].(map[string]any)["scope"] != "all" {
+		t.Fatal("unknown section must fall back to all")
+	}
+
+	empty := NewBlogAuditCollector(nil)
+	empty.Execute(t.Context(), map[string]any{"seo_score": float64(95), "ai_readability_score": float64(90), "issues": []any{}, "suggestions": []any{}})
+	if empty.Report() == nil {
+		t.Fatal("a clean audit is a valid result, not an unreadable one")
 	}
 }

@@ -10,16 +10,21 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/nextlevelbuilder/goclaw/internal/agent"
+	"github.com/nextlevelbuilder/goclaw/internal/providers"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
+	"github.com/nextlevelbuilder/goclaw/internal/tools"
 )
 
 // blog_audit is a read-only, tool-free pass over a finished document: it
 // scores SEO / AEO, lists issues and proposes rewrites the editor can apply
 // as blog_rewrite jobs. It never touches the document.
 const (
-	blogAuditNoTools = "blog-audit/no-tools"
-	blogAuditTimeout = 90 * time.Second
-	blogAuditUnread  = "audit_unreadable"
+	blogAuditNoTools  = "blog-audit/no-tools"
+	blogAuditTimeout  = 90 * time.Second
+	blogAuditUnread   = "audit_unreadable"
+	blogAuditToolName = "submit_blog_audit"
+	// Vòng 1 gọi tool bắt buộc; vòng 2 là lần ép cuối khi vòng 1 bị từ chối.
+	blogAuditIterations = 2
 )
 
 var blogAuditSeverities = map[string]bool{"error": true, "warning": true, "info": true}
@@ -43,41 +48,47 @@ func (s *JobService) runBlogAudit(ctx context.Context, job *store.TekshotJob, re
 	runCtx, cancel := context.WithTimeout(runCtx, blogAuditTimeout)
 	defer cancel()
 
+	// Tool bắt buộc thay vì đọc JSON trong câu trả lời: một lượt tự do đã từng
+	// bị model tiêu vào list_files, để lại content rỗng và chặn xuất bản oan.
+	collector := NewBlogAuditCollector(blogSectionIDs(document))
 	runID := uuid.NewString()
 	result, err := loop.Run(runCtx, agent.RunRequest{
-		SessionKey:    job.SessionKey + ":audit:" + runID,
-		Message:       buildBlogAuditPrompt(request),
-		Channel:       "tekshot_job",
-		ChannelType:   "tekshot",
-		ChatID:        userID,
-		PeerKind:      "direct",
-		Addressed:     true,
-		RunID:         runID,
-		UserID:        userID,
-		SenderID:      userID,
-		ToolAllow:     []string{blogAuditNoTools},
-		MaxIterations: 1,
-		SkillFilter:   []string{},
-		LightContext:  true,
-		HistoryLimit:  1,
-		TraceName:     "tekshot blog audit",
-		TraceTags:     []string{"tekshot", "blog", "audit"},
+		SessionKey:     job.SessionKey + ":audit:" + runID,
+		Message:        buildBlogAuditPrompt(request),
+		Channel:        "tekshot_job",
+		ChannelType:    "tekshot",
+		ChatID:         userID,
+		PeerKind:       "direct",
+		Addressed:      true,
+		RunID:          runID,
+		UserID:         userID,
+		SenderID:       userID,
+		ToolAllow:      []string{blogAuditNoTools},
+		EphemeralTools: []tools.Tool{collector},
+		ToolChoice:     &providers.ToolChoice{Mode: "function", Name: blogAuditToolName},
+		MaxIterations:  blogAuditIterations,
+		SkillFilter:    []string{},
+		LightContext:   true,
+		HistoryLimit:   1,
+		TraceName:      "tekshot blog audit",
+		TraceTags:      []string{"tekshot", "blog", "audit"},
 	})
-	if err != nil || result == nil {
-		reason := "agent returned no result"
+	out := collector.Report()
+	if out == nil && result != nil {
+		// Model đôi khi trả JSON thẳng trong câu trả lời; vẫn nhận, đừng chặn.
+		if parsed, parseErr := parseBlogAuditReply(result.Content); parseErr == nil {
+			out = normalizeBlogAudit(parsed, blogSectionIDs(document))
+		}
+	}
+	if out == nil {
+		reason := "agent did not call " + blogAuditToolName
 		if err != nil {
 			reason = err.Error()
 		}
-		slog.Warn("tekshot: blog audit failed, blocking publish", "job", job.ID.String(), "reason", reason)
+		slog.Warn("tekshot: blog audit unreadable, blocking publish", "job", job.ID.String(), "reason", reason)
 		return auditUnreadableResult(reason), "Blog audit unreadable", nil
 	}
-	parsed, parseErr := parseBlogAuditReply(result.Content)
-	if parseErr != nil {
-		slog.Warn("tekshot: blog audit reply unreadable", "job", job.ID.String(), "reason", parseErr.Error())
-		return auditUnreadableResult(parseErr.Error()), "Blog audit unreadable", nil
-	}
-	out := normalizeBlogAudit(parsed, blogSectionIDs(document))
-	if result.Usage != nil {
+	if result != nil && result.Usage != nil {
 		out["usage"] = result.Usage
 	}
 	return out, "Blog audit completed", nil
@@ -166,6 +177,73 @@ func normalizeBlogAudit(raw map[string]any, sectionIDs map[string]bool) map[stri
 	}
 }
 
+// BlogAuditCollector là kênh ra duy nhất của một lượt audit; nó chỉ chuẩn hoá,
+// không bao giờ từ chối, vì audit rỗng cũng là một kết quả hợp lệ.
+type BlogAuditCollector struct {
+	sectionIDs map[string]bool
+	report     map[string]any
+}
+
+func NewBlogAuditCollector(sectionIDs map[string]bool) *BlogAuditCollector {
+	return &BlogAuditCollector{sectionIDs: sectionIDs}
+}
+
+func (t *BlogAuditCollector) Name() string { return blogAuditToolName }
+
+func (t *BlogAuditCollector) Description() string {
+	return "Submit the SEO/AEO audit of the article: two scores, the issues found and the rewrite suggestions. Call exactly once."
+}
+
+func (t *BlogAuditCollector) Parameters() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"seo_score":            map[string]any{"type": "integer", "description": "0-100: title, meta, keyword placement, heading structure, internal logic for search engines."},
+			"ai_readability_score": map[string]any{"type": "integer", "description": "0-100: how well an answer engine could quote this article — direct answers, definitions up front, FAQ, takeaways, tables."},
+			"issues": map[string]any{
+				"type":        "array",
+				"description": "What is wrong. Empty array when nothing is.",
+				"items": map[string]any{
+					"type":                 "object",
+					"additionalProperties": false,
+					"properties": map[string]any{
+						"code":     map[string]any{"type": "string", "description": "snake_case identifier of the problem."},
+						"severity": map[string]any{"type": "string", "enum": []string{"error", "warning", "info"}, "description": "error only for something that must be fixed before publishing."},
+						"message":  map[string]any{"type": "string", "description": "What is wrong, in the article's language."},
+						"path":     map[string]any{"type": "string", "description": "Where, e.g. document.sections[s2]; empty string when it is the whole article."},
+					},
+					"required": []string{"code", "severity", "message", "path"},
+				},
+			},
+			"suggestions": map[string]any{
+				"type":        "array",
+				"description": "2-5 rewrites a writer could execute, most valuable first. Empty array when there is nothing to improve.",
+				"items": map[string]any{
+					"type":                 "object",
+					"additionalProperties": false,
+					"properties": map[string]any{
+						"title":       map[string]any{"type": "string", "description": "Short name of the change."},
+						"instruction": map[string]any{"type": "string", "description": "The instruction itself, in the article's language."},
+						"scope":       map[string]any{"type": "string", "description": "\"all\", \"presentation\", or \"section:<id>\" of a section that exists."},
+					},
+					"required": []string{"title", "instruction", "scope"},
+				},
+			},
+		},
+		"required": []string{"seo_score", "ai_readability_score", "issues", "suggestions"},
+	}
+}
+
+func (t *BlogAuditCollector) Execute(_ context.Context, args map[string]any) *tools.Result {
+	t.report = normalizeBlogAudit(args, t.sectionIDs)
+	return tools.SilentResult("Blog audit captured.")
+}
+
+func (t *BlogAuditCollector) Report() map[string]any {
+	return t.report
+}
+
 func clampScore(value float64) int {
 	switch {
 	case value < 0:
@@ -194,8 +272,7 @@ func buildBlogAuditPrompt(request map[string]any) string {
 	language := blogSnapshotFromRequest(request).Language
 	var sb strings.Builder
 	sb.WriteString("You are an SEO and AEO (answer-engine optimisation) auditor for one website's blog. You only read; you never rewrite.\n")
-	sb.WriteString("Answer with ONE JSON object and nothing else — no prose, no Markdown fence:\n")
-	sb.WriteString(`{"seo_score": 0-100, "ai_readability_score": 0-100, "issues": [{"code": "snake_case", "severity": "error|warning|info", "message": "…", "path": "document.sections[s2]"}], "suggestions": [{"title": "…", "instruction": "an instruction a writer could execute", "scope": "all | section:<id> | presentation"}]}` + "\n")
+	sb.WriteString("Deliver the audit by calling " + blogAuditToolName + " exactly once. Do not answer with plain text, and do not call any other tool.\n")
 	sb.WriteString("Write messages, titles and instructions in language \"" + language + "\".\n")
 	sb.WriteString("seo_score: title/meta/keyword/heading structure/internal logic for search engines. ai_readability_score: how well an answer engine could quote this article — direct answers, definitions up front, FAQ, takeaways, tables.\n")
 	sb.WriteString("Use severity error only for something that must be fixed before publishing (misleading claim, missing answer to the title's question, keyword absent from title). Do not repeat SEO RULES already listed; add what a rule engine cannot see.\n")
