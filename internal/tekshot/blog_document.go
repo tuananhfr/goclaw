@@ -142,6 +142,7 @@ func blogSubmissionParameters() map[string]any {
 				"template": str("a key from TEMPLATES, or empty for the site default"),
 				"options":  map[string]any{"type": "object", "description": "reserved; send {}"},
 			}, "Presentation"),
+			"image_plan": blogImagePlanParameters(),
 			"seo": obj(map[string]any{
 				"meta_title":       str("≤ 60 chars"),
 				"meta_description": str("≤ 160 chars"),
@@ -149,7 +150,7 @@ func blogSubmissionParameters() map[string]any {
 				"focus_keyword":    str("one focus keyword"),
 			}, "SEO"),
 		},
-		"required": []string{"reply", "document", "presentation", "seo"},
+		"required": []string{"reply", "document", "presentation", "seo", "image_plan"},
 	}
 }
 
@@ -186,10 +187,16 @@ func validateBlogSubmission(args map[string]any, snap blogSnapshot) (map[string]
 		seo[key] = cutRunes(strings.TrimSpace(stringFromMap(rawSEO, key)), limit)
 	}
 
+	plan, err := validateBlogImagePlan(args["image_plan"], blogSectionIDs(document))
+	if err != nil {
+		return nil, err
+	}
+
 	out := map[string]any{
-		"reply":    cutRunes(reply, 2000),
-		"document": document,
-		"seo":      seo,
+		"reply":      cutRunes(reply, 2000),
+		"document":   document,
+		"seo":        seo,
+		"image_plan": plan,
 	}
 	if presentation != nil {
 		out["presentation"] = presentation

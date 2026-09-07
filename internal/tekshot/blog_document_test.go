@@ -34,6 +34,7 @@ func validBlogSubmission() map[string]any {
 			"schema_type": "Article",
 		},
 		"presentation": map[string]any{"template": "editorial", "options": map[string]any{}},
+		"image_plan":   []any{},
 		"seo":          map[string]any{"meta_title": "t", "meta_description": "d", "keywords": "", "focus_keyword": "camera ai"},
 	}
 }
@@ -98,6 +99,9 @@ func TestValidateBlogSubmissionRejects(t *testing.T) {
 		},
 		"schema type":      func(m map[string]any) { m["document"].(map[string]any)["schema_type"] = "Recipe" },
 		"document missing": func(m map[string]any) { delete(m, "document") },
+		"bad image target": func(m map[string]any) {
+			m["image_plan"] = []any{map[string]any{"target": "section:zzz", "prompt": "x", "alt": "y", "caption": ""}}
+		},
 	}
 	for name, mutate := range cases {
 		m := validBlogSubmission()
