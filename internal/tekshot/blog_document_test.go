@@ -90,7 +90,6 @@ func TestValidateBlogSubmissionRejects(t *testing.T) {
 		"empty blocks":   func(m map[string]any) { blogSection(m)["blocks"] = []any{} },
 		"empty title":    func(m map[string]any) { m["document"].(map[string]any)["title"] = " " },
 		"version 2":      func(m map[string]any) { m["document"].(map[string]any)["version"] = float64(2) },
-		"empty reply":    func(m map[string]any) { m["reply"] = "" },
 		"faq without answer": func(m map[string]any) {
 			m["document"].(map[string]any)["faq"] = []any{map[string]any{"q": "Hỏi?", "a": ""}}
 		},
@@ -109,6 +108,18 @@ func TestValidateBlogSubmissionRejects(t *testing.T) {
 		if _, err := validateBlogSubmission(m, validBlogSnapshot()); err == nil {
 			t.Errorf("%s: expected error", name)
 		}
+	}
+}
+
+func TestValidateBlogSubmissionFillsAMissingReply(t *testing.T) {
+	m := validBlogSubmission()
+	m["reply"] = "  "
+	out, err := validateBlogSubmission(m, validBlogSnapshot())
+	if err != nil {
+		t.Fatalf("a missing reply must not sink the article: %v", err)
+	}
+	if got := out["reply"].(string); !strings.Contains(got, "Camera AI trong nhà máy") {
+		t.Fatalf("reply should fall back to the title, got %q", got)
 	}
 }
 

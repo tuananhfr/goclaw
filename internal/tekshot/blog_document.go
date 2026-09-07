@@ -159,9 +159,6 @@ func blogSubmissionParameters() map[string]any {
 // degraded document.
 func validateBlogSubmission(args map[string]any, snap blogSnapshot) (map[string]any, error) {
 	reply := strings.TrimSpace(stringFromMap(args, "reply"))
-	if reply == "" {
-		return nil, fmt.Errorf("reply is required")
-	}
 	rawDoc, ok := args["document"].(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("document must be an object")
@@ -169,6 +166,11 @@ func validateBlogSubmission(args map[string]any, snap blogSnapshot) (map[string]
 	document, err := validateBlogDocument(rawDoc, snap)
 	if err != nil {
 		return nil, err
+	}
+	// reply chỉ là câu ghi chú cho biên tập viên. Bỏ cả bài 11KB vì thiếu một
+	// câu là fail-closed sai chỗ, nên tự điền từ tiêu đề khi model quên.
+	if reply == "" {
+		reply = "Đã viết xong bài: " + stringFromMap(document, "title")
 	}
 
 	var presentation map[string]any
