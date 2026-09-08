@@ -44,12 +44,12 @@ func (s *PGTekshotJobStore) Create(ctx context.Context, job *store.TekshotJob) (
 	_, err := s.db.ExecContext(ctx, `INSERT INTO tekshot_jobs
 		(id, external_job_uuid, workspace_id, workspace_uuid, external_user_id, job_type, agent_key, session_key,
 		 status, progress_message, error_message, request_json, result_json, callback_url, callback_token,
-		 attempt_count, locked_until, created_at, updated_at, completed_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+		 attempt_count, locked_until, created_at, updated_at, completed_at, priority)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
 		ON CONFLICT (external_job_uuid) DO NOTHING`,
 		job.ID, job.ExternalJobUUID, job.WorkspaceID, job.WorkspaceUUID, job.ExternalUserID, job.JobType, job.AgentKey, job.SessionKey,
 		job.Status, job.ProgressMessage, job.ErrorMessage, requestJSON, resultJSON, job.CallbackURL, job.CallbackToken,
-		job.AttemptCount, job.LockedUntil, job.CreatedAt, job.UpdatedAt, job.CompletedAt,
+		job.AttemptCount, job.LockedUntil, job.CreatedAt, job.UpdatedAt, job.CompletedAt, job.Priority,
 	)
 	if err != nil {
 		return nil, err
@@ -73,13 +73,13 @@ func (s *PGTekshotJobStore) ClaimNext(ctx context.Context, lockFor time.Duration
 		WHERE id = (
 			SELECT id FROM tekshot_jobs
 			WHERE status = $5 AND (locked_until IS NULL OR locked_until <= $6)
-			ORDER BY created_at ASC
+			ORDER BY priority DESC, created_at ASC
 			FOR UPDATE SKIP LOCKED
 			LIMIT 1
 		)
 		RETURNING id, external_job_uuid, workspace_id, workspace_uuid, external_user_id, job_type, agent_key, session_key,
 			status, progress_message, error_message, request_json, result_json, callback_url, callback_token,
-			attempt_count, locked_until, created_at, updated_at, completed_at`,
+			attempt_count, locked_until, created_at, updated_at, completed_at, priority`,
 		store.TekshotJobRunning, "Starting Tekshot job", lockedUntil, now, store.TekshotJobQueued, now)
 	return scanTekshotJob(row)
 }
@@ -131,7 +131,7 @@ func (s *PGTekshotJobStore) CancelIfQueued(ctx context.Context, id uuid.UUID) (b
 
 const selectTekshotJobSQL = `SELECT id, external_job_uuid, workspace_id, workspace_uuid, external_user_id, job_type, agent_key, session_key,
 	status, progress_message, error_message, request_json, result_json, callback_url, callback_token,
-	attempt_count, locked_until, created_at, updated_at, completed_at
+	attempt_count, locked_until, created_at, updated_at, completed_at, priority
 	FROM tekshot_jobs`
 
 func (s *PGTekshotJobStore) scanOne(ctx context.Context, query string, args ...any) (*store.TekshotJob, error) {
@@ -150,7 +150,7 @@ func scanTekshotJob(row interface {
 	if err := row.Scan(
 		&job.ID, &job.ExternalJobUUID, &job.WorkspaceID, &job.WorkspaceUUID, &job.ExternalUserID, &job.JobType, &job.AgentKey, &job.SessionKey,
 		&job.Status, &job.ProgressMessage, &job.ErrorMessage, &requestJSON, &resultJSON, &job.CallbackURL, &job.CallbackToken,
-		&job.AttemptCount, &job.LockedUntil, &job.CreatedAt, &job.UpdatedAt, &job.CompletedAt,
+		&job.AttemptCount, &job.LockedUntil, &job.CreatedAt, &job.UpdatedAt, &job.CompletedAt, &job.Priority,
 	); err != nil {
 		return nil, err
 	}

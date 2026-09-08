@@ -172,6 +172,7 @@ func serializeTekshotJob(job *store.TekshotJob, includeResult bool) map[string]a
 		"progress_message":  job.ProgressMessage,
 		"error_message":     job.ErrorMessage,
 		"attempt_count":     job.AttemptCount,
+		"priority":          job.Priority,
 		"created_at":        job.CreatedAt,
 		"updated_at":        job.UpdatedAt,
 		"completed_at":      job.CompletedAt,

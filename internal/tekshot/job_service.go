@@ -58,6 +58,9 @@ type JobCreateRequest struct {
 	SessionKey      string         `json:"session_key"`
 	CallbackURL     string         `json:"callback_url"`
 	CallbackToken   string         `json:"callback_token"`
+	// Priority: higher claims first, then oldest. Bulk producers send a
+	// negative value so interactive callers never queue behind their backlog.
+	Priority        int            `json:"priority"`
 	Request         map[string]any `json:"request"`
 	ToolArgs        map[string]any `json:"tool_args"`
 }
@@ -77,9 +80,11 @@ type JobService struct {
 }
 
 func NewJobService(jobStore store.TekshotJobStore, agents *agent.Router, toolsReg *tools.Registry) *JobService {
+	// Each worker is one in-flight agent/LLM run; the practical ceiling is RAM
+	// and provider rate limits, not a fixed number — 64 is a sanity cap only.
 	workers := max(envInt("GOCLAW_TEKSHOT_JOB_WORKERS", 1), 1)
-	if workers > 8 {
-		workers = 8
+	if workers > 64 {
+		workers = 64
 	}
 	return &JobService{
 		store:  jobStore,
@@ -150,6 +155,7 @@ func (s *JobService) Create(ctx context.Context, req JobCreateRequest) (*store.T
 		RequestJSON:     requestJSON,
 		CallbackURL:     strings.TrimSpace(req.CallbackURL),
 		CallbackToken:   strings.TrimSpace(req.CallbackToken),
+		Priority:        req.Priority,
 	})
 	if err != nil {
 		return nil, err

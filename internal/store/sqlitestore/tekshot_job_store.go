@@ -44,11 +44,11 @@ func (s *SQLiteTekshotJobStore) Create(ctx context.Context, job *store.TekshotJo
 	_, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO tekshot_jobs
 		(id, external_job_uuid, workspace_id, workspace_uuid, external_user_id, job_type, agent_key, session_key,
 		 status, progress_message, error_message, request_json, result_json, callback_url, callback_token,
-		 attempt_count, locked_until, created_at, updated_at, completed_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 attempt_count, locked_until, created_at, updated_at, completed_at, priority)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		job.ID.String(), job.ExternalJobUUID, job.WorkspaceID, job.WorkspaceUUID, job.ExternalUserID, job.JobType, job.AgentKey, job.SessionKey,
 		job.Status, job.ProgressMessage, job.ErrorMessage, string(job.RequestJSON), string(job.ResultJSON), job.CallbackURL, job.CallbackToken,
-		job.AttemptCount, timePtrToString(job.LockedUntil), job.CreatedAt.Format(time.RFC3339Nano), job.UpdatedAt.Format(time.RFC3339Nano), timePtrToString(job.CompletedAt),
+		job.AttemptCount, timePtrToString(job.LockedUntil), job.CreatedAt.Format(time.RFC3339Nano), job.UpdatedAt.Format(time.RFC3339Nano), timePtrToString(job.CompletedAt), job.Priority,
 	)
 	if err != nil {
 		return nil, err
@@ -72,7 +72,7 @@ func (s *SQLiteTekshotJobStore) ClaimNext(ctx context.Context, lockFor time.Dura
 		WHERE id = (
 			SELECT id FROM tekshot_jobs
 			WHERE status = ? AND (locked_until = '' OR locked_until <= ?)
-			ORDER BY created_at ASC
+			ORDER BY priority DESC, created_at ASC
 			LIMIT 1
 		)`,
 		store.TekshotJobRunning, "Starting Tekshot job", lockedUntil.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), store.TekshotJobQueued, now.Format(time.RFC3339Nano))
@@ -134,7 +134,7 @@ func (s *SQLiteTekshotJobStore) CancelIfQueued(ctx context.Context, id uuid.UUID
 
 const selectSQLiteTekshotJobSQL = `SELECT id, external_job_uuid, workspace_id, workspace_uuid, external_user_id, job_type, agent_key, session_key,
 	status, progress_message, error_message, request_json, result_json, callback_url, callback_token,
-	attempt_count, locked_until, created_at, updated_at, completed_at
+	attempt_count, locked_until, created_at, updated_at, completed_at, priority
 	FROM tekshot_jobs`
 
 func (s *SQLiteTekshotJobStore) scanOne(ctx context.Context, query string, args ...any) (*store.TekshotJob, error) {
@@ -154,7 +154,7 @@ func scanSQLiteTekshotJob(row interface {
 	if err := row.Scan(
 		&id, &job.ExternalJobUUID, &job.WorkspaceID, &job.WorkspaceUUID, &job.ExternalUserID, &job.JobType, &job.AgentKey, &job.SessionKey,
 		&job.Status, &job.ProgressMessage, &job.ErrorMessage, &requestJSON, &resultJSON, &job.CallbackURL, &job.CallbackToken,
-		&job.AttemptCount, &lockedUntil, &createdAt, &updatedAt, &completedAt,
+		&job.AttemptCount, &lockedUntil, &createdAt, &updatedAt, &completedAt, &job.Priority,
 	); err != nil {
 		return nil, err
 	}

@@ -33,6 +33,9 @@ type TekshotJob struct {
 	CallbackURL     string          `json:"callback_url" db:"callback_url"`
 	CallbackToken   string          `json:"-" db:"callback_token"`
 	AttemptCount    int             `json:"attempt_count" db:"attempt_count"`
+	// Priority orders the queue: higher first, then oldest. Bulk producers use
+	// negative values so interactive callers are never parked behind them.
+	Priority        int             `json:"priority" db:"priority"`
 	LockedUntil     *time.Time      `json:"locked_until" db:"locked_until"`
 	CreatedAt       time.Time       `json:"created_at" db:"created_at"`
 	UpdatedAt       time.Time       `json:"updated_at" db:"updated_at"`

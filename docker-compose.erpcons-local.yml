@@ -1,0 +1,19 @@
+# Local-dev overlay for the ERPcons Drupal site (WAMP on the host).
+#
+# Usage: add to COMPOSE_FILE in .env (after the other files), then
+#   docker compose up -d goclaw
+#
+# Why: GoClaw posts job callbacks back into Drupal at
+# http://erpcons.localhost/api/erp-ocr/callback/<uuid>. Inside the container
+# that hostname does not resolve, so every callback failed ("dial tcp") and
+# each batch had to wait for the Drupal cron poll — on a dev box with no cron
+# that meant waiting for a human. Same pattern as docker-compose.tekshot-local.yml:
+# map the real hostname to the host gateway so the Host header still matches
+# the Apache vhost (calling host.docker.internal would land on the default
+# vhost).
+#
+# Not needed once callbacks go through a tunnel or a real domain.
+services:
+  goclaw:
+    extra_hosts:
+      - "erpcons.localhost:host-gateway"

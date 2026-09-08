@@ -16,7 +16,7 @@ var schemaSQL string
 
 // SchemaVersion is the current SQLite schema version.
 // Bump this when adding new migration steps below.
-const SchemaVersion = 30
+const SchemaVersion = 31
 
 // migrations maps version → SQL to apply when upgrading FROM that version.
 // schema.sql always represents the LATEST full schema (for fresh DBs).
@@ -663,6 +663,13 @@ CREATE INDEX IF NOT EXISTS idx_tekshot_jobs_workspace
     ON tekshot_jobs(workspace_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tekshot_jobs_type_status
     ON tekshot_jobs(job_type, status, created_at DESC);`,
+	// v30 → v31: job priority (mirrors PG migration 000066). Claim order becomes
+	// priority DESC, created_at ASC so a bulk producer cannot park everyone
+	// else behind its backlog.
+	30: `ALTER TABLE tekshot_jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 0;
+DROP INDEX IF EXISTS idx_tekshot_jobs_status_locked;
+CREATE INDEX IF NOT EXISTS idx_tekshot_jobs_status_locked
+    ON tekshot_jobs(status, locked_until, priority DESC, created_at);`,
 }
 
 // addHooksTables is the SQLite incremental migration for schema v19 → v20.

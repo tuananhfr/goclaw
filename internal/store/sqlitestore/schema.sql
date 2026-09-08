@@ -1722,6 +1722,7 @@ CREATE TABLE IF NOT EXISTS tekshot_jobs (
     callback_url      TEXT NOT NULL DEFAULT '',
     callback_token    TEXT NOT NULL DEFAULT '',
     attempt_count     INTEGER NOT NULL DEFAULT 0,
+    priority          INTEGER NOT NULL DEFAULT 0,
     locked_until      TEXT NOT NULL DEFAULT '',
     created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -1729,7 +1730,7 @@ CREATE TABLE IF NOT EXISTS tekshot_jobs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_tekshot_jobs_status_locked
-    ON tekshot_jobs(status, locked_until, created_at);
+    ON tekshot_jobs(status, locked_until, priority DESC, created_at);
 
 CREATE INDEX IF NOT EXISTS idx_tekshot_jobs_workspace
     ON tekshot_jobs(workspace_id, created_at DESC);
