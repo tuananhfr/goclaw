@@ -54,7 +54,7 @@ type Server struct {
 	apiKeyStore          store.APIKeyStore // for API key auth lookup
 	agentStore           store.AgentStore  // for context injection in tools_invoke
 	msgBus               *bus.MessageBus   // for MCP bridge media delivery
-	tekshotParseSessions *tekshotParseSessionStore
+	agentSessions *agentSessionStore
 	tekshotJobs          *tekshottools.JobService
 	tekshotDraftJobs     *tekshottools.DraftJobService
 	tekshotCron          store.CronStore
@@ -90,7 +90,7 @@ func NewServer(cfg *config.Config, eventPub bus.EventPublisher, agents *agent.Ro
 		sessions:             sess,
 		clients:              make(map[string]*Client),
 		startedAt:            time.Now(),
-		tekshotParseSessions: newTekshotParseSessionStore(),
+		agentSessions: newAgentSessionStore(),
 	}
 
 	s.upgrader = websocket.Upgrader{
@@ -152,6 +152,7 @@ func (s *Server) BuildMux() *http.ServeMux {
 	// HTTP API endpoints
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/v1/tekshot/parse-sessions", s.handleTekshotParseSession)
+	mux.HandleFunc("/v1/agent-sessions", s.handleAgentSession)
 	mux.HandleFunc("/v1/tekshot/jobs", s.handleTekshotJobs)
 	mux.HandleFunc("/v1/tekshot/jobs/", s.handleTekshotJob)
 	mux.HandleFunc("/v1/tekshot/draft-jobs", s.handleTekshotDraftJobs)

@@ -63,8 +63,8 @@ func (r *MethodRouter) Handle(ctx context.Context, client *Client, req *protocol
 		return
 	}
 
-	if client.tekshotParseSession != nil && !client.authorizeTekshotRPC(req) {
-		slog.Warn("security.tekshot_parse_session_denied",
+	if client.agentSession != nil && !client.authorizeAgentSessionRPC(req) {
+		slog.Warn("security.agent_session_denied",
 			"method", req.Method,
 			"user_id", client.userID,
 			"client", client.id,
@@ -72,13 +72,13 @@ func (r *MethodRouter) Handle(ctx context.Context, client *Client, req *protocol
 		client.SendResponse(protocol.NewErrorResponse(
 			req.ID,
 			protocol.ErrUnauthorized,
-			"Tekshot parse session is not allowed to call this method or target",
+			"This agent session is not allowed to call this method or target",
 		))
 		return
 	}
 
 	// Permission check: skip for connect, health, and browser pairing status (used by unauthenticated clients)
-	if client.tekshotParseSession == nil && req.Method != protocol.MethodConnect && req.Method != protocol.MethodHealth && req.Method != protocol.MethodBrowserPairingStatus {
+	if client.agentSession == nil && req.Method != protocol.MethodConnect && req.Method != protocol.MethodHealth && req.Method != protocol.MethodBrowserPairingStatus {
 		if pe := r.server.policyEngine; pe != nil {
 			if !pe.CanAccess(client.role, req.Method) {
 				required := permissions.MethodRole(req.Method)
@@ -196,14 +196,15 @@ func (r *MethodRouter) handleConnect(ctx context.Context, client *Client, req *p
 	}
 
 	// Path 1b: API key → role derived from scopes (uses shared cache)
-	if params.Token != "" && r.server.tekshotParseSessions != nil {
-		if session, ok := r.server.tekshotParseSessions.get(params.Token); ok {
-			client.setTekshotParseSession(session)
-			slog.Info("tekshot.parse_session.connected",
+	if params.Token != "" && r.server.agentSessions != nil {
+		if session, ok := r.server.agentSessions.get(params.Token); ok {
+			client.setAgentSession(session)
+			slog.Info("agent_session.connected",
 				"workspace_id", session.WorkspaceID,
 				"agent_key", session.AgentKey,
 				"user_id", session.UserID,
-				"session_key", session.SessionKey,
+				"scope", session.Scope,
+				"session_key", session.PinnedSessionKey,
 			)
 			r.sendConnectResponse(ctx, client, req.ID)
 			return

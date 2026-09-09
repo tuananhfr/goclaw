@@ -76,6 +76,51 @@ OpenAI-compatible chat API for programmatic access to agents.
 
 ---
 
+## 2b. Agent Sessions (ephemeral browser tickets)
+
+### `POST /v1/agent-sessions`
+
+Mints a short-lived ticket so a **browser** can open a WebSocket to the gateway
+directly, without ever holding a gateway token or API key.
+
+Requires the **gateway token** (an API key is rejected). Intended caller: the
+backend of an embedding application that has already authenticated the end user
+with its own session.
+
+```json
+{ "user_id": "erpcons-42", "agent_key": "erpcons-assistant", "ttl_seconds": 900 }
+```
+
+Response:
+
+```json
+{
+  "ok": true,
+  "ws_url": "wss://host/ws",
+  "token": "goclaw_ephemeral_...",
+  "user_id": "erpcons-42",
+  "expires_at": 1789299035,
+  "allowed_methods": ["connect", "chat.send", "chat.abort", "chat.history",
+                      "chat.session.status", "sessions.list", "sessions.preview",
+                      "sessions.patch", "sessions.delete", "sessions.reset"],
+  "allowed_agent_key": "erpcons-assistant"
+}
+```
+
+The ticket sets `role=operator` and binds to one `(user_id, agent_key)` pair.
+Data scoping is **not** the ticket's job — every `sessions.*` / `chat.*` handler
+already filters by `client.UserID()` for sub-admin roles. The ticket only decides
+**which methods may be called**. TTL is clamped to 1800s; tickets are stored as
+SHA-256 hashes in memory, so a gateway restart invalidates outstanding ones.
+
+> `POST /v1/tekshot/parse-sessions` is the older, narrower path used by Tekshot
+> Studio: it prefixes `user_id` with `tekshot-`, pins the ticket to a single
+> `session_key`, and allows only `chat.send` / `chat.abort` / `tools.invoke`
+> (the last restricted to `tekshot_generate_draft_posts`). Both routes share
+> `mintAgentSession()` in `internal/gateway/agent_sessions.go`.
+
+---
+
 ## 3. OpenResponses Protocol
 
 ### `POST /v1/responses`

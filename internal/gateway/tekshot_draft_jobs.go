@@ -17,14 +17,14 @@ func (s *Server) SetTekshotDraftJobService(service *tekshottools.DraftJobService
 
 func (s *Server) handleTekshotDraftJobs(w http.ResponseWriter, r *http.Request) {
 	if !s.hasGatewayBearer(r) {
-		writeTekshotJSON(w, http.StatusUnauthorized, map[string]any{
+		writeGatewayJSON(w, http.StatusUnauthorized, map[string]any{
 			"ok":      false,
 			"message": "valid gateway token required",
 		})
 		return
 	}
 	if s.tekshotDraftJobs == nil {
-		writeTekshotJSON(w, http.StatusServiceUnavailable, map[string]any{
+		writeGatewayJSON(w, http.StatusServiceUnavailable, map[string]any{
 			"ok":      false,
 			"message": "Tekshot draft job service is not configured",
 		})
@@ -32,7 +32,7 @@ func (s *Server) handleTekshotDraftJobs(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if r.Method != http.MethodPost {
-		writeTekshotJSON(w, http.StatusMethodNotAllowed, map[string]any{
+		writeGatewayJSON(w, http.StatusMethodNotAllowed, map[string]any{
 			"ok":      false,
 			"message": "method not allowed",
 		})
@@ -41,7 +41,7 @@ func (s *Server) handleTekshotDraftJobs(w http.ResponseWriter, r *http.Request) 
 
 	var input tekshottools.DraftJobCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		writeTekshotJSON(w, http.StatusBadRequest, map[string]any{
+		writeGatewayJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":      false,
 			"message": "invalid JSON payload",
 		})
@@ -49,13 +49,13 @@ func (s *Server) handleTekshotDraftJobs(w http.ResponseWriter, r *http.Request) 
 	}
 	job, err := s.tekshotDraftJobs.Create(r.Context(), input)
 	if err != nil {
-		writeTekshotJSON(w, http.StatusBadRequest, map[string]any{
+		writeGatewayJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":      false,
 			"message": err.Error(),
 		})
 		return
 	}
-	writeTekshotJSON(w, http.StatusAccepted, map[string]any{
+	writeGatewayJSON(w, http.StatusAccepted, map[string]any{
 		"ok":  true,
 		"job": serializeTekshotDraftJob(job, false),
 	})
@@ -63,21 +63,21 @@ func (s *Server) handleTekshotDraftJobs(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) handleTekshotDraftJob(w http.ResponseWriter, r *http.Request) {
 	if !s.hasGatewayBearer(r) {
-		writeTekshotJSON(w, http.StatusUnauthorized, map[string]any{
+		writeGatewayJSON(w, http.StatusUnauthorized, map[string]any{
 			"ok":      false,
 			"message": "valid gateway token required",
 		})
 		return
 	}
 	if s.tekshotDraftJobs == nil {
-		writeTekshotJSON(w, http.StatusServiceUnavailable, map[string]any{
+		writeGatewayJSON(w, http.StatusServiceUnavailable, map[string]any{
 			"ok":      false,
 			"message": "Tekshot draft job service is not configured",
 		})
 		return
 	}
 	if r.Method != http.MethodGet {
-		writeTekshotJSON(w, http.StatusMethodNotAllowed, map[string]any{
+		writeGatewayJSON(w, http.StatusMethodNotAllowed, map[string]any{
 			"ok":      false,
 			"message": "method not allowed",
 		})
@@ -87,7 +87,7 @@ func (s *Server) handleTekshotDraftJob(w http.ResponseWriter, r *http.Request) {
 	rawID := strings.TrimPrefix(r.URL.Path, "/v1/tekshot/draft-jobs/")
 	id, err := uuid.Parse(strings.TrimSpace(rawID))
 	if err != nil {
-		writeTekshotJSON(w, http.StatusBadRequest, map[string]any{
+		writeGatewayJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":      false,
 			"message": "invalid draft job id",
 		})
@@ -95,20 +95,20 @@ func (s *Server) handleTekshotDraftJob(w http.ResponseWriter, r *http.Request) {
 	}
 	job, err := s.tekshotDraftJobs.Get(r.Context(), id)
 	if err != nil {
-		writeTekshotJSON(w, http.StatusInternalServerError, map[string]any{
+		writeGatewayJSON(w, http.StatusInternalServerError, map[string]any{
 			"ok":      false,
 			"message": err.Error(),
 		})
 		return
 	}
 	if job == nil {
-		writeTekshotJSON(w, http.StatusNotFound, map[string]any{
+		writeGatewayJSON(w, http.StatusNotFound, map[string]any{
 			"ok":      false,
 			"message": "draft job not found",
 		})
 		return
 	}
-	writeTekshotJSON(w, http.StatusOK, map[string]any{
+	writeGatewayJSON(w, http.StatusOK, map[string]any{
 		"ok":  true,
 		"job": serializeTekshotDraftJob(job, true),
 	})

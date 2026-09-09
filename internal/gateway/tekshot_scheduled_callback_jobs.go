@@ -35,21 +35,21 @@ func (s *Server) SetTekshotCronStore(service store.CronStore) {
 
 func (s *Server) handleTekshotScheduledCallbackJobs(w http.ResponseWriter, r *http.Request) {
 	if !s.hasGatewayBearer(r) {
-		writeTekshotJSON(w, http.StatusUnauthorized, map[string]any{
+		writeGatewayJSON(w, http.StatusUnauthorized, map[string]any{
 			"ok":      false,
 			"message": "valid gateway token required",
 		})
 		return
 	}
 	if s.tekshotCron == nil {
-		writeTekshotJSON(w, http.StatusServiceUnavailable, map[string]any{
+		writeGatewayJSON(w, http.StatusServiceUnavailable, map[string]any{
 			"ok":      false,
 			"message": "cron service is not configured",
 		})
 		return
 	}
 	if r.Method != http.MethodPost {
-		writeTekshotJSON(w, http.StatusMethodNotAllowed, map[string]any{
+		writeGatewayJSON(w, http.StatusMethodNotAllowed, map[string]any{
 			"ok":      false,
 			"message": "method not allowed",
 		})
@@ -62,13 +62,13 @@ func (s *Server) handleTekshotScheduledCallbackJobs(w http.ResponseWriter, r *ht
 	}
 	job, err := s.upsertTekshotScheduledCallbackJob(r.Context(), input)
 	if err != nil {
-		writeTekshotJSON(w, http.StatusBadRequest, map[string]any{
+		writeGatewayJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":      false,
 			"message": err.Error(),
 		})
 		return
 	}
-	writeTekshotJSON(w, http.StatusAccepted, map[string]any{
+	writeGatewayJSON(w, http.StatusAccepted, map[string]any{
 		"ok":  true,
 		"job": serializeTekshotScheduledCallbackJob(job, input),
 	})
@@ -76,14 +76,14 @@ func (s *Server) handleTekshotScheduledCallbackJobs(w http.ResponseWriter, r *ht
 
 func (s *Server) handleTekshotScheduledCallbackJob(w http.ResponseWriter, r *http.Request) {
 	if !s.hasGatewayBearer(r) {
-		writeTekshotJSON(w, http.StatusUnauthorized, map[string]any{
+		writeGatewayJSON(w, http.StatusUnauthorized, map[string]any{
 			"ok":      false,
 			"message": "valid gateway token required",
 		})
 		return
 	}
 	if s.tekshotCron == nil {
-		writeTekshotJSON(w, http.StatusServiceUnavailable, map[string]any{
+		writeGatewayJSON(w, http.StatusServiceUnavailable, map[string]any{
 			"ok":      false,
 			"message": "cron service is not configured",
 		})
@@ -92,7 +92,7 @@ func (s *Server) handleTekshotScheduledCallbackJob(w http.ResponseWriter, r *htt
 
 	jobID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/v1/tekshot/scheduled-callback-jobs/"))
 	if jobID == "" {
-		writeTekshotJSON(w, http.StatusBadRequest, map[string]any{
+		writeGatewayJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":      false,
 			"message": "job id is required",
 		})
@@ -111,30 +111,30 @@ func (s *Server) handleTekshotScheduledCallbackJob(w http.ResponseWriter, r *htt
 			if errors.Is(err, store.ErrCronJobNotFound) {
 				status = http.StatusNotFound
 			}
-			writeTekshotJSON(w, status, map[string]any{
+			writeGatewayJSON(w, status, map[string]any{
 				"ok":      false,
 				"message": err.Error(),
 			})
 			return
 		}
-		writeTekshotJSON(w, http.StatusOK, map[string]any{
+		writeGatewayJSON(w, http.StatusOK, map[string]any{
 			"ok":  true,
 			"job": serializeTekshotScheduledCallbackJob(job, input),
 		})
 	case http.MethodDelete:
 		if err := s.tekshotCron.RemoveJob(r.Context(), jobID); err != nil && err != store.ErrCronJobNotFound {
-			writeTekshotJSON(w, http.StatusBadRequest, map[string]any{
+			writeGatewayJSON(w, http.StatusBadRequest, map[string]any{
 				"ok":      false,
 				"message": err.Error(),
 			})
 			return
 		}
-		writeTekshotJSON(w, http.StatusOK, map[string]any{
+		writeGatewayJSON(w, http.StatusOK, map[string]any{
 			"ok":      true,
 			"deleted": jobID,
 		})
 	default:
-		writeTekshotJSON(w, http.StatusMethodNotAllowed, map[string]any{
+		writeGatewayJSON(w, http.StatusMethodNotAllowed, map[string]any{
 			"ok":      false,
 			"message": "method not allowed",
 		})
@@ -146,7 +146,7 @@ func decodeTekshotScheduledCallbackRequest(w http.ResponseWriter, r *http.Reques
 	dec := json.NewDecoder(r.Body)
 	dec.UseNumber()
 	if err := dec.Decode(&input); err != nil {
-		writeTekshotJSON(w, http.StatusBadRequest, map[string]any{
+		writeGatewayJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":      false,
 			"message": "invalid JSON payload",
 		})

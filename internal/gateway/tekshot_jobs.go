@@ -17,14 +17,14 @@ func (s *Server) SetTekshotJobService(service *tekshottools.JobService) {
 
 func (s *Server) handleTekshotJobs(w http.ResponseWriter, r *http.Request) {
 	if !s.hasGatewayBearer(r) {
-		writeTekshotJSON(w, http.StatusUnauthorized, map[string]any{
+		writeGatewayJSON(w, http.StatusUnauthorized, map[string]any{
 			"ok":      false,
 			"message": "valid gateway token required",
 		})
 		return
 	}
 	if s.tekshotJobs == nil {
-		writeTekshotJSON(w, http.StatusServiceUnavailable, map[string]any{
+		writeGatewayJSON(w, http.StatusServiceUnavailable, map[string]any{
 			"ok":      false,
 			"message": "Tekshot job service is not configured",
 		})
@@ -32,7 +32,7 @@ func (s *Server) handleTekshotJobs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method != http.MethodPost {
-		writeTekshotJSON(w, http.StatusMethodNotAllowed, map[string]any{
+		writeGatewayJSON(w, http.StatusMethodNotAllowed, map[string]any{
 			"ok":      false,
 			"message": "method not allowed",
 		})
@@ -41,7 +41,7 @@ func (s *Server) handleTekshotJobs(w http.ResponseWriter, r *http.Request) {
 
 	var input tekshottools.JobCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		writeTekshotJSON(w, http.StatusBadRequest, map[string]any{
+		writeGatewayJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":      false,
 			"message": "invalid JSON payload",
 		})
@@ -49,13 +49,13 @@ func (s *Server) handleTekshotJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	job, err := s.tekshotJobs.Create(r.Context(), input)
 	if err != nil {
-		writeTekshotJSON(w, http.StatusBadRequest, map[string]any{
+		writeGatewayJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":      false,
 			"message": err.Error(),
 		})
 		return
 	}
-	writeTekshotJSON(w, http.StatusAccepted, map[string]any{
+	writeGatewayJSON(w, http.StatusAccepted, map[string]any{
 		"ok":  true,
 		"job": serializeTekshotJob(job, false),
 	})
@@ -63,14 +63,14 @@ func (s *Server) handleTekshotJobs(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTekshotJob(w http.ResponseWriter, r *http.Request) {
 	if !s.hasGatewayBearer(r) {
-		writeTekshotJSON(w, http.StatusUnauthorized, map[string]any{
+		writeGatewayJSON(w, http.StatusUnauthorized, map[string]any{
 			"ok":      false,
 			"message": "valid gateway token required",
 		})
 		return
 	}
 	if s.tekshotJobs == nil {
-		writeTekshotJSON(w, http.StatusServiceUnavailable, map[string]any{
+		writeGatewayJSON(w, http.StatusServiceUnavailable, map[string]any{
 			"ok":      false,
 			"message": "Tekshot job service is not configured",
 		})
@@ -86,7 +86,7 @@ func (s *Server) handleTekshotJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method != http.MethodGet {
-		writeTekshotJSON(w, http.StatusMethodNotAllowed, map[string]any{
+		writeGatewayJSON(w, http.StatusMethodNotAllowed, map[string]any{
 			"ok":      false,
 			"message": "method not allowed",
 		})
@@ -95,7 +95,7 @@ func (s *Server) handleTekshotJob(w http.ResponseWriter, r *http.Request) {
 
 	id, err := uuid.Parse(strings.TrimSpace(rawID))
 	if err != nil {
-		writeTekshotJSON(w, http.StatusBadRequest, map[string]any{
+		writeGatewayJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":      false,
 			"message": "invalid tekshot job id",
 		})
@@ -103,20 +103,20 @@ func (s *Server) handleTekshotJob(w http.ResponseWriter, r *http.Request) {
 	}
 	job, err := s.tekshotJobs.Get(r.Context(), id)
 	if err != nil {
-		writeTekshotJSON(w, http.StatusInternalServerError, map[string]any{
+		writeGatewayJSON(w, http.StatusInternalServerError, map[string]any{
 			"ok":      false,
 			"message": err.Error(),
 		})
 		return
 	}
 	if job == nil {
-		writeTekshotJSON(w, http.StatusNotFound, map[string]any{
+		writeGatewayJSON(w, http.StatusNotFound, map[string]any{
 			"ok":      false,
 			"message": "tekshot job not found",
 		})
 		return
 	}
-	writeTekshotJSON(w, http.StatusOK, map[string]any{
+	writeGatewayJSON(w, http.StatusOK, map[string]any{
 		"ok":  true,
 		"job": serializeTekshotJob(job, true),
 	})
@@ -124,7 +124,7 @@ func (s *Server) handleTekshotJob(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTekshotJobCancel(w http.ResponseWriter, r *http.Request, rawID string) {
 	if r.Method != http.MethodPost {
-		writeTekshotJSON(w, http.StatusMethodNotAllowed, map[string]any{
+		writeGatewayJSON(w, http.StatusMethodNotAllowed, map[string]any{
 			"ok":      false,
 			"message": "method not allowed",
 		})
@@ -132,7 +132,7 @@ func (s *Server) handleTekshotJobCancel(w http.ResponseWriter, r *http.Request, 
 	}
 	id, err := uuid.Parse(strings.TrimSpace(rawID))
 	if err != nil {
-		writeTekshotJSON(w, http.StatusBadRequest, map[string]any{
+		writeGatewayJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":      false,
 			"message": "invalid tekshot job id",
 		})
@@ -140,20 +140,20 @@ func (s *Server) handleTekshotJobCancel(w http.ResponseWriter, r *http.Request, 
 	}
 	job, err := s.tekshotJobs.Cancel(r.Context(), id)
 	if err != nil {
-		writeTekshotJSON(w, http.StatusInternalServerError, map[string]any{
+		writeGatewayJSON(w, http.StatusInternalServerError, map[string]any{
 			"ok":      false,
 			"message": err.Error(),
 		})
 		return
 	}
 	if job == nil {
-		writeTekshotJSON(w, http.StatusNotFound, map[string]any{
+		writeGatewayJSON(w, http.StatusNotFound, map[string]any{
 			"ok":      false,
 			"message": "tekshot job not found",
 		})
 		return
 	}
-	writeTekshotJSON(w, http.StatusOK, map[string]any{
+	writeGatewayJSON(w, http.StatusOK, map[string]any{
 		"ok":  true,
 		"job": serializeTekshotJob(job, false),
 	})
