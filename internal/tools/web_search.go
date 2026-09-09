@@ -23,6 +23,7 @@ const (
 	braveSearchEndpoint  = "https://api.search.brave.com/res/v1/web/search"
 	exaSearchEndpoint    = "https://api.exa.ai/search"
 	tavilySearchEndpoint = "https://api.tavily.com/search"
+	googleCSEEndpoint    = "https://www.googleapis.com/customsearch/v1"
 	webSearchUserAgent   = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
 
@@ -31,12 +32,19 @@ const (
 	searchProviderTavily     = "tavily"
 	searchProviderBrave      = "brave"
 	searchProviderDuckDuckGo = "duckduckgo"
+	searchProviderGoogleCSE  = "google_cse"
 )
 
+// Google CSE sits ahead of DuckDuckGo but behind the paid-first providers:
+// a tenant that configured Exa/Tavily/Brave meant to use them, while CSE is
+// the one keyless-friendly option that actually answers in bursts (see the
+// docblock in web_search_google.go). DuckDuckGo stays last as the no-key
+// fallback it has always been.
 var defaultSearchProviderOrder = []string{
 	searchProviderExa,
 	searchProviderTavily,
 	searchProviderBrave,
+	searchProviderGoogleCSE,
 	searchProviderDuckDuckGo,
 }
 

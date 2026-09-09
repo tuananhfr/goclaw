@@ -18,6 +18,7 @@ func configCmd() *cobra.Command {
 	cmd.AddCommand(configShowCmd())
 	cmd.AddCommand(configPathCmd())
 	cmd.AddCommand(configValidateCmd())
+	cmd.AddCommand(configSecretCmd())
 	return cmd
 }
 

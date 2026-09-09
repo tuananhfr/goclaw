@@ -19,6 +19,8 @@ func buildProviderByName(name, apiKey string, maxResults int) SearchProvider {
 		return newTavilySearchProvider(apiKey, maxResults)
 	case searchProviderBrave:
 		return newBraveSearchProvider(apiKey, maxResults)
+	case searchProviderGoogleCSE:
+		return newGoogleCSESearchProvider(apiKey, maxResults)
 	case searchProviderDuckDuckGo:
 		return newDuckDuckGoSearchProvider(maxResults)
 	default:
