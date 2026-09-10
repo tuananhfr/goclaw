@@ -73,7 +73,9 @@ func TestBuildLearnStylePrompt(t *testing.T) {
 		"ENTIRE style guide in Vietnamese",
 		"ONLY the style guide text",
 		"Bài mẫu tham chiếu",
-		"2-3 bài ĐẦY ĐỦ nguyên văn",
+		"đúng 1 bài ĐẦY ĐỦ nguyên văn",
+		"khoảng 4000 ký tự",
+		"tối đa 5000 ký tự",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt missing %q\n---\n%s", want, prompt)
@@ -81,5 +83,100 @@ func TestBuildLearnStylePrompt(t *testing.T) {
 	}
 	if strings.Contains(prompt, "Title: \n") {
 		t.Fatalf("prompt should omit empty titles\n---\n%s", prompt)
+	}
+	if strings.Contains(prompt, "Current style guide") {
+		t.Fatalf("fresh learn must not carry an update block\n---\n%s", prompt)
+	}
+}
+
+func TestBuildLearnStylePromptUpdatesCurrentGuide(t *testing.T) {
+	request := map[string]any{
+		"style_source":        "page_posts",
+		"current_style_guide": "## Giọng văn\n- Thân thiện, xưng \"nhà mình\".",
+	}
+	prompt := buildLearnStylePrompt(request, []learnStyleSample{{Content: "Bài mới nè."}})
+
+	for _, want := range []string{
+		"## Current style guide",
+		"xưng \"nhà mình\"",
+		"## New sample posts (1)",
+		"Giữ nguyên cấu trúc và tên các mục",
+		"Ít bài mẫu thì thay đổi ít",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("update prompt missing %q\n---\n%s", want, prompt)
+		}
+	}
+	if strings.Contains(prompt, "## Sample posts (") {
+		t.Fatalf("update prompt should label samples as new\n---\n%s", prompt)
+	}
+}
+
+func TestBuildLearnStylePromptAsksToShrinkAnOversizedGuide(t *testing.T) {
+	request := map[string]any{
+		"current_style_guide":   strings.Repeat("á", 120),
+		"style_guide_max_chars": float64(100),
+	}
+	prompt := buildLearnStylePrompt(request, []learnStyleSample{{Content: "Bài mới."}})
+	if !strings.Contains(prompt, "đang dài hơn giới hạn") {
+		t.Fatalf("prompt should ask to shrink a guide over the limit\n---\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "tối đa 100 ký tự") {
+		t.Fatalf("prompt should state the limit from the request\n---\n%s", prompt)
+	}
+}
+
+func TestLearnStyleMaxChars(t *testing.T) {
+	cases := map[string]struct {
+		request map[string]any
+		want    int
+	}{
+		"missing uses default":  {map[string]any{}, learnStyleDefaultMaxChars},
+		"json number":           {map[string]any{"style_guide_max_chars": float64(4000)}, 4000},
+		"zero uses default":     {map[string]any{"style_guide_max_chars": float64(0)}, learnStyleDefaultMaxChars},
+		"negative uses default": {map[string]any{"style_guide_max_chars": float64(-5)}, learnStyleDefaultMaxChars},
+	}
+	for name, tc := range cases {
+		if got := learnStyleMaxChars(tc.request); got != tc.want {
+			t.Fatalf("%s: got %d, want %d", name, got, tc.want)
+		}
+	}
+}
+
+func TestStyleGuideLengthCountsCharactersNotBytes(t *testing.T) {
+	// PHP đo bằng mb_strlen, nên Go phải đếm ký tự chứ không đếm byte UTF-8.
+	if got := styleGuideLength("Tiếng Việt"); got != 10 {
+		t.Fatalf("got %d, want 10", got)
+	}
+}
+
+func TestLearnStyleTargetCharsLeavesHeadroomUnderTheLimit(t *testing.T) {
+	// Model hay viết lố con số được giao, nên nhắm 80% giới hạn.
+	if got := learnStyleTargetChars(5000); got != 4000 {
+		t.Fatalf("got %d, want 4000", got)
+	}
+}
+
+func TestShorterGuideKeepsTheShortestNonEmptyVersion(t *testing.T) {
+	cases := map[string]struct {
+		current, candidate, want string
+	}{
+		"shorter candidate wins":   {"dài dòng lắm", "gọn", "gọn"},
+		"longer candidate ignored": {"gọn", "dài dòng lắm", "gọn"},
+		"empty candidate ignored":  {"gọn", "   ", "gọn"},
+	}
+	for name, tc := range cases {
+		if got := shorterGuide(tc.current, tc.candidate); got != tc.want {
+			t.Fatalf("%s: got %q, want %q", name, got, tc.want)
+		}
+	}
+}
+
+func TestBuildLearnStyleShortenPrompt(t *testing.T) {
+	prompt := buildLearnStyleShortenPrompt("## Giọng văn\n- dài dòng", 6200, 5000)
+	for _, want := range []string{"6200", "5000", "4000", "## Giọng văn", "Giữ nguyên cấu trúc", "ONLY the style guide text"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("shorten prompt missing %q\n---\n%s", want, prompt)
+		}
 	}
 }
