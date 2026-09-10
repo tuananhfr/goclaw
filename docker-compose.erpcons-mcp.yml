@@ -1,11 +1,17 @@
 # Sidecar MCP cho ERPcons — cho agent ĐỌC dữ liệu ERPcons thay mặt người hỏi.
 #
-# Usage: thêm vào COMPOSE_FILE trong .env, rồi:
+# File này DÙNG CHUNG cho mọi môi trường. Thứ khác nhau giữa dev và production
+# nằm hết ở `.env` (`ERPCONS_API_BASE`) và ở overlay local
+# `docker-compose.erpcons-local.yml` (bí danh host + cổng publish). Đừng sửa tay
+# file này khi deploy - phải sửa tay là sớm muộn cũng quên.
+#
+# Usage: thêm vào COMPOSE_FILE trong .env, khai ERPCONS_API_BASE, rồi:
 #   docker compose up -d --build erpcons-mcp
 #
 # Sau đó thêm MCP server trong giao diện GoClaw:
 #   Transport: SSE
-#   URL: http://erpcons-mcp:3300/sse
+#   URL: http://erpcons-mcp:3300/sse      <- tên container, KHÔNG phải tên miền
+#   Tool prefix: (để trống, sidecar đã tự thêm `erp_`)
 #   Settings: {"require_user_credentials": true}
 # rồi chép UUID của server đó vào /admin/config/services/erp-assistant bên Drupal.
 #
@@ -13,10 +19,9 @@
 # chung không mang token ai cả, và mọi người đều thấy 0 tool. Có nó thì GoClaw
 # mở kết nối riêng cho từng người kèm token của họ.
 #
-# `extra_hosts` lặp lại của docker-compose.erpcons-local.yml vì container này
-# cũng phải gọi ngược vào Drupal chạy trên WAMP của host, và Host header phải
-# khớp vhost Apache (gọi host.docker.internal sẽ rơi vào vhost mặc định).
-# Production: bỏ extra_hosts, trỏ ERP_API_BASE vào tên miền thật.
+# Cổng 3300 chỉ `expose` trong mạng compose, KHÔNG publish ra host: GoClaw gọi
+# bằng tên container nên không cần, mà publish là dựng thêm một endpoint đứng
+# ngoài internet chẳng để làm gì.
 
 services:
   erpcons-mcp:
@@ -26,14 +31,16 @@ services:
     image: goclaw/erpcons-mcp:local
     environment:
       - PORT=3300
-      - ERP_API_BASE=${ERPCONS_API_BASE:-http://erpcons.localhost/api/v1}
+      # CỐ Ý KHÔNG CÓ GIÁ TRỊ MẶC ĐỊNH.
+      #
+      # Khai một mặc định trỏ về máy dev nghĩa là quên đặt biến ở production thì
+      # sidecar lặng lẽ gọi nhầm địa chỉ - hỏng mà không ai biết vì sao. Để trống
+      # thì `docker compose` cảnh báo ngay lúc `up`, `/health` trả
+      # `status: misconfigured`, và mọi kết nối SSE bị từ chối kèm log rõ ràng.
+      - ERP_API_BASE=${ERPCONS_API_BASE:?dat ERPCONS_API_BASE trong .env}
       - ERP_TIMEOUT_MS=${ERPCONS_TIMEOUT_MS:-20000}
-    extra_hosts:
-      - "erpcons.localhost:host-gateway"
     expose:
       - "3300"
-    ports:
-      - "${ERPCONS_MCP_PORT:-3300}:3300"
     networks:
       - default
       - goclaw-net

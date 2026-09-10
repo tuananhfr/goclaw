@@ -17,3 +17,15 @@ services:
   goclaw:
     extra_hosts:
       - "erpcons.localhost:host-gateway"
+
+  # Sidecar MCP: cùng lý do với goclaw ở trên — nó gọi REST của Drupal đang chạy
+  # trên WAMP của host, và Host header phải khớp vhost Apache.
+  #
+  # Cổng publish cũng để ở đây chứ không ở file dùng chung: nó chỉ phục vụ việc
+  # chạy tay `test-client.mjs` / `test-chat.mjs` từ host. Production không cần —
+  # GoClaw gọi sidecar bằng tên container trong mạng compose.
+  erpcons-mcp:
+    extra_hosts:
+      - "erpcons.localhost:host-gateway"
+    ports:
+      - "${ERPCONS_MCP_PORT:-3300}:3300"

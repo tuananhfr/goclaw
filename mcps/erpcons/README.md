@@ -23,18 +23,40 @@ vụ đúng một người và không có API nào ở đây nhận `userId` là
 
 ## Cấu hình
 
-| Biến | Mặc định | Ý nghĩa |
+Mọi thứ khác nhau giữa các môi trường nằm ở `.env`, **không** ở compose file —
+phải sửa compose file khi deploy là sớm muộn cũng quên.
+
+| Biến `.env` | Mặc định | Ý nghĩa |
 | --- | --- | --- |
-| `ERP_API_BASE` | (bắt buộc) | Gốc REST của ERPcons, ví dụ `http://erpcons.localhost/api/v1` |
-| `PORT` | `3300` | |
-| `ERP_TIMEOUT_MS` | `20000` | Hạn cho mỗi lời gọi sang Drupal |
+| `ERPCONS_API_BASE` | **không có** | Gốc REST của ERPcons. Dev: `http://erpcons.localhost/api/v1`. Production: `https://lpc.vn/erpcons/api/v1` |
+| `ERPCONS_TIMEOUT_MS` | `20000` | Hạn cho mỗi lời gọi sang Drupal |
+| `ERPCONS_MCP_PORT` | `3300` | Chỉ có tác dụng ở dev (xem dưới) |
+
+`ERPCONS_API_BASE` **cố ý không có mặc định**. Một mặc định trỏ về máy dev nghĩa
+là quên khai ở production thì sidecar lặng lẽ gọi nhầm địa chỉ; để trống thì
+`docker compose` từ chối chạy kèm câu chỉ thẳng vào `.env`.
 
 Chạy cùng GoClaw:
 
 ```bash
 # thêm docker-compose.erpcons-mcp.yml vào COMPOSE_FILE trong .env
+# và khai ERPCONS_API_BASE
 docker compose up -d --build erpcons-mcp
+docker exec goclaw-erpcons-mcp-1 wget -qO- http://localhost:3300/health
 ```
+
+### Dev khác production ở đâu
+
+`docker-compose.erpcons-mcp.yml` dùng chung cho mọi môi trường. Phần chỉ đúng ở
+máy dev nằm trong `docker-compose.erpcons-local.yml` (vốn đã có sẵn và chỉ được
+thêm vào `COMPOSE_FILE` của máy dev):
+
+- `extra_hosts` trỏ `erpcons.localhost` về host gateway, để container gọi được
+  WAMP đang chạy trên máy và Host header vẫn khớp vhost Apache.
+- Publish cổng 3300 ra host, để chạy tay `test-client.mjs` / `test-chat.mjs`.
+
+Production không cần cả hai: Drupal ở tên miền thật, còn GoClaw gọi sidecar bằng
+tên container trong mạng compose.
 
 Rồi thêm MCP server trong giao diện GoClaw:
 
