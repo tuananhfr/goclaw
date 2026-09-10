@@ -51,6 +51,7 @@ var allowedEnvVars = map[string]bool{
 var defaultPrivateURLHosts = map[string]bool{
 	"facebook-mcp":     true,
 	"google-drive-mcp": true,
+	"erpcons-mcp":      true,
 }
 
 // ValidateCommand checks stdio command for injection vulnerabilities.

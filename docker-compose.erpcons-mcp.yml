@@ -1,0 +1,40 @@
+# Sidecar MCP cho ERPcons — cho agent ĐỌC dữ liệu ERPcons thay mặt người hỏi.
+#
+# Usage: thêm vào COMPOSE_FILE trong .env, rồi:
+#   docker compose up -d --build erpcons-mcp
+#
+# Sau đó thêm MCP server trong giao diện GoClaw:
+#   Transport: SSE
+#   URL: http://erpcons-mcp:3300/sse
+#   Settings: {"require_user_credentials": true}
+# rồi chép UUID của server đó vào /admin/config/services/erp-assistant bên Drupal.
+#
+# `require_user_credentials` là bắt buộc: thiếu nó, GoClaw mở MỘT kết nối dùng
+# chung không mang token ai cả, và mọi người đều thấy 0 tool. Có nó thì GoClaw
+# mở kết nối riêng cho từng người kèm token của họ.
+#
+# `extra_hosts` lặp lại của docker-compose.erpcons-local.yml vì container này
+# cũng phải gọi ngược vào Drupal chạy trên WAMP của host, và Host header phải
+# khớp vhost Apache (gọi host.docker.internal sẽ rơi vào vhost mặc định).
+# Production: bỏ extra_hosts, trỏ ERP_API_BASE vào tên miền thật.
+
+services:
+  erpcons-mcp:
+    build:
+      context: ./mcps/erpcons
+      dockerfile: Dockerfile
+    image: goclaw/erpcons-mcp:local
+    environment:
+      - PORT=3300
+      - ERP_API_BASE=${ERPCONS_API_BASE:-http://erpcons.localhost/api/v1}
+      - ERP_TIMEOUT_MS=${ERPCONS_TIMEOUT_MS:-20000}
+    extra_hosts:
+      - "erpcons.localhost:host-gateway"
+    expose:
+      - "3300"
+    ports:
+      - "${ERPCONS_MCP_PORT:-3300}:3300"
+    networks:
+      - default
+      - goclaw-net
+    restart: unless-stopped

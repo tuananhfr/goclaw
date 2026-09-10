@@ -24,7 +24,19 @@ func connectAndDiscover(ctx context.Context, name, transportType, command string
 	}
 
 	if transportType != "stdio" {
-		if err := client.Start(ctx); err != nil {
+		// The transport outlives the caller — detach it from ctx.
+		//
+		// For SSE/HTTP, Start() owns the long-lived stream, and every caller here
+		// stores the client for reuse (pool entries, manager servers). Binding that
+		// stream to the caller's ctx means a per-run context kills it the moment the
+		// run finishes: the pool still lists the entry as connected, BridgeTools keep
+		// the stale client, and every later tool call fails with the MCP server's
+		// "session not found" until the health loop finally evicts it. That is exactly
+		// why the pool's health loop below already runs on context.Background().
+		//
+		// Initialize/ListTools keep the caller's ctx on purpose — they are short
+		// handshake calls that should still be cancellable.
+		if err := client.Start(context.WithoutCancel(ctx)); err != nil {
 			_ = client.Close()
 			return nil, nil, fmt.Errorf("start transport: %w", err)
 		}

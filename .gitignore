@@ -33,6 +33,7 @@ ui/web/.vite/
 
 # Bundled local MCP build artifacts
 mcps/**/dist/
+mcps/**/node_modules/
 
 # UI Desktop (Wails + React)
 ui/desktop/frontend/node_modules/
