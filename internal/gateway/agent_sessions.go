@@ -395,6 +395,24 @@ func authorizeUserScopedRPC(session *agentSession, req *protocol.RequestFrame) b
 		}
 		return params.AgentID == session.AgentKey
 
+	case protocol.MethodConnect:
+		// Gia hạn vé ngay trên kết nối đang mở.
+		//
+		// `allowedMethodsFor(scopeUser)` vẫn quảng cáo `connect` từ đầu, nhưng chỗ
+		// này lại quên nó - đúng thứ mà comment "hai chỗ phải khớp nhau" ở trên
+		// dặn phải tránh. Hậu quả không thấy ngay: vé sống 15 phút, còn client thì
+		// chỉ xin vé lúc mở socket, nên một khung chat mở lâu hơn thế là mọi RPC
+		// chết mà socket vẫn mở - không có `onclose` để client biết mà nối lại.
+		//
+		// Cho phép `connect` ở đây thì client tự thay vé trước khi hết hạn, không
+		// phải dựng lại socket và không làm đứt luồng chunk đang chảy. Vé mới vẫn
+		// được `handleConnect` kiểm đầy đủ; hàm này chỉ quyết định ĐƯỢC GỌI method
+		// nào, không quyết định vé nào hợp lệ.
+		//
+		// Vé đã HẾT HẠN thì vẫn bị chặn ở phép kiểm phía trên - lúc đó client buộc
+		// phải dựng lại socket, và như thế là đúng.
+		return true
+
 	case protocol.MethodChatAbort,
 		protocol.MethodChatHistory,
 		protocol.MethodChatInject,
