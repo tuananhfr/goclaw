@@ -12,7 +12,13 @@ services:
   postgres:
     image: pgvector/pgvector:pg18
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Loopback by default: goclaw reaches Postgres over the compose
+      # network as "postgres:5432" and never through a host port. Publishing
+      # on 0.0.0.0 writes an iptables rule into the DOCKER chain, which is
+      # evaluated before ufw — so a published 5432 stays reachable from the
+      # internet even when the firewall says it is denied. Override with
+      # POSTGRES_BIND only on a host that is not public.
+      - "${POSTGRES_BIND:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-goclaw}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-goclaw}
@@ -24,6 +30,14 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          # Without a cap Postgres is the one container free to grow into the
+          # host's spare RAM; the kernel then OOM-kills the largest process,
+          # which is goclaw, and that loses every in-flight job at once.
+          memory: ${POSTGRES_MEM_LIMIT:-4G}
+          cpus: '${POSTGRES_CPU_LIMIT:-1.0}'
     restart: unless-stopped
 
   goclaw:

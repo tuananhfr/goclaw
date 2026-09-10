@@ -73,9 +73,15 @@ services:
           # raise them, the kernel still OOM-kills at the number below, and an
           # OOM kills every in-flight job at once (the queue only makes jobs
           # wait). Raise this together with the worker count, never after.
-          memory: 4G
-          cpus: '2.0'
-          pids: 500
+          #
+          # Set GOCLAW_MEM_LIMIT / GOCLAW_CPU_LIMIT in .env to resize a
+          # deployment without editing this file; the defaults below are the
+          # original values, so an unset environment is unchanged.
+          memory: ${GOCLAW_MEM_LIMIT:-4G}
+          cpus: '${GOCLAW_CPU_LIMIT:-2.0}'
+          # A cap, not a reservation: knowledge_extract forks a python3 per
+          # job, so a large worker pool needs headroom here.
+          pids: 1000
     networks:
       - default
       - goclaw-net
