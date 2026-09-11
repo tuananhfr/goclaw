@@ -279,7 +279,7 @@ func (s *JobService) processNext(parent context.Context, workerID int) error {
 	}
 
 	slog.Info("tekshot.job.claimed", "worker", workerID, "job_id", job.ID, "job_type", job.JobType, "external_job_uuid", job.ExternalJobUUID)
-	runCtx, cancel := context.WithTimeout(parent, defaultJobRunTimeout)
+	runCtx, cancel := context.WithTimeout(parent, jobRunTimeout(job.JobType))
 	s.registerCancel(job.ID, cancel)
 	defer func() {
 		s.unregisterCancel(job.ID)

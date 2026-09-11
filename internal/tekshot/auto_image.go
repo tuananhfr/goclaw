@@ -33,6 +33,9 @@ func (s *JobService) runAutoImage(ctx context.Context, job *store.TekshotJob, re
 	if basePrompt == "" {
 		return nil, "", fmt.Errorf("automated image prompt is required")
 	}
+	if reviewAgent := strings.TrimSpace(stringFromMap(request, "review_agent_key")); reviewAgent != "" {
+		return s.runAutoImageReviewed(ctx, job, request, reviewAgent)
+	}
 
 	imageJob := *job
 	imageJob.JobType = TekshotJobTypeImageChat
