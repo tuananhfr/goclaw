@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"maps"
 	"math"
 	"regexp"
@@ -212,6 +213,18 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 	}
 	runDraftReview(ctx, ag, runReq, collector)
 	batch := collector.Batch()
+	// Người soát độc lập (agent chung Drupal chọn) chấm và cho sửa tới 2 lượt;
+	// bước biên tập ở trên vẫn là chính người viết tự đọc lại bài mình.
+	if reviewAgent := strings.TrimSpace(stringArg(args, "review_agent_key")); reviewAgent != "" {
+		if reviewer, rerr := t.router.Get(ctx, reviewAgent); rerr == nil {
+			batch = reviewDraftContent(ctx, reviewer, ag, runReq, collector, sourceItemsArg(args["source_items"]), stringArg(writerArgs, "researched_facts"))
+		} else {
+			slog.Warn("tekshot.draft.content_reviewer_missing", "agent", reviewAgent, "error", rerr)
+			for _, post := range draftPostList(batch) {
+				post["content_review"] = failedContentReview("không gọi được agent soát: " + rerr.Error())
+			}
+		}
+	}
 
 	// Prompt D: lop kiem tra THU HAI, tach khoi luot viet. Chi chay khi trang
 	// da bat luat va bai khong phai thuan thong tin — bai THONG_TIN khong mang
