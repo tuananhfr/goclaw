@@ -181,22 +181,10 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 
 	profile := pageProfileFromRequest(args)
 	collector := NewDraftBatchCollectorTool(sourceItemsArg(args["source_items"])).withProfile(profile)
-	runReq := agent.RunRequest{
-		SessionKey:     sessionKey,
-		Message:        buildPrompt(args, timezone) + buildGovernancePrompt(profile),
-		Media:          mediaFilesArg(args["source_media"]),
-		Channel:        "http",
-		ChatID:         "api",
-		PeerKind:       "direct",
-		Addressed:      true,
-		RunID:          uuid.NewString(),
-		UserID:         store.UserIDFromContext(ctx),
-		ToolAllow:      tekshotDraftResearchToolAllow(),
-		EphemeralTools: []tools.Tool{collector},
-		MaxIterations:  8,
-		TraceName:      "tekshot draft posts",
-		TraceTags:      []string{"tekshot", "draft_posts"},
-	}
+	userID := store.UserIDFromContext(ctx)
+	writerArgs := maps.Clone(args)
+	writerArgs["researched_facts"] = renderFactSheet(researchDraftFacts(ctx, ag, args, userID, sessionKey))
+	runReq := draftRunRequest(writerArgs, timezone, userID, sessionKey, collector)
 
 	if _, err := ag.Run(ctx, runReq); err != nil && collector.Batch() == nil {
 		return tools.ErrorResult(fmt.Sprintf("draft generation run failed: %v", err))
@@ -219,10 +207,11 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 		}
 	}
 
-	batch := collector.Batch()
-	if batch == nil {
+	if collector.Batch() == nil {
 		return tools.ErrorResult("MODEL_OUTPUT_INVALID: agent did not submit a valid structured draft batch")
 	}
+	runDraftReview(ctx, ag, runReq, collector)
+	batch := collector.Batch()
 
 	// Prompt D: lop kiem tra THU HAI, tach khoi luot viet. Chi chay khi trang
 	// da bat luat va bai khong phai thuan thong tin — bai THONG_TIN khong mang
@@ -244,6 +233,56 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 			"timezone":    timezone,
 		},
 	}
+}
+
+// draftRunRequest builds the writing run. LightContext drops the agent's chat
+// persona files (SOUL/AGENTS/USER.md, NO_REPLY and cron rules): in a caption
+// run they were most of the prompt and the source row a sliver of it. The
+// writer gets no research tools — facts come from the research pass — and one
+// forced submission, since ToolChoice re-applies every iteration and a second
+// one could overwrite a valid post.
+func draftRunRequest(args map[string]any, timezone, userID, sessionKey string, collector *DraftBatchCollectorTool) agent.RunRequest {
+	return agent.RunRequest{
+		SessionKey:     sessionKey,
+		Message:        draftWriterPersona(args) + "\n\n" + buildPrompt(args, timezone) + buildGovernancePrompt(pageProfileFromRequest(args)),
+		Media:          mediaFilesArg(args["source_media"]),
+		Channel:        "tekshot_job",
+		ChannelType:    "tekshot",
+		ChatID:         userID,
+		PeerKind:       "direct",
+		Addressed:      true,
+		RunID:          uuid.NewString(),
+		UserID:         userID,
+		SenderID:       userID,
+		ToolAllow:      []string{draftWriteNoTools},
+		EphemeralTools: []tools.Tool{collector},
+		ToolChoice:     &providers.ToolChoice{Mode: "function", Name: finalToolName},
+		MaxIterations:  1,
+		SkillFilter:    []string{},
+		LightContext:   true,
+		TraceName:      "tekshot draft posts",
+		TraceTags:      []string{"tekshot", "draft_posts"},
+	}
+}
+
+// draftWriterPersona replaces the chat persona LightContext drops with the one
+// this run actually needs: the page's own editor writing from the given row.
+func draftWriterPersona(args map[string]any) string {
+	page := ""
+	if workspace, ok := args["workspace"].(map[string]any); ok {
+		page = strings.TrimSpace(stringArg(workspace, "label"))
+	}
+	var sb strings.Builder
+	if page != "" {
+		sb.WriteString(fmt.Sprintf("Bạn là biên tập viên nội dung của page Facebook \"%s\".", page))
+	} else {
+		sb.WriteString("Bạn là biên tập viên nội dung của một page Facebook.")
+	}
+	sb.WriteString(" Lượt này chỉ có một việc: viết caption cho dòng checklist được giao.")
+	sb.WriteString(" Những gì dòng checklist còn thiếu đã được tra sẵn ở khối RESEARCHED FACTS bên dưới — dùng chúng như kiến thức của chính bạn.")
+	sb.WriteString(" Viết như người làm nghề viết cho page của mình: đi thẳng vào điều tiêu đề hứa, dùng đúng số liệu, tên, bước làm từ dòng checklist và khối dữ kiện đó;")
+	sb.WriteString(" có giọng văn, có mở bài, có nối ý; không viết câu chung chung đặt vào page nào cũng đúng; không bịa dữ kiện.")
+	return sb.String()
 }
 
 type DraftBatchCollectorTool struct {
@@ -333,20 +372,25 @@ func (t *DraftBatchCollectorTool) baseParameters() map[string]any {
 						},
 						"brief":  map[string]any{"type": "string"},
 						"pillar": map[string]any{"type": "string"},
-						// The caption is the whole deliverable, yet this was the only
-						// consequential field with no spec — so the model filled it like a
-						// form cell and settled at ~537 chars regardless of how much prose
-						// guidance the prompt carried. Field descriptions bind far harder
-						// than prompt text because they attach to the slot being filled.
+						// Field descriptions bind far harder than prompt text because they
+						// attach to the slot being filled. A single promo template here once
+						// (800-1000 chars, sensory clauses per item, a "sell the feeling"
+						// beat) turned every post type into a padded food ad: 72% of posts
+						// landed at 800-1200 chars and recipes lost their steps.
 						"content": map[string]any{
 							"type": "string",
-							"description": "The complete Facebook caption body, ready to publish. TARGET LENGTH 800-1000 characters — a 500-character caption is too thin and will be rejected. " +
-								"STRUCTURE: (1) an opening hook of 1-2 sentences that names a concrete moment or tension the reader recognises, containing the price or the offer; " +
-								"(2) a short lead-in that speaks to the reader as 'bạn'/'các bác' or whatever address the source uses; " +
-								"(3) the offer block — list each item on its own line led by a food/product emoji, and give every item 2-3 clauses of sensory detail (texture, temperature, aroma, taste), never a bare noun; " +
-								"(4) one energy beat that sells the feeling rather than the item; " +
-								"(5) exactly one closing CTA carrying a verb, a channel and a time or place. " +
-								"EMOJI: one leading the offer-block header, one leading each listed item, optionally one on the CTA line. Never mid-sentence, never two adjacent. " +
+							"description": "The complete Facebook caption body, ready to publish — written the way a skilled human copywriter for this page would write it. " +
+								"MATERIAL = the source row + the RESEARCHED FACTS block in the prompt, looked up for you in a separate pass. Use the researched facts that help the reader do or understand what the title promises, as if you knew them; skip trivia (nutrition tables, device models, timing footnotes); never invent a fact beyond them, and what is listed as NOT FOUND stays out. " +
+								"When a researched fact disagrees with the checklist row, the checklist wins and the other is dropped — never discuss sources or discrepancies in the post. " +
+								"LENGTH FOLLOWS THE MATERIAL: carry every useful fact you have and stop. Never pad to reach a length, never drop a fact to stay short. " +
+								"NEVER mention the source, the checklist, your research or what is missing — the reader sees only the post; a fact you cannot confirm is simply left out. " +
+								"Research in any language, but write for this page's readers: metric units (g, ml, muỗng canh, muỗng cà phê, °C) and Vietnamese kitchen and business terms — never cup, tablespoon, °F or untranslated English words. " +
+								"SHAPE BY POST TYPE, decided from the source: " +
+								"RECIPE / HOW-TO — an opening that names the result and who it suits; the ingredients with exact quantities, one per line, plus a short practical note only where it helps (how to prep it), never sensory adjectives; every step numbered in order; tips when you have them; a CTA. " +
+								"OFFER / MENU / PRICE — a hook naming a concrete moment and the price or offer; one line per item with its concrete details; one CTA carrying a verb, a channel and a time or place. " +
+								"KNOWLEDGE / B2B / RECRUITMENT / STORY — open on the specific problem, question or moment the title names; develop each point with its concrete fact (number, threshold, example, name); end on one takeaway and a CTA that fits. " +
+								"EVERY SENTENCE does a job: it carries a fact from your material, hooks the reader into the exact problem or result, links two points, or asks for action. What is banned is the sentence that would fit any other page unchanged (generic scene-setting, stock feelings, stock praise) — not the voice. The post must read like a post, not a spec sheet. " +
+								"EMOJI: one leading each list header and each list item, optionally one on the CTA line. Never mid-sentence, never two adjacent. " +
 								"When the source brief already supplies wording, address form, slang or a CTA sentence, KEEP them verbatim and build around them — expand and format, do not reword into neutral prose. " +
 								"Write in the language of the source. Blank line between blocks so it scans on a phone.",
 						},
@@ -401,9 +445,8 @@ func buildPrompt(args map[string]any, timezone string) string {
 	}
 	sb.WriteString("Do not return the final batch as plain text.\n")
 	sb.WriteString("Keep every post grounded in the source material. Use empty strings for unknown optional fields and never omit required fields.\n")
-	sb.WriteString("When business facts are needed, search the Vault first and read relevant results before drafting.\n")
-	sb.WriteString("Use web search/fetch for external or current information, and skill_search for brand voice, content, or visual guidance.\n")
-	sb.WriteString("Do not invent page, brand, product, service, policy, pricing, FAQ, availability, or promotion facts that are not supported by the provided source, Vault, or web evidence.\n")
+	sb.WriteString("Your material is the source records and the RESEARCHED FACTS block below; facts were looked up in a separate pass, so write from them directly.\n")
+	sb.WriteString("Do not invent page, brand, product, service, policy, pricing, FAQ, availability, or promotion facts that are not supported by the source records or the researched facts.\n")
 	sb.WriteString("Scheduling timezone: ")
 	sb.WriteString(timezone)
 	sb.WriteString("\n\n")
@@ -451,7 +494,7 @@ func buildPrompt(args map[string]any, timezone string) string {
 			sb.WriteString("- Do not include footer/signature information or hashtags in content. Return 2-3 supplementary hashtags as one space-separated hashtags string.\n")
 			// Thứ tự làm việc, không phải luật viết: nội dung luật nằm trong
 			// Content Writing Guidelines do Drupal gửi kèm instructions.
-			sb.WriteString("- Work in this order: classify the post intent and pick the framework per the instructions; research facts with the allowed tools when the source needs support; write the caption; run the instructions' self-check; only call submit_draft_batch after the self-check passes.\n")
+			sb.WriteString("- Work in this order: classify the post intent and pick the framework per the instructions; write the caption from the source record and the researched facts; run the instructions' self-check; only call submit_draft_batch after the self-check passes.\n")
 		}
 		sb.WriteString("\nSOURCE RECORDS:\n")
 		for _, item := range sourceItems {
@@ -467,6 +510,9 @@ func buildPrompt(args map[string]any, timezone string) string {
 				sb.WriteString(indentPromptBlock(supporting, "    "))
 			}
 			sb.WriteString("\n")
+		}
+		if facts := strings.TrimSpace(stringArg(args, "researched_facts")); facts != "" {
+			sb.WriteString("\n" + facts + "\n")
 		}
 		sb.WriteString("\nSTRICT source item rules:\n")
 		sb.WriteString("- Return exactly one post for every source_index listed above.\n")
