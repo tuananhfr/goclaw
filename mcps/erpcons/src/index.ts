@@ -28,6 +28,7 @@
  */
 import express from "express";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { dropCachedCatalog, getCachedCatalog, setCachedCatalog } from "./catalog-cache.js";
 import { ErpClient } from "./erp-client.js";
 import { createMcpServer } from "./mcp-server.js";
 
@@ -63,6 +64,7 @@ app.get("/sse", async (req, res) => {
 
   const client = new ErpClient(ERP_API_BASE, token, REQUEST_TIMEOUT_MS);
   let catalog = {};
+  let cached = false;
   const catalogStart = Date.now();
 
   if (token === "") {
@@ -72,7 +74,17 @@ app.get("/sse", async (req, res) => {
     console.warn("[SSE] Không có token — phục vụ 0 tool.");
   } else {
     try {
-      catalog = await client.fetchCatalog();
+      // Kết nối được mở lại mỗi khi người dùng quay lại sau lúc nhàn rỗi, nên
+      // lượt gọi Drupal ở đây nằm đúng trên đường đi của câu hỏi. Xem
+      // `catalog-cache.ts` để biết vì sao chỉ nhớ kết quả THÀNH CÔNG.
+      const hit = getCachedCatalog(token);
+      if (hit) {
+        catalog = hit;
+        cached = true;
+      } else {
+        catalog = await client.fetchCatalog();
+        setCachedCatalog(token, catalog);
+      }
     } catch (err) {
       // ==================================================================
       // KHÔNG TÁCH ĐƯỢC CATALOG THÌ TỪ CHỐI KẾT NỐI, ĐỪNG PHỤC VỤ 0 TOOL
@@ -102,7 +114,7 @@ app.get("/sse", async (req, res) => {
 
   const openedAt = Date.now();
   console.log(
-    `[SSE] Mở ${transport.sessionId} — ${toolCount} tool, catalog ${catalogMs}ms${token === "" ? ", KHÔNG token" : ""}.`,
+    `[SSE] Mở ${transport.sessionId} — ${toolCount} tool, catalog ${catalogMs}ms${cached ? " (cache)" : ""}${token === "" ? ", KHÔNG token" : ""}.`,
   );
 
   // Token chết -> tự đóng kết nối này.
@@ -116,6 +128,9 @@ app.get("/sse", async (req, res) => {
   // đó rồi nối lại — lần nối mới lấy credential mới từ kho của nó. Tự lành, không
   // cần Drupal gọi ngược sang GoClaw để báo "tôi vừa xoay token".
   client.onUnauthorized = () => {
+    // Token đã bị xoay: bỏ catalog đã nhớ NGAY, đừng để lần nối lại kế tiếp
+    // dựng tool từ bản của một danh tính không còn giá trị.
+    dropCachedCatalog(token);
     if (!sessions.has(transport.sessionId)) return;
     console.warn(`[SSE] Token hết hiệu lực — đóng ${transport.sessionId} để GoClaw nối lại.`);
     // setImmediate: trả xong phản hồi cho lời gọi hiện tại rồi mới ngắt, nếu

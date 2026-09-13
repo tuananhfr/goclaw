@@ -39,6 +39,10 @@ services:
       # `status: misconfigured`, và mọi kết nối SSE bị từ chối kèm log rõ ràng.
       - ERP_API_BASE=${ERPCONS_API_BASE:?dat ERPCONS_API_BASE trong .env}
       - ERP_TIMEOUT_MS=${ERPCONS_TIMEOUT_MS:-20000}
+      # Nhớ danh mục tool của mỗi người trong bao lâu (hạn trượt, mili-giây).
+      # Trống = mặc định 15 phút, khớp với GOCLAW_MCP_USER_IDLE_TTL nên người
+      # quay lại sau lúc nhàn rỗi không phải chờ Drupal. 0 = tắt cache.
+      - ERP_CATALOG_CACHE_MS=${ERPCONS_CATALOG_CACHE_MS:-}
     expose:
       - "3300"
     networks:
