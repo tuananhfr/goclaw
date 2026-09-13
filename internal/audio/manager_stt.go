@@ -10,6 +10,10 @@ import (
 // ErrAllSTTProvidersFailed is returned when every provider in the chain fails.
 var ErrAllSTTProvidersFailed = errors.New("all STT providers failed")
 
+// ErrSTTRateLimited marks a provider rejection for quota/rate limits (HTTP 429).
+// Providers wrap it so callers can tell "try later" apart from a broken setup.
+var ErrSTTRateLimited = errors.New("stt rate limited")
+
 // defaultSTTChain is the built-in fallback order when no explicit chain is set.
 var defaultSTTChain = []string{"elevenlabs", "proxy"}
 
@@ -40,6 +44,18 @@ func (m *Manager) Transcribe(ctx context.Context, in STTInput, opts STTOptions) 
 		return nil, fmt.Errorf("%w: %w", ErrAllSTTProvidersFailed, lastErr)
 	}
 	return nil, fmt.Errorf("%w: no providers matched in chain %v", ErrAllSTTProvidersFailed, chain)
+}
+
+// CanTranscribe reports whether the chain resolved for ctx contains at least one
+// registered provider. Lets callers answer "not configured" instead of turning a
+// setup gap into a generic transcription failure.
+func (m *Manager) CanTranscribe(ctx context.Context) bool {
+	for _, name := range m.resolveSTTChain(ctx) {
+		if _, ok := m.sttProviders[name]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // SetSTTChain sets an explicit provider order for STT dispatch.

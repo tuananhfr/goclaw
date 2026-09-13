@@ -57,6 +57,9 @@ func (c *Config) MaskedCopy() *Config {
 	maskNonEmpty(&cp.Tts.OpenAI.APIKey)
 	maskNonEmpty(&cp.Tts.ElevenLabs.APIKey)
 	maskNonEmpty(&cp.Tts.MiniMax.APIKey)
+	if cp.Audio != nil && cp.Audio.Stt != nil {
+		maskNonEmpty(&cp.Audio.Stt.APIKey)
+	}
 
 	// Mask Tailscale auth key
 	maskNonEmpty(&cp.Tailscale.AuthKey)

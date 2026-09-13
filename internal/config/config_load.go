@@ -128,6 +128,9 @@ func (c *Config) applyEnvOverrides() {
 	envStr("GOCLAW_TTS_MINIMAX_API_KEY", &c.Tts.MiniMax.APIKey)
 	envStr("GOCLAW_TTS_MINIMAX_GROUP_ID", &c.Tts.MiniMax.GroupID)
 
+	// STT (OpenAI-compatible endpoint, e.g. Groq) — see config_audio.go.
+	c.applySTTEnvOverrides()
+
 	// Auto-enable channels if credentials are provided via env
 	if c.Channels.Telegram.Token != "" {
 		c.Channels.Telegram.Enabled = true

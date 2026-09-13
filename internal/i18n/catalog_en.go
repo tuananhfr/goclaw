@@ -214,6 +214,8 @@ func init() {
 		MsgSTTLegacyConfigDeprecated: "Legacy STT config deprecated; migrate to builtin_tools[stt]",
 		MsgSTTWhatsappPrivacyWarning: "Enabling STT for WhatsApp breaks end-to-end encryption for voice messages sent to this agent.",
 		MsgVoiceMessageFallback:      "[Voice message]",
+		MsgSTTNotConfigured:          "speech-to-text is not configured",
+		MsgSTTRateLimited:            "speech-to-text quota exhausted — try again later",
 
 		// Hooks
 		MsgHookInvalidMatcher:          "invalid matcher regex: %s",

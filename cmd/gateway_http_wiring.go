@@ -263,6 +263,15 @@ func (d *gatewayDeps) wireHTTPHandlersOnServer(
 		}
 		d.server.SetTTSHandler(ttsH)
 		d.ttsHandler = ttsH // store for hot-reload
+
+		// STT transcription endpoint. Holds the ORIGINAL manager on purpose and is
+		// not updated by TTS hot-reload: that path rebuilds via setupTTS() only and
+		// would drop the providers registered in setupAudioExtras.
+		sttH := httpapi.NewSTTHandler(d.audioMgr)
+		if rl := d.server.RateLimiter(); rl != nil && rl.Enabled() {
+			sttH.SetRateLimiter(rl.Allow)
+		}
+		d.server.SetSTTHandler(sttH)
 	}
 
 	// Per-tenant TTS config endpoint — allows tenant admins to configure TTS.

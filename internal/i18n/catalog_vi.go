@@ -214,6 +214,8 @@ func init() {
 		MsgSTTLegacyConfigDeprecated: "Cấu hình STT cũ đã lỗi thời; hãy chuyển sang builtin_tools[stt]",
 		MsgSTTWhatsappPrivacyWarning: "Bật STT cho WhatsApp sẽ phá vỡ mã hóa đầu cuối cho tin nhắn thoại gửi đến agent này.",
 		MsgVoiceMessageFallback:      "[Tin nhắn thoại]",
+		MsgSTTNotConfigured:          "chưa cấu hình nhận dạng giọng nói",
+		MsgSTTRateLimited:            "đã hết lượt nhận dạng giọng nói — vui lòng thử lại sau",
 
 		// Hooks
 		MsgHookInvalidMatcher:          "biểu thức regex matcher không hợp lệ: %s",

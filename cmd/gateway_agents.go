@@ -7,6 +7,7 @@ import (
 	"github.com/nextlevelbuilder/goclaw/internal/audio/elevenlabs"
 	geminiaudio "github.com/nextlevelbuilder/goclaw/internal/audio/gemini"
 	minimaxaudio "github.com/nextlevelbuilder/goclaw/internal/audio/minimax"
+	openaiaudio "github.com/nextlevelbuilder/goclaw/internal/audio/openai"
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
 	"github.com/nextlevelbuilder/goclaw/internal/config"
 	"github.com/nextlevelbuilder/goclaw/internal/memory"
@@ -400,4 +401,45 @@ func setupAudioExtras(cfg *config.Config, mgr *tts.Manager) {
 		mgr.SetSTTChain([]string{"elevenlabs", "proxy"})
 		slog.Info("audio.stt: elevenlabs registered")
 	}
+
+	setupStaticSTT(cfg, mgr)
+}
+
+// setupStaticSTT registers the STT provider declared in cfg.Audio.Stt
+// (GOCLAW_AUDIO_STT_* env). Runs AFTER the ElevenLabs block on purpose: that
+// block calls SetSTTChain, and the explicitly configured provider must win.
+//
+// It must set the chain itself — resolveSTTChain's default only considers
+// "elevenlabs" and "proxy", so a registered provider left out of the chain is
+// silently never used.
+func setupStaticSTT(cfg *config.Config, mgr *tts.Manager) {
+	if cfg.Audio == nil || cfg.Audio.Stt == nil || cfg.Audio.Stt.Provider == "" {
+		return
+	}
+	sc := cfg.Audio.Stt
+
+	switch sc.Provider {
+	case "openai":
+		if sc.APIKey == "" {
+			slog.Warn("audio.stt: provider openai configured without api_key; skipping", "base_url", sc.BaseURL)
+			return
+		}
+		mgr.RegisterSTT(openaiaudio.NewSTTProvider(openaiaudio.STTConfig{
+			APIKey:    sc.APIKey,
+			APIBase:   sc.BaseURL,
+			Model:     sc.Model,
+			Language:  sc.Language,
+			TimeoutMs: sc.TimeoutMs,
+		}))
+	default:
+		slog.Warn("audio.stt: unsupported static provider; skipping", "provider", sc.Provider)
+		return
+	}
+
+	chain := []string{sc.Provider}
+	if sc.Fallback != "" && sc.Fallback != sc.Provider {
+		chain = append(chain, sc.Fallback)
+	}
+	mgr.SetSTTChain(chain)
+	slog.Info("audio.stt: static provider registered", "provider", sc.Provider, "base_url", sc.BaseURL, "model", sc.Model, "chain", chain)
 }

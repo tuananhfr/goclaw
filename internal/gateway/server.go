@@ -531,6 +531,9 @@ func (s *Server) SetVoicesHandler(h *httpapi.VoicesHandler) { s.handlers = appen
 // SetTTSHandler sets the TTS synthesize handler.
 func (s *Server) SetTTSHandler(h *httpapi.TTSHandler) { s.handlers = append(s.handlers, h) }
 
+// SetSTTHandler sets the speech-to-text transcription handler.
+func (s *Server) SetSTTHandler(h *httpapi.STTHandler) { s.handlers = append(s.handlers, h) }
+
 // SetTTSConfigHandler sets the per-tenant TTS config handler.
 func (s *Server) SetTTSConfigHandler(h *httpapi.TTSConfigHandler) { s.handlers = append(s.handlers, h) }
 

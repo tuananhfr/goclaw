@@ -214,6 +214,8 @@ func init() {
 		MsgSTTLegacyConfigDeprecated: "旧版 STT 配置已弃用；请迁移至 builtin_tools[stt]",
 		MsgSTTWhatsappPrivacyWarning: "为 WhatsApp 启用 STT 将破坏发送至此 Agent 的语音消息的端对端加密。",
 		MsgVoiceMessageFallback:      "[语音消息]",
+		MsgSTTNotConfigured:          "未配置语音转文字",
+		MsgSTTRateLimited:            "语音转文字额度已用尽 — 请稍后重试",
 
 		// Hooks
 		MsgHookInvalidMatcher:          "无效的匹配器正则表达式: %s",
