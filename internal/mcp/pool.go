@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -20,22 +22,64 @@ type PoolConfig struct {
 	MaxIdle            int           // max idle connections to keep alive (default 20)
 	IdleTTL            time.Duration // close idle connections after this (default 20m)
 	AcquireTimeout     time.Duration // wait for pool slot before error (default 60s)
-	MaxUserConns       int           // max per-user connections per MCP server (default 30)
-	UserIdleTTL        time.Duration // close idle user connections after this (default 15m)
+	MaxUserConns       int           // max per-user connections per MCP server (env GOCLAW_MCP_MAX_USER_CONNS, default 100)
+	UserIdleTTL        time.Duration // close idle user connections after this (env GOCLAW_MCP_USER_IDLE_TTL, default 15m)
 	UserAcquireTimeout time.Duration // wait for user pool slot before error (default 10s)
 }
 
 // DefaultPoolConfig returns the default pool configuration.
+//
+// The two per-user knobs are environment-tunable because they scale with head
+// count, not with hardware: a server with require_user_credentials holds one
+// connection per person actively chatting, so a company of a thousand needs a
+// ceiling a small deployment would never reach. Past the ceiling AcquireUser
+// blocks for UserAcquireTimeout and then the user simply gets no tools, which
+// looks like "the assistant ignored my data" rather than like an outage.
+//
+// The idle TTL stays generous on purpose. An idle SSE connection costs tens of
+// kilobytes and one ping per 30s; reopening one costs a request to the tool
+// catalog on the critical path of somebody's question (measured 0.1-8.9s, and
+// once over the 20s timeout). Slots are the cheap resource here, latency is
+// not — so hold connections and raise the ceiling rather than the reverse.
 func DefaultPoolConfig() PoolConfig {
 	return PoolConfig{
 		MaxSize:            200,
 		MaxIdle:            20,
 		IdleTTL:            20 * time.Minute,
 		AcquireTimeout:     60 * time.Second,
-		MaxUserConns:       30,
-		UserIdleTTL:        15 * time.Minute,
+		MaxUserConns:       envInt("GOCLAW_MCP_MAX_USER_CONNS", 100),
+		UserIdleTTL:        envDuration("GOCLAW_MCP_USER_IDLE_TTL", 15*time.Minute),
 		UserAcquireTimeout: 10 * time.Second,
 	}
+}
+
+// envInt reads a positive int from the environment, falling back on anything
+// unparseable. A typo must not silently shrink a pool to zero.
+func envInt(key string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		slog.Warn("mcp.pool.bad_env", "key", key, "value", raw, "using", fallback)
+		return fallback
+	}
+	return v
+}
+
+// envDuration reads a Go duration ("3m", "90s") from the environment.
+func envDuration(key string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	v, err := time.ParseDuration(raw)
+	if err != nil || v <= 0 {
+		slog.Warn("mcp.pool.bad_env", "key", key, "value", raw, "using", fallback)
+		return fallback
+	}
+	return v
 }
 
 // poolEntry holds a shared connection and its discovered tools.
@@ -376,6 +420,28 @@ func (p *Pool) ReleaseUser(key string) {
 		}
 		entry.lastUsed = time.Now()
 		slog.Debug("mcp.pool.user.release", "key", key, "refCount", entry.refCount)
+	}
+}
+
+// TouchUser marks a user connection as still in use, so idle eviction measures
+// UserIdleTTL from the last CHAT rather than from the moment we connected.
+//
+// Without it a user-scoped connection is always evictable: getUserMCPTools
+// releases the pool reference immediately (refCount drops to 0 so that idle
+// eviction can work at all) and then serves tools from its own cache, never
+// touching the pool again. lastUsed therefore froze at connect time and the
+// connection was dropped mid-conversation every UserIdleTTL, costing the next
+// turn a fresh SSE handshake — and killing any tool call that happened to be
+// in flight, since eviction does not wait for one.
+//
+// Unknown keys are ignored: callers touch every user-credential server they
+// know about, and a user may have credentials for only some of them.
+func (p *Pool) TouchUser(key string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if entry, ok := p.userServers[key]; ok {
+		entry.lastUsed = time.Now()
 	}
 }
 

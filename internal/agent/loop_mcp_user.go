@@ -33,6 +33,13 @@ func (l *Loop) getUserMCPTools(ctx context.Context, userID string) []tools.Tool 
 			}
 		}
 		if allConnected {
+			// Keep the pooled connections alive while this user keeps chatting:
+			// nothing else touches the pool on the cache-hit path, so without
+			// this they would be evicted UserIdleTTL after CONNECT regardless of
+			// activity. Per-tool touches happen in executeToolWithUserOverride.
+			for _, info := range l.mcpUserCredSrvs {
+				l.mcpPool.TouchUser(mcpbridge.UserPoolKey(l.tenantID, info.Server.Name, userID))
+			}
 			return cachedTools
 		}
 		l.mcpUserTools.Delete(userID)

@@ -47,6 +47,11 @@ services:
       - GOCLAW_GATEWAY_TOKEN=${GOCLAW_GATEWAY_TOKEN:-}
       - GOCLAW_ENCRYPTION_KEY=${GOCLAW_ENCRYPTION_KEY:-}
       - GOCLAW_SKILLS_DIR=/app/data/skills
+      # MCP servers with require_user_credentials hold one connection per
+      # person actively chatting, so these scale with head count, not with
+      # hardware. Empty = code defaults (100 per server, 15m idle).
+      - GOCLAW_MCP_MAX_USER_CONNS=${GOCLAW_MCP_MAX_USER_CONNS:-}
+      - GOCLAW_MCP_USER_IDLE_TTL=${GOCLAW_MCP_USER_IDLE_TTL:-}
       # Debug
       - GOCLAW_TRACE_VERBOSE=${GOCLAW_TRACE_VERBOSE:-0}
     volumes:

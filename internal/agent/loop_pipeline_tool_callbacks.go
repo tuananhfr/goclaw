@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	mcpbridge "github.com/nextlevelbuilder/goclaw/internal/mcp"
 	"github.com/nextlevelbuilder/goclaw/internal/pipeline"
 	"github.com/nextlevelbuilder/goclaw/internal/providers"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
@@ -258,6 +259,12 @@ func (l *Loop) executeToolWithUserOverride(ctx context.Context, registryName str
 	// 2. If a user-specific tool exists, clone the registry, override the tool, and execute.
 	// This ensures interceptors (rate limiting, scrubbing, panics) are still applied.
 	if userTool != nil {
+		// A long turn can spend more than UserIdleTTL between tool calls, so
+		// touch on every call and not just at the start of the turn — eviction
+		// does not wait for an in-flight call.
+		if bt, ok := userTool.(interface{ ServerName() string }); ok && l.mcpPool != nil {
+			l.mcpPool.TouchUser(mcpbridge.UserPoolKey(l.tenantID, bt.ServerName(), req.UserID))
+		}
 		if reg, ok := l.tools.(*tools.Registry); ok {
 			clone := reg.Clone()
 			clone.Register(userTool)
