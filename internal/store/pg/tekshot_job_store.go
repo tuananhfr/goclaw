@@ -118,6 +118,11 @@ func (s *PGTekshotJobStore) MarkCancelled(ctx context.Context, id uuid.UUID, mes
 	return err
 }
 
+func (s *PGTekshotJobStore) ClearRequest(ctx context.Context, id uuid.UUID) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE tekshot_jobs SET request_json = '{}', updated_at = $1 WHERE id = $2`, time.Now().UTC(), id)
+	return err
+}
+
 func (s *PGTekshotJobStore) CancelIfQueued(ctx context.Context, id uuid.UUID) (bool, error) {
 	now := time.Now().UTC()
 	res, err := s.db.ExecContext(ctx, `UPDATE tekshot_jobs SET status = $1, progress_message = $2, locked_until = NULL, completed_at = $3, updated_at = $4 WHERE id = $5 AND status = $6`,

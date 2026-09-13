@@ -56,4 +56,6 @@ type TekshotJobStore interface {
 	// CancelIfQueued cancels a job only while it is still queued (not yet
 	// claimed by a worker); returns true when a queued row was cancelled.
 	CancelIfQueued(ctx context.Context, id uuid.UUID) (bool, error)
+	// ClearRequest xoá request của job đã chạy xong khi request chứa dữ liệu khách không được giữ.
+	ClearRequest(ctx context.Context, id uuid.UUID) error
 }

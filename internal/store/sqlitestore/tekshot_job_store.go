@@ -121,6 +121,11 @@ func (s *SQLiteTekshotJobStore) MarkCancelled(ctx context.Context, id uuid.UUID,
 	return err
 }
 
+func (s *SQLiteTekshotJobStore) ClearRequest(ctx context.Context, id uuid.UUID) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE tekshot_jobs SET request_json = '{}', updated_at = ? WHERE id = ?`, time.Now().UTC().Format(time.RFC3339Nano), id.String())
+	return err
+}
+
 func (s *SQLiteTekshotJobStore) CancelIfQueued(ctx context.Context, id uuid.UUID) (bool, error) {
 	now := time.Now().UTC()
 	res, err := s.db.ExecContext(ctx, `UPDATE tekshot_jobs SET status = ?, progress_message = ?, locked_until = '', completed_at = ?, updated_at = ? WHERE id = ? AND status = ?`,
