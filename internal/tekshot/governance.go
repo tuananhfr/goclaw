@@ -160,7 +160,7 @@ func governancePostProperties() map[string]any {
 		},
 		"khoi_7_tuan_thu": map[string]any{
 			"type":        "string",
-			"description": "Nhãn tuân thủ đặt ở DÒNG ĐẦU bài, trong 125 ký tự đầu: 'Nội dung tài trợ' (bài trả tiền), 'Quảng cáo' (quảng bá sản phẩm nhà), 'Nội dung có liên kết tiếp thị'. Để rỗng khi bài thuần thông tin.",
+			"description": "Phân loại bài cho người duyệt: 'Nội dung tài trợ' (bài trả tiền), 'Quảng cáo' (quảng bá sản phẩm nhà), 'Nội dung có liên kết tiếp thị'. Để rỗng khi bài thuần thông tin. Chỉ điền ở trường này — TUYỆT ĐỐI KHÔNG viết nhãn này vào tiêu đề hay nội dung bài.",
 		},
 		"nguon_da_dung": map[string]any{
 			"type":        "array",

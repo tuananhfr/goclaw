@@ -18,10 +18,21 @@ func TestApplicableChecksFiltersByProfile(t *testing.T) {
 			t.Fatalf("P7 không được mang %s (của profile khác)", code)
 		}
 	}
-	// C1–C5 không gắn profile nên áp cho mọi trang.
-	for _, code := range []string{"C1", "C2", "C3", "C4", "C5"} {
+	// C2–C5 không gắn profile nên áp cho mọi trang.
+	for _, code := range []string{"C2", "C3", "C4", "C5"} {
 		if !strings.Contains(joined, code+".") {
 			t.Fatalf("%s là luật chung, phải áp cho mọi profile", code)
+		}
+	}
+}
+
+// Nhãn "Quảng cáo"/"Nội dung tài trợ" không được nằm trong bài (quyết định
+// 2026-09-14): C1 đòi nhãn ở dòng đầu nên còn nó là bài sạch nhãn bị CHẶN.
+func TestComplianceChecksNoLongerDemandLabelInContent(t *testing.T) {
+	for _, profile := range []string{"P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"} {
+		joined := strings.Join(applicableChecks([]string{profile}), "\n")
+		if strings.Contains(joined, "C1.") || strings.Contains(joined, "DÒNG ĐẦU") {
+			t.Fatalf("%s vẫn mang check đòi nhãn ở dòng đầu bài", profile)
 		}
 	}
 }

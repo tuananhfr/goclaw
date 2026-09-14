@@ -27,14 +27,14 @@ const (
 	complianceTimeout = 90 * time.Second
 )
 
-// complianceChecks là C1–C22 của Bộ Prompt v3.0, gắn nhãn profile áp dụng.
-// Rỗng = áp cho mọi profile.
+// complianceChecks là C2–C22 của Bộ Prompt v3.0, gắn nhãn profile áp dụng.
+// Rỗng = áp cho mọi profile. C1 (nhãn quảng cáo ở dòng đầu) đã bỏ 2026-09-14:
+// nhãn không được nằm trong bài, nên còn C1 thì mọi bài quảng bá bị CHẶN.
 var complianceChecks = []struct {
 	Code     string
 	Profiles []string
 	Rule     string
 }{
-	{"C1", nil, "Nhãn quảng cáo/tài trợ có ở DÒNG ĐẦU và trong 125 ký tự đầu? Đặt cuối bài hoặc trong bình luận = KHÔNG ĐẠT."},
 	{"C2", nil, "Mọi khẳng định về sản phẩm, giá, khuyến mại, kỹ thuật, năng lực, thu nhập có nguồn còn hiệu lực?"},
 	{"C3", nil, "Có từ tuyệt đối (nhất/số một/duy nhất/tốt nhất/hàng đầu/đầu tiên) mà không có tài liệu? → BỎ TỪ."},
 	{"C4", nil, "Có so sánh trực tiếp, xếp hạng, hoặc nêu tên cơ sở kinh doanh ngoài hệ sinh thái?"},
@@ -129,7 +129,7 @@ func buildCompliancePrompt(profile *pageProfile, post map[string]any) string {
 	sb.WriteString("\n## ĐẦU RA\n")
 	sb.WriteString("Trả lời CHỈ bằng một object JSON:\n")
 	sb.WriteString(`{"ket_luan":"DUOC_DANG|CAN_SUA|CHAN",`)
-	sb.WriteString(`"loi_chan":[{"ma":"C1","trich_doan":"","sua_the_nao":""}],`)
+	sb.WriteString(`"loi_chan":[{"ma":"C2","trich_doan":"","sua_the_nao":""}],`)
 	sb.WriteString(`"canh_bao":[{"ma":"W1","noi_dung":""}],`)
 	sb.WriteString(`"lich_ra_soat_de_xuat":{"ngay":"YYYY-MM-DD","ly_do":""}}` + "\n\n")
 	sb.WriteString("Có bất kỳ lỗi chặn nào → ket_luan phải là CHAN. Chỉ có cảnh báo → CAN_SUA. Sạch cả hai → DUOC_DANG.\n")

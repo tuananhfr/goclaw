@@ -54,6 +54,22 @@ func TestBuildGovernancePromptCarriesProfileRules(t *testing.T) {
 	}
 }
 
+// Nhãn tuân thủ chỉ để người duyệt phân loại: mô tả cũ bảo đặt ở dòng đầu nên
+// agent viết "Quảng cáo" vào giữa bài đang hay.
+func TestComplianceLabelFieldKeepsLabelOutOfContent(t *testing.T) {
+	field, ok := governancePostProperties()["khoi_7_tuan_thu"].(map[string]any)
+	if !ok {
+		t.Fatal("khoi_7_tuan_thu phải còn trong schema để người duyệt đọc")
+	}
+	description, _ := field["description"].(string)
+	if strings.Contains(description, "DÒNG ĐẦU") {
+		t.Fatalf("mô tả vẫn bảo đặt nhãn ở dòng đầu bài: %q", description)
+	}
+	if !strings.Contains(description, "KHÔNG viết nhãn này vào tiêu đề hay nội dung") {
+		t.Fatalf("mô tả phải cấm viết nhãn vào bài: %q", description)
+	}
+}
+
 func TestBuildGovernancePromptEmptyWithoutProfile(t *testing.T) {
 	if buildGovernancePrompt(nil) != "" {
 		t.Fatal("page chưa bật luật thì prompt phải không đổi một ký tự")
