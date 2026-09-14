@@ -550,6 +550,33 @@ func (s *JobService) runChat(ctx context.Context, job *store.TekshotJob, request
 			"count", len(result.Media), "job", job.ID.String(), "external", job.ExternalJobUUID)
 		result.Media = result.Media[len(result.Media)-1:]
 	}
+	// Logo được Drupal đóng vào vùng này sau khi sinh: vùng bị chữ hay chi tiết
+	// chiếm thì sửa chính ảnh vừa ra đúng một lần. Nội dung (JSON QA của ảnh cron)
+	// giữ nguyên từ lượt đầu, chỉ thay ảnh.
+	if job.JobType == TekshotJobTypeImageChat {
+		if zones := brandZonesFromRequest(request); len(zones) > 0 {
+			result.Media = regenerateForBrandZone(
+				result.Media,
+				func(path string) (brandZoneCheck, error) { return checkBrandZones(path, zones) },
+				func(message string) ([]agent.MediaResult, error) {
+					fixReq := runReq
+					fixReq.RunID = uuid.NewString()
+					fixReq.Message = message
+					// Một vòng lặp, ép create_image: xem ghi chú ở lượt ép phía trên.
+					fixReq.MaxIterations = 1
+					fixReq.ToolChoice = &providers.ToolChoice{Mode: "function", Name: "create_image"}
+					fixed, err := loop.Run(runCtx, fixReq)
+					if err != nil {
+						return nil, err
+					}
+					if fixed == nil {
+						return nil, fmt.Errorf("agent returned no result")
+					}
+					return fixed.Media, nil
+				},
+			)
+		}
+	}
 
 	return map[string]any{
 		"content": result.Content,
