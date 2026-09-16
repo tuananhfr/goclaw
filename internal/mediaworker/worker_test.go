@@ -106,6 +106,65 @@ func TestProcessorMixesAudioAndMuxesVietnameseSubtitles(t *testing.T) {
 	}
 }
 
+func TestProcessorPositionsVoiceTracksAndPadsTheMix(t *testing.T) {
+	runner := &recordingRunner{}
+	processor := NewProcessor(runner, t.TempDir(), nil)
+	processor.download = func(_ context.Context, rawURL, destination string, _ int64) error {
+		return os.WriteFile(destination, []byte(rawURL), 0o600)
+	}
+	start := 3000
+	manifest := validManifest()
+	manifest.Audio = []AudioTrack{
+		{SourceURL: "https://example.test/music.mp3", Kind: "music", GainDB: -12},
+		{SourceURL: "https://example.test/voice.wav", Kind: "voice", StartMS: &start},
+	}
+
+	if _, err := processor.Process(context.Background(), "job-voice", manifest); err != nil {
+		t.Fatal(err)
+	}
+
+	var mix []string
+	for _, command := range runner.commands {
+		if strings.Contains(strings.Join(command, " "), "amix") {
+			mix = command
+		}
+	}
+	if mix == nil {
+		t.Fatal("no mixing command recorded")
+	}
+
+	looped := map[string]bool{}
+	for i := 0; i+3 < len(mix); i++ {
+		if mix[i] == "-stream_loop" && mix[i+1] == "-1" && mix[i+2] == "-i" {
+			looped[filepath.Base(mix[i+3])] = true
+		}
+	}
+	if !looped["audio-00.bin"] {
+		t.Fatal("music track must still loop")
+	}
+	if looped["audio-01.bin"] {
+		t.Fatal("voice track must not loop")
+	}
+
+	joined := strings.Join(mix, " ")
+	// apad keeps -shortest trimming to the video rather than the short clip.
+	for _, expected := range []string{"adelay=delays=3000:all=1", "apad[aout]"} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("missing %q in mix command:\n%s", expected, joined)
+		}
+	}
+}
+
+func TestValidateManifestRejectsVoiceOutsideTimeline(t *testing.T) {
+	for _, start := range []int{-1, 7000} {
+		manifest := validManifest()
+		manifest.Audio = []AudioTrack{{SourceURL: "https://example.test/voice.wav", Kind: "voice", StartMS: &start}}
+		if err := ValidateManifest(manifest); err == nil {
+			t.Fatalf("start_ms %d must be rejected for a 6000 ms timeline", start)
+		}
+	}
+}
+
 func validManifest() Manifest {
 	return Manifest{
 		ContractVersion: 1,

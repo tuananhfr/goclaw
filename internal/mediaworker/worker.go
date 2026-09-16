@@ -47,6 +47,9 @@ type AudioTrack struct {
 	SourceURL string  `json:"source_url"`
 	Kind      string  `json:"kind"`
 	GainDB    float64 `json:"gain_db"`
+	// StartMS places a clip at a fixed offset and disables looping; nil keeps
+	// the background-music behaviour of looping for the whole video.
+	StartMS *int `json:"start_ms,omitempty"`
 }
 
 type SubtitleCue struct {
@@ -145,6 +148,9 @@ func ValidateManifest(manifest Manifest) error {
 		if err := validateRemoteURL(track.SourceURL); err != nil {
 			return fmt.Errorf("audio track: %w", err)
 		}
+		if track.StartMS != nil && (*track.StartMS < 0 || *track.StartMS > totalDuration) {
+			return fmt.Errorf("audio track start_ms %d is outside the %d ms timeline", *track.StartMS, totalDuration)
+		}
 	}
 	return nil
 }
@@ -213,7 +219,10 @@ func (p *Processor) decorate(ctx context.Context, jobDir, timeline, output strin
 			return fmt.Errorf("download audio track %d: %w", index+1, err)
 		}
 		audioPaths = append(audioPaths, path)
-		args = append(args, "-stream_loop", "-1", "-i", path)
+		if track.StartMS == nil {
+			args = append(args, "-stream_loop", "-1")
+		}
+		args = append(args, "-i", path)
 	}
 
 	subtitlePath := ""
@@ -233,10 +242,16 @@ func (p *Processor) decorate(ctx context.Context, jobDir, timeline, output strin
 		labels := make([]string, 0, len(audioPaths))
 		for index, track := range manifest.Audio {
 			label := fmt.Sprintf("a%d", index)
-			parts = append(parts, fmt.Sprintf("[%d:a]volume=%gdB[%s]", index+1, track.GainDB, label))
+			filter := fmt.Sprintf("[%d:a]volume=%gdB", index+1, track.GainDB)
+			if track.StartMS != nil {
+				filter += fmt.Sprintf(",adelay=delays=%d:all=1", *track.StartMS)
+			}
+			parts = append(parts, filter+"["+label+"]")
 			labels = append(labels, "["+label+"]")
 		}
-		parts = append(parts, fmt.Sprintf("%samix=inputs=%d:duration=longest:normalize=0[aout]", strings.Join(labels, ""), len(labels)))
+		// A narration clip ends; without apad, -shortest would cut the video to it.
+		parts = append(parts, fmt.Sprintf("%samix=inputs=%d:duration=longest:normalize=0[mixed]", strings.Join(labels, ""), len(labels)))
+		parts = append(parts, "[mixed]apad[aout]")
 		args = append(args, "-filter_complex", strings.Join(parts, ";"), "-map", "[aout]", "-c:a", "aac", "-b:a", "192k")
 	} else {
 		args = append(args, "-map", "0:a?")
