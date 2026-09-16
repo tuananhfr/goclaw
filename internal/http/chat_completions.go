@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/nextlevelbuilder/goclaw/internal/agent"
+	"github.com/nextlevelbuilder/goclaw/internal/bus"
 	"github.com/nextlevelbuilder/goclaw/internal/i18n"
 	"github.com/nextlevelbuilder/goclaw/internal/permissions"
 	"github.com/nextlevelbuilder/goclaw/internal/sessions"
@@ -46,10 +48,11 @@ func (h *ChatCompletionsHandler) SetRateLimiter(fn func(string) bool) {
 }
 
 type chatCompletionsRequest struct {
-	Model    string        `json:"model"`
-	Messages []chatMessage `json:"messages"`
-	Stream   bool          `json:"stream"`
-	User     string        `json:"user,omitempty"`
+	Model       string           `json:"model"`
+	Messages    []chatMessage    `json:"messages"`
+	Stream      bool             `json:"stream"`
+	User        string           `json:"user,omitempty"`
+	InputImages []chatInputImage `json:"input_images,omitempty"`
 }
 
 type chatMessage struct {
@@ -65,6 +68,14 @@ type chatCompletionsResponse struct {
 	Model   string       `json:"model"`
 	Choices []chatChoice `json:"choices"`
 	Usage   *chatUsage   `json:"usage,omitempty"`
+	Media   []chatMedia  `json:"media,omitempty"`
+}
+
+type chatMedia struct {
+	URL         string `json:"url"`
+	ContentType string `json:"content_type,omitempty"`
+	Size        int64  `json:"size,omitempty"`
+	Prompt      string `json:"prompt,omitempty"`
 }
 
 type chatChoice struct {
@@ -115,9 +126,9 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	// Limit request body size to prevent DoS
-	const maxRequestBodySize = 1 << 20 // 1MB
-	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
+	// input_images is base64, so the JSON envelope is larger than its decoded
+	// 20 MB media cap. The decoder below enforces both per-file and total limits.
+	r.Body = http.MaxBytesReader(w, r.Body, maxChatRequestBodyBytes)
 
 	var req chatCompletionsRequest
 	if !bindJSON(w, r, locale, &req) {
@@ -154,6 +165,13 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		http.Error(w, fmt.Sprintf(`{"error":{"message":"%s"}}`, i18n.T(locale, i18n.MsgNoUserMessage)), http.StatusBadRequest)
 		return
 	}
+	inputMedia, cleanupInputMedia, err := decodeChatInputImages(req.InputImages)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":{"message":"%s"}}`, i18n.T(locale, i18n.MsgInvalidRequest, err.Error())), http.StatusBadRequest)
+		return
+	}
+	defer cleanupInputMedia()
+	lastMessage = decorateChatMessageWithMedia(lastMessage, inputMedia)
 
 	runID := uuid.NewString()
 	// Include userID in session key for multi-tenant isolation
@@ -166,19 +184,20 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	slog.Info("chat completions request", "agent", agentID, "stream", req.Stream, "user", userID)
 
 	if req.Stream {
-		h.handleStream(w, r, loop, runID, sessionKey, lastMessage, req.Model, userID)
+		h.handleStream(w, r, loop, runID, sessionKey, lastMessage, req.Model, userID, inputMedia)
 	} else {
-		h.handleNonStream(w, r, loop, runID, sessionKey, lastMessage, req.Model, userID)
+		h.handleNonStream(w, r, loop, runID, sessionKey, lastMessage, req.Model, userID, inputMedia)
 	}
 }
 
-func (h *ChatCompletionsHandler) handleNonStream(w http.ResponseWriter, r *http.Request, loop agent.Agent, runID, sessionKey, message, model, userID string) {
+func (h *ChatCompletionsHandler) handleNonStream(w http.ResponseWriter, r *http.Request, loop agent.Agent, runID, sessionKey, message, model, userID string, inputMedia []bus.MediaFile) {
 	ctx, drainTeamDispatch := tools.InjectTeamDispatch(r.Context(), h.postTurn)
 	defer drainTeamDispatch()
 
 	result, err := loop.Run(ctx, agent.RunRequest{
 		SessionKey: sessionKey,
 		Message:    message,
+		Media:      inputMedia,
 		Channel:    "http",
 		ChatID:     "api",
 		RunID:      runID,
@@ -202,6 +221,7 @@ func (h *ChatCompletionsHandler) handleNonStream(w http.ResponseWriter, r *http.
 			Message:      &chatMessage{Role: "assistant", Content: SignFileURLs(result.Content, FileSigningKey())},
 			FinishReason: "stop",
 		}},
+		Media: signedChatMedia(result.Media),
 	}
 
 	if result.Usage != nil {
@@ -216,7 +236,26 @@ func (h *ChatCompletionsHandler) handleNonStream(w http.ResponseWriter, r *http.
 	json.NewEncoder(w).Encode(resp)
 }
 
-func (h *ChatCompletionsHandler) handleStream(w http.ResponseWriter, r *http.Request, loop agent.Agent, runID, sessionKey, message, model, userID string) {
+func signedChatMedia(media []agent.MediaResult) []chatMedia {
+	if len(media) == 0 {
+		return nil
+	}
+	result := make([]chatMedia, 0, len(media))
+	for _, item := range media {
+		if strings.TrimSpace(item.Path) == "" {
+			continue
+		}
+		result = append(result, chatMedia{
+			URL:         SignMediaPath(item.Path, FileSigningKey()),
+			ContentType: item.ContentType,
+			Size:        item.Size,
+			Prompt:      item.Prompt,
+		})
+	}
+	return result
+}
+
+func (h *ChatCompletionsHandler) handleStream(w http.ResponseWriter, r *http.Request, loop agent.Agent, runID, sessionKey, message, model, userID string, inputMedia []bus.MediaFile) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		locale := store.LocaleFromContext(r.Context())
@@ -240,6 +279,7 @@ func (h *ChatCompletionsHandler) handleStream(w http.ResponseWriter, r *http.Req
 	result, err := loop.Run(ctx, agent.RunRequest{
 		SessionKey: sessionKey,
 		Message:    message,
+		Media:      inputMedia,
 		Channel:    "http",
 		ChatID:     "api",
 		RunID:      runID,

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"log/slog"
+	"path/filepath"
 	"time"
 
 	"github.com/nextlevelbuilder/goclaw/internal/audio"
@@ -14,6 +15,7 @@ import (
 	"github.com/nextlevelbuilder/goclaw/internal/store"
 	"github.com/nextlevelbuilder/goclaw/internal/store/pg"
 	"github.com/nextlevelbuilder/goclaw/internal/tools"
+	"github.com/nextlevelbuilder/goclaw/internal/video"
 )
 
 // httpHandlers bundles the results of wireHTTP() for passing to wireHTTPHandlersOnServer.
@@ -221,6 +223,18 @@ func (d *gatewayDeps) wireHTTPHandlersOnServer(
 
 	// Media upload endpoint — accepts multipart file uploads, returns temp path + MIME type.
 	d.server.SetMediaUploadHandler(httpapi.NewMediaUploadHandler())
+
+	// Tekshot Video capability catalog. The mock registry is provider-neutral and
+	// will also host official adapters without changing the public HTTP contract.
+	videoRegistry := video.MustMockRegistry()
+	d.server.SetVideoModelsHandler(httpapi.NewVideoModelsHandler(videoRegistry))
+	videoJobStore, err := video.NewFileJobStore(filepath.Join(d.dataDir, "video-jobs"))
+	if err != nil {
+		slog.Error("video job store unavailable", "error", err)
+	} else {
+		videoJobs := video.NewJobService(videoRegistry, videoJobStore, nil, 0)
+		d.server.SetVideoJobsHandler(httpapi.NewVideoJobsHandler(videoJobs))
+	}
 
 	// Media serve endpoint — serves persisted media files by ID for WS/web clients.
 	if mediaStore != nil {

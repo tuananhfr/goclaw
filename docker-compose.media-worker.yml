@@ -1,0 +1,44 @@
+services:
+  goclaw:
+    environment:
+      - GOCLAW_MEDIA_WORKER_URL=http://media-worker:18810
+      - GOCLAW_MEDIA_WORKER_TOKEN=${MEDIA_WORKER_TOKEN:-tekshot-media-worker-local-development-token}
+    depends_on:
+      media-worker:
+        condition: service_healthy
+    extra_hosts:
+      - "tekshot.localhost:host-gateway"
+
+  media-worker:
+    build:
+      context: ${GOCLAW_DIR:-.}
+      dockerfile: Dockerfile.media-worker
+    environment:
+      - MEDIA_WORKER_TOKEN=${MEDIA_WORKER_TOKEN:-tekshot-media-worker-local-development-token}
+      - MEDIA_WORKER_PUBLIC_BASE_URL=${MEDIA_WORKER_PUBLIC_BASE_URL:-http://127.0.0.1:18810}
+      - MEDIA_WORKER_CONCURRENCY=${MEDIA_WORKER_CONCURRENCY:-1}
+    volumes:
+      - media-worker-data:/app/data
+    ports:
+      - "127.0.0.1:${MEDIA_WORKER_PORT:-18810}:18810"
+    networks:
+      - default
+      - goclaw-net
+    extra_hosts:
+      - "tekshot.localhost:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:18810/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+    restart: unless-stopped
+
+volumes:
+  media-worker-data:

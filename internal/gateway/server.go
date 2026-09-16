@@ -49,15 +49,15 @@ type Server struct {
 	handlers []routeRegistrar
 
 	// Non-handler dependencies (don't implement RegisterRoutes)
-	policyEngine         *permissions.PolicyEngine
-	pairingService       store.PairingStore
-	apiKeyStore          store.APIKeyStore // for API key auth lookup
-	agentStore           store.AgentStore  // for context injection in tools_invoke
-	msgBus               *bus.MessageBus   // for MCP bridge media delivery
-	agentSessions *agentSessionStore
-	tekshotJobs          *tekshottools.JobService
-	tekshotDraftJobs     *tekshottools.DraftJobService
-	tekshotCron          store.CronStore
+	policyEngine     *permissions.PolicyEngine
+	pairingService   store.PairingStore
+	apiKeyStore      store.APIKeyStore // for API key auth lookup
+	agentStore       store.AgentStore  // for context injection in tools_invoke
+	msgBus           *bus.MessageBus   // for MCP bridge media delivery
+	agentSessions    *agentSessionStore
+	tekshotJobs      *tekshottools.JobService
+	tekshotDraftJobs *tekshottools.DraftJobService
+	tekshotCron      store.CronStore
 
 	upgrader    websocket.Upgrader
 	rateLimiter *RateLimiter
@@ -84,12 +84,12 @@ func (s *Server) SetPostTurnProcessor(pt tools.PostTurnProcessor) {
 // NewServer creates a new gateway server.
 func NewServer(cfg *config.Config, eventPub bus.EventPublisher, agents *agent.Router, sess store.SessionStore, toolsReg ...*tools.Registry) *Server {
 	s := &Server{
-		cfg:                  cfg,
-		eventPub:             eventPub,
-		agents:               agents,
-		sessions:             sess,
-		clients:              make(map[string]*Client),
-		startedAt:            time.Now(),
+		cfg:           cfg,
+		eventPub:      eventPub,
+		agents:        agents,
+		sessions:      sess,
+		clients:       make(map[string]*Client),
+		startedAt:     time.Now(),
 		agentSessions: newAgentSessionStore(),
 	}
 
@@ -530,6 +530,16 @@ func (s *Server) SetVoicesHandler(h *httpapi.VoicesHandler) { s.handlers = appen
 
 // SetTTSHandler sets the TTS synthesize handler.
 func (s *Server) SetTTSHandler(h *httpapi.TTSHandler) { s.handlers = append(s.handlers, h) }
+
+// SetVideoModelsHandler sets the Tekshot Video model catalog handler.
+func (s *Server) SetVideoModelsHandler(h *httpapi.VideoModelsHandler) {
+	s.handlers = append(s.handlers, h)
+}
+
+// SetVideoJobsHandler sets the durable Tekshot Video job handler.
+func (s *Server) SetVideoJobsHandler(h *httpapi.VideoJobsHandler) {
+	s.handlers = append(s.handlers, h)
+}
 
 // SetSTTHandler sets the speech-to-text transcription handler.
 func (s *Server) SetSTTHandler(h *httpapi.STTHandler) { s.handlers = append(s.handlers, h) }
