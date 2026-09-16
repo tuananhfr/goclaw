@@ -84,6 +84,11 @@ func (t *CreateImageTool) Parameters() map[string]any {
 				"type":        "string",
 				"description": "Optional workspace/team workspace image path to use as visual reference for image-to-image generation. Supports absolute paths, relative paths, MEDIA: paths, and /v1/files/... paths when readable.",
 			},
+			"reference_image_paths": map[string]any{
+				"type":        "array",
+				"items":       map[string]any{"type": "string"},
+				"description": fmt.Sprintf("Optional ordered list of image paths when the generation needs SEVERAL specific images at once — for example a base image to edit plus a separate image showing what to put into it. Same path formats as reference_image_path, which this overrides when set. The images reach the model unlabelled and in this exact order, so the prompt must refer to them by position ('image 1 is the base, image 2 is the reference'). At most %d are used; the rest are ignored.", maxReferenceImagePaths),
+			},
 			"deliver": map[string]any{
 				"type":        "boolean",
 				"description": "Whether to attach the generated image to the user. Default true. Set false when this image is only an intermediate asset for another tool or workflow.",
@@ -175,20 +180,81 @@ func (t *CreateImageTool) Execute(ctx context.Context, args map[string]any) *Res
 	return result
 }
 
+// maxReferenceImagePaths caps reference_image_paths. Going over it trims rather
+// than failing: losing the extra inputs beats losing the whole generation.
+const maxReferenceImagePaths = 4
+
+// stringSliceParam reads a []string argument. JSON decoding yields []any, so both
+// shapes are accepted; blank entries are dropped.
+func stringSliceParam(args map[string]any, key string) []string {
+	var raw []any
+	switch v := args[key].(type) {
+	case []any:
+		raw = v
+	case []string:
+		out := make([]string, 0, len(v))
+		for _, s := range v {
+			if s = strings.TrimSpace(s); s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+	out := make([]string, 0, len(raw))
+	for _, item := range raw {
+		s, ok := item.(string)
+		if !ok {
+			continue
+		}
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 func (t *CreateImageTool) loadReferenceImages(ctx context.Context, args map[string]any) ([]providers.ImageContent, error) {
+	// Order is the only thing telling the model which image is which — the
+	// provider sends them as bare input_image blocks with no name or role.
+	if paths := stringSliceParam(args, "reference_image_paths"); len(paths) > 0 {
+		if len(paths) > maxReferenceImagePaths {
+			slog.Warn("create_image: too many reference_image_paths, trimming",
+				"given", len(paths), "used", maxReferenceImagePaths)
+			paths = paths[:maxReferenceImagePaths]
+		}
+		images := make([]providers.ImageContent, 0, len(paths))
+		for i, p := range paths {
+			image, err := t.loadReferenceImageFile(ctx, p)
+			if err != nil {
+				return nil, fmt.Errorf("reference_image_paths[%d]: %v", i, err)
+			}
+			images = append(images, image)
+		}
+		return images, nil
+	}
+
 	refPath, _ := args["reference_image_path"].(string)
 	refPath = strings.TrimSpace(refPath)
 	if refPath == "" {
 		return MediaImagesFromCtx(ctx), nil
 	}
+	image, err := t.loadReferenceImageFile(ctx, refPath)
+	if err != nil {
+		return nil, err
+	}
+	return []providers.ImageContent{image}, nil
+}
 
+func (t *CreateImageTool) loadReferenceImageFile(ctx context.Context, refPath string) (providers.ImageContent, error) {
 	workspace := ToolWorkspaceFromCtx(ctx)
 	if workspace == "" {
 		workspace = os.TempDir()
 	}
 	resolved, err := resolveReadPathWithGlobalOverlay(ctx, normalizeMediaPath(refPath), workspace, true, allowedWithTeamWorkspace(ctx, t.allowedPrefixes))
 	if err != nil {
-		return nil, fmt.Errorf("invalid reference_image_path: %v", err)
+		return providers.ImageContent{}, fmt.Errorf("invalid reference_image_path: %v", err)
 	}
 	if _, statErr := os.Stat(resolved); statErr != nil && !filepath.IsAbs(normalizeMediaPath(refPath)) {
 		if fallback, ok := resolveTeamRelativeFile(ctx, normalizeMediaPath(refPath)); ok {
@@ -203,26 +269,26 @@ func (t *CreateImageTool) loadReferenceImages(ctx context.Context, args map[stri
 	}
 	mime, ok := mimeByExt[ext]
 	if !ok {
-		return nil, fmt.Errorf("unsupported reference_image_path format %q (supported: jpg, jpeg, jfif, png, gif, webp, bmp)", ext)
+		return providers.ImageContent{}, fmt.Errorf("unsupported reference_image_path format %q (supported: jpg, jpeg, jfif, png, gif, webp, bmp)", ext)
 	}
 	fi, err := os.Stat(resolved)
 	if err != nil {
-		return nil, fmt.Errorf("failed to stat reference_image_path: %v", err)
+		return providers.ImageContent{}, fmt.Errorf("failed to stat reference_image_path: %v", err)
 	}
 	if fi.IsDir() {
-		return nil, fmt.Errorf("reference_image_path is a directory")
+		return providers.ImageContent{}, fmt.Errorf("reference_image_path is a directory")
 	}
 	if fi.Size() > maxImageFileBytes {
-		return nil, fmt.Errorf("reference_image_path too large (%d bytes, max %d)", fi.Size(), maxImageFileBytes)
+		return providers.ImageContent{}, fmt.Errorf("reference_image_path too large (%d bytes, max %d)", fi.Size(), maxImageFileBytes)
 	}
 	data, err := os.ReadFile(resolved)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read reference_image_path: %v", err)
+		return providers.ImageContent{}, fmt.Errorf("failed to read reference_image_path: %v", err)
 	}
-	return []providers.ImageContent{{
+	return providers.ImageContent{
 		MimeType: mime,
 		Data:     base64.StdEncoding.EncodeToString(data),
-	}}, nil
+	}, nil
 }
 
 func getReferenceImages(params map[string]any) []providers.ImageContent {
