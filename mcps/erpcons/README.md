@@ -31,6 +31,7 @@ phải sửa compose file khi deploy là sớm muộn cũng quên.
 | `ERPCONS_API_BASE` | **không có** | Gốc REST của ERPcons. Dev: `http://erpcons.localhost/api/v1`. Production: `https://lpc.vn/erpcons/api/v1` |
 | `ERPCONS_TIMEOUT_MS` | `20000` | Hạn cho mỗi lời gọi sang Drupal |
 | `ERPCONS_MCP_PORT` | `3300` | Chỉ có tác dụng ở dev (xem dưới) |
+| `ERPCONS_MCP_TOOL_MODE` | `directory` | `directory` chỉ đăng ký `erp_find` + `erp_get`; đặt `legacy` để rollback về một tool cho mỗi API |
 
 `ERPCONS_API_BASE` **cố ý không có mặc định**. Một mặc định trỏ về máy dev nghĩa
 là quên khai ở production thì sidecar lặng lẽ gọi nhầm địa chỉ; để trống thì
@@ -82,6 +83,12 @@ Sửa `tools/catalog.yml` **bên Drupal** (`web/modules/custom/erp_assistant/`) 
 xoá cache. Không phải sửa sidecar, không build lại image, không restart GoClaw.
 Sidecar cố ý không biết ERPcons có những API nào.
 
+Ở chế độ mặc định `directory`, agent gọi `erp_find` để tìm capability trong
+catalog **của chính user đang kết nối**, sau đó chuyển `key` nhận được cho
+`erp_get`. `erp_get` không nhận URL hay HTTP method; đường dẫn luôn lấy từ
+catalog Drupal. Cách này giữ context ổn định khi catalog tăng lên hàng trăm GET
+API. Nếu cần rollback tạm thời, đặt `ERPCONS_MCP_TOOL_MODE=legacy`.
+
 ## Hai quy tắc đã trả giá để có
 
 **1. `0 tool` chỉ được mang nghĩa "người này thật sự không có tool".**
@@ -109,8 +116,9 @@ Khi Drupal xoay token (gán lại agent cho một người), sidecar gặp 401 v
 # Người này thấy tool nào?
 node test-client.mjs http://localhost:3300/sse <token>
 
-# Gọi thử một tool
-node test-client.mjs http://localhost:3300/sse <token> erp_tasks '{"limit":3}'
+# Tìm rồi gọi thử một capability
+node test-client.mjs http://localhost:3300/sse <token> erp_find '{"query":"công việc"}'
+node test-client.mjs http://localhost:3300/sse <token> erp_get '{"capability":"tasks","params":{"limit":3}}'
 
 # Cả đường: hỏi trợ lý một câu cần dữ liệu thật
 GOCLAW_GATEWAY_TOKEN=... node test-chat.mjs erpcons 28 "Tôi có bao nhiêu công việc?"

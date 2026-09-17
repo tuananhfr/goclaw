@@ -1,4 +1,4 @@
-import type { CatalogTool, Catalog, CatalogResponse } from "./types.js";
+import type { CatalogTool, Catalog, CatalogParam, CatalogResponse } from "./types.js";
 
 /**
  * Cầu nối tới REST API của ERPcons, mang danh tính của ĐÚNG một người.
@@ -45,12 +45,27 @@ export class ErpClient {
    * Tham số đã được zod kiểm ở tầng trên nên ở đây chỉ còn việc ghép.
    */
   async callTool(tool: CatalogTool, args: Record<string, unknown>): Promise<unknown> {
+    assertSafeCatalogPath(tool.path);
+
+    const declaredParams = tool.params ?? {};
+    for (const name of Object.keys(args)) {
+      if (!(name in declaredParams)) {
+        throw new ToolInputError(`Tham số "${name}" không được khai báo cho capability này.`);
+      }
+    }
+
     let path = tool.path;
     const query: Record<string, string> = {};
 
-    for (const [name, spec] of Object.entries(tool.params ?? {})) {
+    for (const [name, spec] of Object.entries(declaredParams)) {
       const value = args[name];
-      if (value === undefined || value === null || value === "") continue;
+      if (value === undefined || value === null || value === "") {
+        if (spec.required) {
+          throw new ToolInputError(`Thiếu tham số bắt buộc "${name}".`);
+        }
+        continue;
+      }
+      assertParamValue(name, value, spec);
 
       if (spec.in === "path") {
         // encodeURIComponent chứ không nối thẳng: tham số đường dẫn tới từ LLM,
@@ -84,6 +99,7 @@ export class ErpClient {
     try {
       response = await fetch(url, {
         method: "GET",
+        redirect: "error",
         headers: {
           "X-ERP-Assistant-Token": this.token,
           Accept: "application/json",
@@ -108,6 +124,52 @@ export class ErpClient {
     }
 
     return (await response.json()) as T;
+  }
+}
+
+/** Catalog là cấu hình tin cậy có kiểm soát, nhưng vẫn không được biến MCP thành proxy. */
+function assertSafeCatalogPath(path: string): void {
+  if (!/^\/(?!\/)/.test(path) || path.includes("\\") || /[?#]/.test(path)) {
+    throw new ToolInputError("Đường dẫn capability trong catalog không an toàn.");
+  }
+
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(path);
+  } catch {
+    throw new ToolInputError("Đường dẫn capability trong catalog không hợp lệ.");
+  }
+
+  if (decoded.split("/").some((segment) => segment === "." || segment === "..")) {
+    throw new ToolInputError("Đường dẫn capability trong catalog không an toàn.");
+  }
+}
+
+/** Directory mode dùng schema động, nên client phải tự thực thi ràng buộc catalog. */
+function assertParamValue(name: string, value: unknown, spec: CatalogParam): void {
+  if (spec.enum && !spec.enum.some((allowed) => String(allowed) === String(value))) {
+    throw new ToolInputError(`Tham số "${name}" không thuộc tập giá trị cho phép.`);
+  }
+
+  if (spec.type === "integer") {
+    const number = Number(value);
+    if (!Number.isFinite(number) || !Number.isInteger(number)) {
+      throw new ToolInputError(`Tham số "${name}" phải là số nguyên.`);
+    }
+  } else if (spec.type === "number") {
+    if (!Number.isFinite(Number(value))) {
+      throw new ToolInputError(`Tham số "${name}" phải là số.`);
+    }
+  } else if (spec.type === "boolean") {
+    if (![true, false, 0, 1, "0", "1", "true", "false"].includes(value as never)) {
+      throw new ToolInputError(`Tham số "${name}" phải là giá trị đúng/sai.`);
+    }
+  } else if (spec.type === "string" && typeof value !== "string") {
+    throw new ToolInputError(`Tham số "${name}" phải là chuỗi.`);
+  }
+
+  if (spec.format === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+    throw new ToolInputError(`Tham số "${name}" phải có dạng ngày YYYY-MM-DD.`);
   }
 }
 

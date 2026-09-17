@@ -23,6 +23,12 @@ export interface TrimRule {
 }
 
 export interface CatalogTool {
+  /** Nhãn ngắn cho người đọc; không bắt buộc với catalog cũ. */
+  label?: string;
+  /** Nhóm nghiệp vụ dùng để tìm capability, ví dụ projects, hr, documents. */
+  domain?: string;
+  /** Kiểu thao tác đọc: list, detail, lookup, report hoặc support. */
+  kind?: string;
   description: string;
   path: string;
   params?: Record<string, CatalogParam>;
@@ -30,6 +36,10 @@ export interface CatalogTool {
   trim?: Record<string, TrimRule>;
   /** Khoá cấp một bị bỏ hẳn khỏi phản hồi. */
   drop?: string[];
+  /** False = vẫn gọi được bằng key nhưng không hiện trong kết quả tìm kiếm. */
+  discoverable?: boolean;
+  /** Mức nhạy cảm để phục vụ audit/hiển thị; không phải hàng rào quyền. */
+  sensitivity?: string;
 }
 
 export type Catalog = Record<string, CatalogTool>;
