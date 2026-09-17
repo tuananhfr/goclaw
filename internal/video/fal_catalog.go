@@ -1,7 +1,7 @@
 package video
 
 // Bump when a fal model's capabilities change so Drupal refreshes its cache.
-const FalCatalogVersion = "2026-09-17T12:00:00Z"
+const FalCatalogVersion = "2026-09-17T15:00:00Z"
 
 const FalProviderName = "fal"
 
@@ -46,6 +46,62 @@ func falModels() []Model {
 			UISchema: map[string]any{"order": []string{"enable_prompt_expansion", "seed"}},
 			Pricing:  &Pricing{Currency: "USD", Unit: "second", AmountMinor: 4},
 			Limits:   Limits{MaxConcurrentJobs: 2, MaxRequestsPerMinute: intPtr(10)},
+		},
+		{
+			SchemaVersion:   1,
+			ID:              "fal/kling-2.6-pro-i2v",
+			Provider:        FalProviderName,
+			ProviderModelID: stringPtr("fal-ai/kling-video/v2.6/pro/image-to-video"),
+			Label:           "Kling 2.6 Pro (fal) — ảnh thành video có tiếng",
+			Description:     stringPtr("Clip 5 hoặc 10 giây kèm tiếng động, không khí do model tự tạo. Lời thoại của model chỉ có tiếng Trung/Anh; cần giọng Việt thì dùng cảnh nhân vật nói. Khoảng 0,14 USD/giây có tiếng, 0,07 USD/giây tắt tiếng."),
+			Status:          ModelAvailable,
+			Operations:      []string{"image-to-video"},
+			Capabilities: Capabilities{
+				Prompt: PromptCapability{Required: false, MinLength: 1, MaxLength: 2500, Languages: []string{"en", "vi"}, NegativePrompt: true},
+				Inputs: InputCapability{Image: true, ReferenceImages: ReferenceImageLimits{}},
+				// Kling renders exactly 5 or 10 s; the assembler trims or holds to the scene.
+				Duration: Duration{Mode: "allowed-values", ValuesMS: []int{5000, 10000}},
+				// The clip follows the input image's frame, so the ratio only has to match the project.
+				AspectRatios: []string{"16:9", "9:16", "1:1"},
+				Resolutions:  []string{"1080p"},
+				OutputCount:  OutputCount{Min: 1, Max: 1},
+				NativeAudio:  true,
+				Cancel:       true,
+				Progress:     "estimated",
+			},
+			Defaults: Defaults{Operation: "image-to-video", DurationMS: 5000, AspectRatio: "9:16", Resolution: "1080p", OutputCount: 1},
+			ParametersSchema: objectSchema(map[string]any{
+				"generate_audio": map[string]any{"type": "boolean", "default": true, "title": "Tạo tiếng (tiếng động, không khí)"},
+			}),
+			UISchema: map[string]any{"order": []string{"generate_audio"}},
+			Pricing:  &Pricing{Currency: "USD", Unit: "second", AmountMinor: 14},
+			Limits:   Limits{MaxConcurrentJobs: 2, MaxRequestsPerMinute: intPtr(10)},
+		},
+		{
+			SchemaVersion:   1,
+			ID:              "fal/kling-avatar-v2-pro",
+			Provider:        FalProviderName,
+			ProviderModelID: stringPtr("fal-ai/kling-video/ai-avatar/v2/pro"),
+			Label:           "Kling Avatar v2 Pro (fal) — nhân vật nói bằng giọng của bạn",
+			Description:     stringPtr("Nhân vật trong ảnh nói đúng lời đọc của cảnh, khớp môi, bất kỳ ngôn ngữ nào. Bấm “Đọc lời” trước; độ dài clip bằng độ dài lời đọc. Khoảng 0,115 USD/giây."),
+			Status:          ModelAvailable,
+			Operations:      []string{"image-to-video"},
+			Capabilities: Capabilities{
+				Prompt: PromptCapability{Required: false, MinLength: 1, MaxLength: 2000, Languages: []string{"en", "vi"}},
+				Inputs: InputCapability{Image: true, Audio: true, ReferenceImages: ReferenceImageLimits{}},
+				// The clip length is the narration's, so any scene length is accepted.
+				Duration:     Duration{Mode: "range", MinMS: 1000, MaxMS: 30000, StepMS: 1},
+				AspectRatios: []string{"16:9", "9:16", "1:1"},
+				Resolutions:  []string{"1080p"},
+				OutputCount:  OutputCount{Min: 1, Max: 1},
+				NativeAudio:  true,
+				Cancel:       true,
+				Progress:     "estimated",
+			},
+			Defaults:         Defaults{Operation: "image-to-video", DurationMS: 5000, AspectRatio: "9:16", Resolution: "1080p", OutputCount: 1},
+			ParametersSchema: objectSchema(map[string]any{}),
+			Pricing:          &Pricing{Currency: "USD", Unit: "second", AmountMinor: 12},
+			Limits:           Limits{MaxConcurrentJobs: 2, MaxRequestsPerMinute: intPtr(10)},
 		},
 	}
 }

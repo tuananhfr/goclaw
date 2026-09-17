@@ -24,6 +24,7 @@ import (
 const (
 	falDefaultQueueURL  = "https://queue.fal.run"
 	falMaxImageBytes    = 10 << 20
+	falMaxAudioBytes    = 20 << 20
 	falMaxVideoBytes    = 512 << 20
 	falMaxPollFailures  = 10
 	falWanFramesPerSec  = 16
@@ -70,6 +71,23 @@ type falVideoResult struct {
 		URL         string `json:"url"`
 		ContentType string `json:"content_type"`
 	} `json:"video"`
+	// Only audio-driven models report it; their clip follows the audio, not the request.
+	Duration *float64 `json:"duration"`
+}
+
+// falMedia carries the scene inputs already inlined as data URIs.
+type falMedia struct {
+	Image string
+	Audio string
+}
+
+type falInputBuilder func(request JobRequest, media falMedia) map[string]any
+
+// Each fal endpoint names its fields differently; submit, poll and download stay shared.
+var falInputBuilders = map[string]falInputBuilder{
+	"fal-ai/wan/v2.2-a14b/image-to-video":        falWanImageToVideoInput,
+	"fal-ai/kling-video/v2.6/pro/image-to-video": falKlingImageToVideoInput,
+	"fal-ai/kling-video/ai-avatar/v2/pro":        falKlingAvatarInput,
 }
 
 func (p *FalProvider) Render(ctx context.Context, request RenderRequest, update func(RenderUpdate)) (RenderOutput, error) {
@@ -92,28 +110,48 @@ func (p *FalProvider) Render(ctx context.Context, request RenderRequest, update 
 		return RenderOutput{}, err
 	}
 	update(RenderUpdate{Progress: 90, Message: "fal đã render xong, đang tải video về."})
-	videoURL, err := p.result(ctx, state["response_url"])
+	result, err := p.result(ctx, state["response_url"])
 	if err != nil {
 		return RenderOutput{}, err
 	}
-	return p.download(ctx, videoURL, request.OutputPath)
+	output, err := p.download(ctx, result.Video.URL, request.OutputPath)
+	if err != nil {
+		return RenderOutput{}, err
+	}
+	if result.Duration != nil && *result.Duration > 0 {
+		output.DurationMS = int(*result.Duration * 1000)
+	}
+	return output, nil
 }
 
 func (p *FalProvider) submit(ctx context.Context, request RenderRequest) (map[string]string, error) {
 	if request.Model.ProviderModelID == nil || *request.Model.ProviderModelID == "" {
 		return nil, &ProviderError{Code: "MODEL_UNAVAILABLE", Message: "Model has no fal endpoint.", Retryable: false}
 	}
+	build, ok := falInputBuilders[*request.Model.ProviderModelID]
+	if !ok {
+		return nil, &ProviderError{Code: "MODEL_UNAVAILABLE", Message: "No fal input mapping for this model.", Retryable: false}
+	}
 	imageURL := stringValue(request.Job.Request.Inputs.ImageURL)
 	if imageURL == "" {
 		return nil, &ProviderError{Code: "INVALID_REQUEST", Message: "Cảnh chưa có ảnh đầu vào cho image-to-video.", Retryable: false}
 	}
-	// Send bytes, not the URL: Drupal's signed URL may expire before fal fetches it.
-	image, err := p.fetchImageDataURI(ctx, imageURL)
-	if err != nil {
+	// Send bytes, not URLs: Drupal's signed URLs may expire before fal fetches them.
+	var media falMedia
+	var err error
+	if media.Image, err = p.fetchDataURI(ctx, imageURL, falImageTypes, falMaxImageBytes, "Ảnh đầu vào phải là JPEG, PNG hoặc WebP, tối đa 10MB."); err != nil {
 		return nil, err
 	}
-	input := falWanImageToVideoInput(request.Job.Request, image)
-	body, err := json.Marshal(input)
+	if request.Model.Capabilities.Inputs.Audio {
+		audioURL := stringValue(request.Job.Request.Inputs.AudioURL)
+		if audioURL == "" {
+			return nil, &ProviderError{Code: "INVALID_REQUEST", Message: "Cảnh nhân vật nói cần lời đọc: hãy bấm Đọc lời trước khi tạo video.", Retryable: false}
+		}
+		if media.Audio, err = p.fetchDataURI(ctx, audioURL, falAudioTypes, falMaxAudioBytes, "Lời đọc phải là WAV, MP3 hoặc M4A, tối đa 20MB."); err != nil {
+			return nil, err
+		}
+	}
+	body, err := json.Marshal(build(request.Job.Request, media))
 	if err != nil {
 		return nil, &ProviderError{Code: "INVALID_REQUEST", Message: "Could not encode the fal request.", Retryable: false}
 	}
@@ -136,16 +174,50 @@ func (p *FalProvider) submit(ctx context.Context, request RenderRequest) (map[st
 	return state, nil
 }
 
-func falWanImageToVideoInput(request JobRequest, imageDataURI string) map[string]any {
-	frames := request.Output.DurationMS*falWanFramesPerSec/1000 + 1
-	frames = min(max(frames, falWanMinFrames), falWanMaxFrames)
-	prompt := strings.TrimSpace(stringValue(request.Inputs.Prompt))
-	if prompt == "" {
-		prompt = falDefaultMotionPrompt
+func falPrompt(request JobRequest) string {
+	if prompt := strings.TrimSpace(stringValue(request.Inputs.Prompt)); prompt != "" {
+		return prompt
+	}
+	return falDefaultMotionPrompt
+}
+
+func falKlingImageToVideoInput(request JobRequest, media falMedia) map[string]any {
+	duration := "5"
+	if request.Output.DurationMS > 5000 {
+		duration = "10"
+	}
+	// Kling voices only Chinese and English and translates everything else, so
+	// sound is on by default but the user can switch it off per scene.
+	generateAudio := true
+	if value, ok := request.ProviderOptions["generate_audio"].(bool); ok {
+		generateAudio = value
 	}
 	input := map[string]any{
-		"prompt":       prompt,
-		"image_url":    imageDataURI,
+		"prompt":          falPrompt(request),
+		"start_image_url": media.Image,
+		"duration":        duration,
+		"generate_audio":  generateAudio,
+	}
+	if negative := strings.TrimSpace(stringValue(request.Inputs.NegativePrompt)); negative != "" {
+		input["negative_prompt"] = negative
+	}
+	return input
+}
+
+func falKlingAvatarInput(request JobRequest, media falMedia) map[string]any {
+	return map[string]any{
+		"prompt":    falPrompt(request),
+		"image_url": media.Image,
+		"audio_url": media.Audio,
+	}
+}
+
+func falWanImageToVideoInput(request JobRequest, media falMedia) map[string]any {
+	frames := request.Output.DurationMS*falWanFramesPerSec/1000 + 1
+	frames = min(max(frames, falWanMinFrames), falWanMaxFrames)
+	input := map[string]any{
+		"prompt":       falPrompt(request),
+		"image_url":    media.Image,
 		"resolution":   request.Output.Resolution,
 		"aspect_ratio": request.Output.AspectRatio,
 		"num_frames":   frames,
@@ -203,15 +275,15 @@ func (p *FalProvider) waitCompleted(ctx context.Context, state map[string]string
 	}
 }
 
-func (p *FalProvider) result(ctx context.Context, responseURL string) (string, error) {
+func (p *FalProvider) result(ctx context.Context, responseURL string) (falVideoResult, error) {
 	var result falVideoResult
 	if err := p.callJSON(ctx, http.MethodGet, responseURL, nil, &result); err != nil {
-		return "", err
+		return falVideoResult{}, err
 	}
 	if result.Video.URL == "" {
-		return "", &ProviderError{Code: "MEDIA_VALIDATION_FAILED", Message: "fal returned no video.", Retryable: false}
+		return falVideoResult{}, &ProviderError{Code: "MEDIA_VALIDATION_FAILED", Message: "fal returned no video.", Retryable: false}
 	}
-	return result.Video.URL, nil
+	return result, nil
 }
 
 func (p *FalProvider) cancel(cancelURL string) {
@@ -348,22 +420,55 @@ func (p *FalProvider) openMedia(ctx context.Context, rawURL, accept, failureCode
 	return response, nil
 }
 
-func (p *FalProvider) fetchImageDataURI(ctx context.Context, imageURL string) (string, error) {
-	response, err := p.openMedia(ctx, imageURL, "image/*", "INPUT_DOWNLOAD_FAILED")
+// falImageTypes and falAudioTypes map an accepted response type to the type
+// written into the data URI; Drupal serves VieNeu output as audio/x-wav.
+var (
+	falImageTypes = map[string]string{"image/jpeg": "image/jpeg", "image/png": "image/png", "image/webp": "image/webp"}
+	falAudioTypes = map[string]string{
+		"audio/wav": "audio/wav", "audio/x-wav": "audio/wav", "audio/wave": "audio/wav",
+		"audio/mpeg": "audio/mpeg", "audio/mp4": "audio/mp4", "audio/x-m4a": "audio/mp4", "audio/aac": "audio/aac",
+	}
+)
+
+// inlineDataURI re-checks an inlined input with the same type and size rules as a download.
+func inlineDataURI(raw string, allowed map[string]string, maxBytes int, rejectMessage string) (string, error) {
+	reject := &ProviderError{Code: "INVALID_REQUEST", Message: rejectMessage, Retryable: false}
+	header, payload, ok := strings.Cut(strings.TrimPrefix(raw, "data:"), ",")
+	if !ok || !strings.HasSuffix(header, ";base64") {
+		return "", reject
+	}
+	mediaType, ok := allowed[strings.ToLower(strings.TrimSuffix(header, ";base64"))]
+	if !ok {
+		return "", reject
+	}
+	data, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil || len(data) == 0 || len(data) > maxBytes {
+		return "", reject
+	}
+	return "data:" + mediaType + ";base64," + payload, nil
+}
+
+func (p *FalProvider) fetchDataURI(ctx context.Context, rawURL string, allowed map[string]string, maxBytes int, rejectMessage string) (string, error) {
+	// Drupal inlines the scene's own media so no request has to reach back into it.
+	if strings.HasPrefix(rawURL, "data:") {
+		return inlineDataURI(rawURL, allowed, maxBytes, rejectMessage)
+	}
+	response, err := p.openMedia(ctx, rawURL, "*/*", "INPUT_DOWNLOAD_FAILED")
 	if err != nil {
 		return "", err
 	}
 	defer response.Body.Close()
-	mediaType, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
-	if mediaType != "image/jpeg" && mediaType != "image/png" && mediaType != "image/webp" {
-		return "", &ProviderError{Code: "INVALID_REQUEST", Message: "Ảnh đầu vào phải là JPEG, PNG hoặc WebP.", Retryable: false}
+	received, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
+	mediaType, ok := allowed[received]
+	if !ok {
+		return "", &ProviderError{Code: "INVALID_REQUEST", Message: rejectMessage, Retryable: false}
 	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, falMaxImageBytes+1))
+	data, err := io.ReadAll(io.LimitReader(response.Body, int64(maxBytes)+1))
 	if err != nil {
-		return "", &ProviderError{Code: "INPUT_DOWNLOAD_FAILED", Message: "Could not read the input image.", Retryable: true}
+		return "", &ProviderError{Code: "INPUT_DOWNLOAD_FAILED", Message: "Could not read the input media.", Retryable: true}
 	}
-	if len(data) == 0 || len(data) > falMaxImageBytes {
-		return "", &ProviderError{Code: "INVALID_REQUEST", Message: "Ảnh đầu vào rỗng hoặc lớn hơn 10MB.", Retryable: false}
+	if len(data) == 0 || len(data) > maxBytes {
+		return "", &ProviderError{Code: "INVALID_REQUEST", Message: rejectMessage, Retryable: false}
 	}
 	return "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(data), nil
 }

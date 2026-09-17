@@ -3,6 +3,7 @@ package video
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -29,6 +30,7 @@ type fakeFal struct {
 	statusCalls   atomic.Int32
 	mu            sync.Mutex
 	submitted     map[string]any
+	submitPath    string
 	authHeader    string
 	submitStatus  int
 	submitBody    string
@@ -46,6 +48,10 @@ func newFakeFal(t *testing.T) *fakeFal {
 		case "/scene.png":
 			w.Header().Set("Content-Type", "image/png")
 			_, _ = w.Write([]byte("png-bytes"))
+		case "/voice.wav":
+			// Drupal serves VieNeu narration with this non-canonical type.
+			w.Header().Set("Content-Type", "audio/x-wav")
+			_, _ = w.Write([]byte("wav-bytes"))
 		case "/output.mp4":
 			w.Header().Set("Content-Type", "video/mp4")
 			_, _ = w.Write(fake.videoBody)
@@ -64,10 +70,11 @@ func newFakeFal(t *testing.T) *fakeFal {
 func (f *fakeFal) serveQueue(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	switch {
-	case r.Method == http.MethodPost && r.URL.Path == "/fal-ai/wan/v2.2-a14b/image-to-video":
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/fal-ai/"):
 		f.submits.Add(1)
 		body, _ := io.ReadAll(r.Body)
 		f.mu.Lock()
+		f.submitPath = r.URL.Path
 		f.authHeader = r.Header.Get("Authorization")
 		_ = json.Unmarshal(body, &f.submitted)
 		f.mu.Unlock()
@@ -97,7 +104,7 @@ func (f *fakeFal) serveQueue(w http.ResponseWriter, r *http.Request) {
 		status := f.statuses[min(call, len(f.statuses)-1)]
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": status})
 	case r.Method == http.MethodGet && r.URL.Path == "/fal-ai/wan/requests/req-1":
-		_ = json.NewEncoder(w).Encode(map[string]any{"video": map[string]any{"url": f.media.URL + "/output.mp4", "content_type": "video/mp4"}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"video": map[string]any{"url": f.media.URL + "/output.mp4", "content_type": "video/mp4"}, "duration": 7.25})
 	case r.Method == http.MethodPut && r.URL.Path == "/fal-ai/wan/requests/req-1/cancel":
 		f.cancels.Add(1)
 		w.WriteHeader(http.StatusAccepted)
@@ -129,11 +136,16 @@ func falJobRequest(callbackURL, imageURL string) JobRequest {
 
 func falModel(t *testing.T) Model {
 	t.Helper()
+	return falModelByID(t, "fal/wan-2.2-a14b-i2v")
+}
+
+func falModelByID(t *testing.T, id string) Model {
+	t.Helper()
 	registry, err := NewRegistry(true)
 	if err != nil {
 		t.Fatalf("registry: %v", err)
 	}
-	model, ok := registry.Get("fal/wan-2.2-a14b-i2v")
+	model, ok := registry.Get(id)
 	if !ok {
 		t.Fatal("fal model missing from registry")
 	}
@@ -293,12 +305,12 @@ func TestFalWanInputClampsFrames(t *testing.T) {
 	request := falJobRequest("https://drupal.test/callback", "https://drupal.test/scene.png")
 	for durationMS, frames := range map[int]int{500: falWanMinFrames, 5000: 81, 10000: 161, 20000: falWanMaxFrames} {
 		request.Output.DurationMS = durationMS
-		if got := falWanImageToVideoInput(request, "data:")["num_frames"]; got != frames {
+		if got := falWanImageToVideoInput(request, falMedia{Image: "data:"})["num_frames"]; got != frames {
 			t.Fatalf("duration %d → %v frames, want %d", durationMS, got, frames)
 		}
 	}
 	request.ProviderOptions = map[string]any{"seed": float64(42), "scenario": "slow"}
-	input := falWanImageToVideoInput(request, "data:")
+	input := falWanImageToVideoInput(request, falMedia{Image: "data:"})
 	if input["seed"] != int64(42) {
 		t.Fatalf("seed not forwarded: %v", input["seed"])
 	}
@@ -311,7 +323,7 @@ func TestFalAcceptsSceneWithoutPrompt(t *testing.T) {
 	request := falJobRequest("https://drupal.test/callback", "https://drupal.test/scene.png")
 	empty := "   "
 	request.Inputs.Prompt = &empty
-	if got := falWanImageToVideoInput(request, "data:")["prompt"]; got != falDefaultMotionPrompt {
+	if got := falWanImageToVideoInput(request, falMedia{Image: "data:"})["prompt"]; got != falDefaultMotionPrompt {
 		t.Fatalf("empty prompt must fall back to the motion default, got %q", got)
 	}
 
@@ -530,5 +542,107 @@ func TestJobServiceCancelStopsProvider(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	if after, _ := service.Get(created.ID); after.Status != JobCancelled {
 		t.Fatalf("cancelled job was overwritten: %+v", after)
+	}
+}
+
+func TestFalKlingAvatarSendsNarrationAndReportsItsLength(t *testing.T) {
+	fake := newFakeFal(t)
+	request := falJobRequest("https://drupal.test/callback", fake.media.URL+"/scene.png")
+	voice := fake.media.URL + "/voice.wav"
+	request.Inputs.AudioURL = &voice
+	result, err := fake.provider().Render(context.Background(), RenderRequest{
+		Job:        Job{Request: request},
+		Model:      falModelByID(t, "fal/kling-avatar-v2-pro"),
+		OutputPath: filepath.Join(t.TempDir(), "0.mp4"),
+	}, func(RenderUpdate) {})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	if fake.submitPath != "/fal-ai/kling-video/ai-avatar/v2/pro" {
+		t.Fatalf("submitted to %s", fake.submitPath)
+	}
+	if fake.submitted["audio_url"] != "data:audio/wav;base64,d2F2LWJ5dGVz" || fake.submitted["image_url"] == nil {
+		t.Fatalf("avatar input must inline both image and narration, got %v", fake.submitted)
+	}
+	// The clip follows the narration, so the job must report fal's length, not the requested one.
+	if result.DurationMS != 7250 {
+		t.Fatalf("duration = %d, want 7250 from fal", result.DurationMS)
+	}
+}
+
+func TestFalKlingAvatarRefusesSceneWithoutNarration(t *testing.T) {
+	fake := newFakeFal(t)
+	_, err := fake.provider().Render(context.Background(), RenderRequest{
+		Job:        Job{Request: falJobRequest("https://drupal.test/callback", fake.media.URL+"/scene.png")},
+		Model:      falModelByID(t, "fal/kling-avatar-v2-pro"),
+		OutputPath: filepath.Join(t.TempDir(), "0.mp4"),
+	}, func(RenderUpdate) {})
+	var providerErr *ProviderError
+	if !errors.As(err, &providerErr) || providerErr.Code != "INVALID_REQUEST" || !strings.Contains(providerErr.Message, "Đọc lời") {
+		t.Fatalf("got %v", err)
+	}
+	if fake.submits.Load() != 0 {
+		t.Fatal("nothing may be billed when the narration is missing")
+	}
+}
+
+func TestFalKlingImageToVideoInput(t *testing.T) {
+	request := falJobRequest("https://drupal.test/callback", "https://drupal.test/scene.png")
+	request.Output.DurationMS = 10000
+	input := falKlingImageToVideoInput(request, falMedia{Image: "data:image/png;base64,x"})
+	if input["start_image_url"] != "data:image/png;base64,x" || input["duration"] != "10" || input["generate_audio"] != true {
+		t.Fatalf("unexpected Kling input %v", input)
+	}
+	if _, leaked := input["image_url"]; leaked {
+		t.Fatal("Kling names the image start_image_url")
+	}
+	request.Output.DurationMS = 5000
+	request.ProviderOptions = map[string]any{"generate_audio": false}
+	input = falKlingImageToVideoInput(request, falMedia{Image: "data:"})
+	if input["duration"] != "5" || input["generate_audio"] != false {
+		t.Fatalf("user must be able to switch sound off: %v", input)
+	}
+}
+
+func TestEveryFalCatalogModelHasAnInputBuilder(t *testing.T) {
+	for _, model := range falModels() {
+		if _, ok := falInputBuilders[*model.ProviderModelID]; !ok {
+			t.Fatalf("model %s has no input builder; its jobs would fail at submit", model.ID)
+		}
+	}
+}
+
+func TestFalAcceptsInlinedSceneMediaWithoutFetching(t *testing.T) {
+	fake := newFakeFal(t)
+	request := falJobRequest("https://drupal.test/callback", "data:image/png;base64,cG5nLWJ5dGVz")
+	voice := "data:audio/x-wav;base64,d2F2LWJ5dGVz"
+	request.Inputs.AudioURL = &voice
+	if _, err := fake.provider().Render(context.Background(), RenderRequest{
+		Job:        Job{Request: request},
+		Model:      falModelByID(t, "fal/kling-avatar-v2-pro"),
+		OutputPath: filepath.Join(t.TempDir(), "0.mp4"),
+	}, func(RenderUpdate) {}); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	if fake.submitted["image_url"] != "data:image/png;base64,cG5nLWJ5dGVz" || fake.submitted["audio_url"] != "data:audio/wav;base64,d2F2LWJ5dGVz" {
+		t.Fatalf("inlined media must reach fal unchanged (audio type normalised), got %v", fake.submitted)
+	}
+}
+
+func TestInlineDataURIRejectsWrongTypeOrSize(t *testing.T) {
+	for _, raw := range []string{
+		"data:text/html;base64,PGgxPg==",
+		"data:image/png,not-base64-flagged",
+		"data:image/png;base64,***",
+		"data:image/png;base64,",
+		"data:image/png;base64," + base64.StdEncoding.EncodeToString(make([]byte, 11)),
+	} {
+		if _, err := inlineDataURI(raw, falImageTypes, 10, "bad"); err == nil {
+			t.Fatalf("%q must be rejected", raw)
+		}
 	}
 }

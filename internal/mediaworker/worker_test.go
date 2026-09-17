@@ -92,7 +92,8 @@ func TestProcessorMixesAudioAndMuxesVietnameseSubtitles(t *testing.T) {
 		all.WriteString(strings.Join(command, " "))
 		all.WriteByte('\n')
 	}
-	for _, expected := range []string{"volume=-12dB", "amix=inputs=1", "mov_text", "language=vie"} {
+	// inputs=2: the timeline's own audio plus the music track.
+	for _, expected := range []string{"volume=-12dB", "[0:a:0]", "amix=inputs=2", "mov_text", "language=vie"} {
 		if !strings.Contains(all.String(), expected) {
 			t.Fatalf("missing %q in commands:\n%s", expected, all.String())
 		}
@@ -147,8 +148,8 @@ func TestProcessorPositionsVoiceTracksAndPadsTheMix(t *testing.T) {
 	}
 
 	joined := strings.Join(mix, " ")
-	// apad keeps -shortest trimming to the video rather than the short clip.
-	for _, expected := range []string{"adelay=delays=3000:all=1", "apad[aout]"} {
+	// The output length comes from -t, never from whichever track ends first.
+	for _, expected := range []string{"adelay=delays=3000:all=1", "apad[aout]", "-t 6.000"} {
 		if !strings.Contains(joined, expected) {
 			t.Fatalf("missing %q in mix command:\n%s", expected, joined)
 		}
@@ -177,4 +178,56 @@ func validManifest() Manifest {
 		},
 		Output: OutputProfile{Width: 1280, Height: 720, FPS: 30, Format: "mp4", VideoCodec: "h264", SubtitleMode: "mux"},
 	}
+}
+
+func TestNormalizeArgsKeepsSceneDurationAndAlwaysEmitsAudio(t *testing.T) {
+	profile := OutputProfile{Width: 720, Height: 1280, FPS: 30, Format: "mp4", VideoCodec: "h264"}
+	image := strings.Join(normalizeArgs("in.png", "out.mp4", Scene{MIMEType: "image/png", DurationMS: 4000, Motion: "smooth"}, profile, false), " ")
+	for _, expected := range []string{"zoompan=z='min(zoom+0.0010,1.12)':d=1:", "-framerate 25 -t 4.000 -i in.png", "anullsrc=r=48000:cl=stereo", "-map 1:a:0", "-t 4.000 -c:v libx264", "-c:a aac -ar 48000 -ac 2"} {
+		if !strings.Contains(image, expected) {
+			t.Fatalf("image scene missing %q in: %s", expected, image)
+		}
+	}
+	if strings.Contains(image, "-an") {
+		t.Fatal("scenes must carry an audio track so concat and the mix stay aligned")
+	}
+
+	silent := strings.Join(normalizeArgs("in.mp4", "out.mp4", Scene{MIMEType: "video/mp4", DurationMS: 8000}, profile, false), " ")
+	for _, expected := range []string{"tpad=stop_mode=clone:stop_duration=8.000", "anullsrc", "-map 1:a:0", "-t 8.000 -c:v"} {
+		if !strings.Contains(silent, expected) {
+			t.Fatalf("silent clip missing %q in: %s", expected, silent)
+		}
+	}
+
+	voiced := strings.Join(normalizeArgs("in.mp4", "out.mp4", Scene{MIMEType: "video/mp4", DurationMS: 6000}, profile, true), " ")
+	for _, expected := range []string{"-af apad", "-map 0:a:0", "tpad=stop_mode=clone:stop_duration=6.000"} {
+		if !strings.Contains(voiced, expected) {
+			t.Fatalf("voiced clip missing %q in: %s", expected, voiced)
+		}
+	}
+	if strings.Contains(voiced, "anullsrc") {
+		t.Fatal("a clip with sound must keep it, not get silence")
+	}
+}
+
+func TestProcessRejectsOutputWhoseLengthDriftsFromManifest(t *testing.T) {
+	runner := &driftingRunner{}
+	processor := NewProcessor(runner, t.TempDir(), nil)
+	processor.download = func(_ context.Context, rawURL, destination string, _ int64) error {
+		return os.WriteFile(destination, []byte(rawURL), 0o600)
+	}
+	_, err := processor.Process(context.Background(), "job-drift", validManifest())
+	if err == nil || !strings.Contains(err.Error(), "manifest is 6000 ms") {
+		t.Fatalf("a 400 s output for a 6 s manifest must fail, got %v", err)
+	}
+}
+
+// driftingRunner reports a final file 100x longer than the manifest, the shape of the old zoompan bug.
+type driftingRunner struct{ recordingRunner }
+
+func (r *driftingRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if name == "ffprobe" && strings.Contains(strings.Join(args, " "), "output.mp4") {
+		return []byte(`{"streams":[{"codec_type":"video","codec_name":"h264","width":1280,"height":720}],"format":{"duration":"400.000","size":"1024"}}`), nil
+	}
+	return r.recordingRunner.Run(ctx, name, args...)
 }

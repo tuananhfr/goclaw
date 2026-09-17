@@ -175,7 +175,11 @@ func (p *Processor) Process(ctx context.Context, jobID string, manifest Manifest
 			return Result{}, fmt.Errorf("download scene %d: %w", index+1, err)
 		}
 		clip := filepath.Join(jobDir, fmt.Sprintf("scene-%03d.mp4", index))
-		args := normalizeArgs(source, clip, scene, manifest.Output)
+		hasAudio := false
+		if strings.HasPrefix(scene.MIMEType, "video/") {
+			hasAudio = p.hasAudioStream(ctx, source)
+		}
+		args := normalizeArgs(source, clip, scene, manifest.Output, hasAudio)
 		if _, err := p.runner.Run(ctx, "ffmpeg", args...); err != nil {
 			return Result{}, fmt.Errorf("normalize scene %d: %w", index+1, err)
 		}
@@ -207,7 +211,23 @@ func (p *Processor) Process(ctx context.Context, jobID string, manifest Manifest
 			return Result{}, err
 		}
 	}
-	return p.probe(ctx, outputPath)
+	result, err := p.probe(ctx, outputPath)
+	if err != nil {
+		return Result{}, err
+	}
+	// Every scene is cut or padded to its duration, so a drift here means a
+	// filter regressed (the image path once ran 100x long) and must not ship.
+	if expected := manifest.DurationMS; expected > 0 && absInt(result.DurationMS-expected) > 500 {
+		return Result{}, fmt.Errorf("output runs %d ms but the manifest is %d ms", result.DurationMS, expected)
+	}
+	return result, nil
+}
+
+func absInt(value int) int {
+	if value < 0 {
+		return -value
+	}
+	return value
 }
 
 func (p *Processor) decorate(ctx context.Context, jobDir, timeline, output string, manifest Manifest) error {
@@ -238,8 +258,10 @@ func (p *Processor) decorate(ctx context.Context, jobDir, timeline, output strin
 
 	args = append(args, "-map", "0:v:0")
 	if len(audioPaths) > 0 {
-		parts := make([]string, 0, len(audioPaths)+1)
-		labels := make([]string, 0, len(audioPaths))
+		parts := make([]string, 0, len(audioPaths)+2)
+		// Every normalized scene carries an audio track (its own or silence), so
+		// the clips' native sound survives the mix instead of being replaced.
+		labels := []string{"[0:a:0]"}
 		for index, track := range manifest.Audio {
 			label := fmt.Sprintf("a%d", index)
 			filter := fmt.Sprintf("[%d:a]volume=%gdB", index+1, track.GainDB)
@@ -249,12 +271,13 @@ func (p *Processor) decorate(ctx context.Context, jobDir, timeline, output strin
 			parts = append(parts, filter+"["+label+"]")
 			labels = append(labels, "["+label+"]")
 		}
-		// A narration clip ends; without apad, -shortest would cut the video to it.
+		// normalize=0 keeps each track at its own gain; the limiter stops the sum
+		// of clip sound and narration from clipping.
 		parts = append(parts, fmt.Sprintf("%samix=inputs=%d:duration=longest:normalize=0[mixed]", strings.Join(labels, ""), len(labels)))
-		parts = append(parts, "[mixed]apad[aout]")
+		parts = append(parts, "[mixed]alimiter=limit=0.95,apad[aout]")
 		args = append(args, "-filter_complex", strings.Join(parts, ";"), "-map", "[aout]", "-c:a", "aac", "-b:a", "192k")
 	} else {
-		args = append(args, "-map", "0:a?")
+		args = append(args, "-map", "0:a:0", "-c:a", "copy")
 	}
 
 	if subtitlePath != "" && manifest.Output.SubtitleMode == "burn" {
@@ -267,7 +290,15 @@ func (p *Processor) decorate(ctx context.Context, jobDir, timeline, output strin
 		subtitleInput := 1 + len(audioPaths)
 		args = append(args, "-map", fmt.Sprintf("%d:s:0", subtitleInput), "-c:s", "mov_text", "-metadata:s:s:0", "language=vie")
 	}
-	args = append(args, "-shortest", "-movflags", "+faststart", "-map_metadata", "-1", output)
+	// -t, not -shortest: a subtitle track ends at its last cue and -shortest cut
+	// the whole video there; looped music is endless by design.
+	total := manifest.DurationMS
+	if total <= 0 {
+		for _, scene := range manifest.Scenes {
+			total += scene.DurationMS
+		}
+	}
+	args = append(args, "-t", strconv.FormatFloat(float64(total)/1000, 'f', 3, 64), "-movflags", "+faststart", "-map_metadata", "-1", output)
 	if _, err := p.runner.Run(ctx, "ffmpeg", args...); err != nil {
 		return fmt.Errorf("mix audio and subtitles: %w", err)
 	}
@@ -298,25 +329,60 @@ func srtTime(milliseconds int) string {
 	return fmt.Sprintf("%02d:%02d:%02d,%03d", hours, minutes, seconds, milliseconds)
 }
 
-func normalizeArgs(source, destination string, scene Scene, profile OutputProfile) []string {
+func normalizeArgs(source, destination string, scene Scene, profile OutputProfile, hasAudio bool) []string {
 	duration := strconv.FormatFloat(float64(scene.DurationMS)/1000, 'f', 3, 64)
 	scale := fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d", profile.Width, profile.Height, profile.Width, profile.Height)
+	silence := []string{"-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"}
 	args := []string{"-y"}
 	if strings.HasPrefix(scene.MIMEType, "image/") {
-		frames := max(1, scene.DurationMS*profile.FPS/1000)
 		zoomStep := "0.0005"
 		if scene.Motion == "smooth" {
 			zoomStep = "0.0010"
 		} else if scene.Motion == "dynamic" {
 			zoomStep = "0.0018"
 		}
-		filter := fmt.Sprintf("%s,zoompan=z='min(zoom+%s,1.12)':d=%d:s=%dx%d:fps=%d,format=yuv420p", scale, zoomStep, frames, profile.Width, profile.Height, profile.FPS)
-		args = append(args, "-loop", "1", "-t", duration, "-i", source, "-vf", filter)
+		// d=1: zoompan's d counts output frames PER INPUT FRAME, and the looped
+		// image feeds 25 input frames a second, so any d>1 multiplies the length.
+		filter := fmt.Sprintf("%s,zoompan=z='min(zoom+%s,1.12)':d=1:s=%dx%d:fps=%d,format=yuv420p", scale, zoomStep, profile.Width, profile.Height, profile.FPS)
+		args = append(args, "-loop", "1", "-framerate", "25", "-t", duration, "-i", source)
+		args = append(args, silence...)
+		args = append(args, "-vf", filter, "-map", "0:v:0", "-map", "1:a:0")
 	} else {
-		filter := fmt.Sprintf("%s,fps=%d,format=yuv420p", scale, profile.FPS)
-		args = append(args, "-t", duration, "-i", source, "-vf", filter)
+		// tpad holds the last frame when the clip is shorter than the scene; the
+		// output -t below trims a longer one. apad does the same for its sound.
+		filter := fmt.Sprintf("%s,fps=%d,tpad=stop_mode=clone:stop_duration=%s,format=yuv420p", scale, profile.FPS, duration)
+		args = append(args, "-i", source)
+		if hasAudio {
+			args = append(args, "-vf", filter, "-af", "apad", "-map", "0:v:0", "-map", "0:a:0")
+		} else {
+			args = append(args, silence...)
+			args = append(args, "-vf", filter, "-map", "0:v:0", "-map", "1:a:0")
+		}
 	}
-	return append(args, "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", strconv.Itoa(profile.FPS), "-movflags", "+faststart", "-map_metadata", "-1", destination)
+	// Identical codec parameters on every clip are what let the concat step copy streams.
+	return append(args, "-t", duration, "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", strconv.Itoa(profile.FPS),
+		"-c:a", "aac", "-ar", "48000", "-ac", "2", "-b:a", "192k", "-movflags", "+faststart", "-map_metadata", "-1", destination)
+}
+
+func (p *Processor) hasAudioStream(ctx context.Context, path string) bool {
+	output, err := p.runner.Run(ctx, "ffprobe", "-v", "error", "-show_streams", "-of", "json", path)
+	if err != nil {
+		return false
+	}
+	var probe struct {
+		Streams []struct {
+			CodecType string `json:"codec_type"`
+		} `json:"streams"`
+	}
+	if json.Unmarshal(output, &probe) != nil {
+		return false
+	}
+	for _, stream := range probe.Streams {
+		if stream.CodecType == "audio" {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Processor) probe(ctx context.Context, path string) (Result, error) {

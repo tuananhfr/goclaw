@@ -30,6 +30,8 @@ type RenderOutput struct {
 	MIMEType       string
 	FileSize       int
 	ChecksumSHA256 string
+	// DurationMS is set when the provider decides the length (audio-driven models).
+	DurationMS int
 }
 
 // ProviderError carries a contract error code back to the job ledger.

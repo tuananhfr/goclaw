@@ -684,6 +684,9 @@ func (s *JobService) runProvider(id string, job Job, provider RenderProvider) {
 	checksum := output.ChecksumSHA256
 	fileSize := output.FileSize
 	duration := latest.Request.Output.DurationMS
+	if output.DurationMS > 0 {
+		duration = output.DurationMS
+	}
 	result := JobOutput{
 		VariantIndex:   0,
 		DownloadURL:    outputDownloadPath(id, 0, latest.OutputToken),
