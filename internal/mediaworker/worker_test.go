@@ -166,6 +166,125 @@ func TestValidateManifestRejectsVoiceOutsideTimeline(t *testing.T) {
 	}
 }
 
+func TestJoinArgsBlendsTransitionsAndKeepsPlainCutsOnConcat(t *testing.T) {
+	profile := OutputProfile{Width: 720, Height: 1280, FPS: 30, Format: "mp4", VideoCodec: "h264"}
+	scenes := []Scene{
+		{UUID: "a", DurationMS: 3000},
+		{UUID: "b", DurationMS: 3000, Transition: &Transition{Type: transitionCrossfade, DurationMS: 500}},
+		{UUID: "c", DurationMS: 3000, Transition: &Transition{Type: transitionFadeBlack, DurationMS: 400}},
+		{UUID: "d", DurationMS: 3000, Transition: &Transition{Type: transitionCut}},
+	}
+	joined := strings.Join(joinArgs([]string{"0.mp4", "1.mp4", "2.mp4", "3.mp4"}, scenes, profile, "out.mp4"), " ")
+	for _, expected := range []string{
+		"xfade=transition=fade:duration=0.500:offset=2.500[v1]",
+		"[0:a][1:a]acrossfade=d=0.500[a1]",
+		"[v1]tpad=stop_mode=clone:stop_duration=0.400[p2]",
+		"[a1]apad=pad_dur=0.400[q2]",
+		// Cảnh 3 vào lúc 5.5 s (đã trừ hoà tan), dip đen kéo dài tổng thêm 0.4 s.
+		"xfade=transition=fadeblack:duration=0.400:offset=5.500[v2]",
+		"[v2][a2][3:v][3:a]concat=n=2:v=1:a=1[v3][a3]",
+		"-map [v3] -map [a3]",
+		"-c:v libx264",
+	} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("missing %q in join command:\n%s", expected, joined)
+		}
+	}
+	if strings.Contains(joined, "-f concat") {
+		t.Fatal("a blended timeline must not use the stream-copy concat")
+	}
+	if timelineDuration(scenes) != 12000-500 {
+		t.Fatalf("only a crossfade shortens the film, got %d", timelineDuration(scenes))
+	}
+	if joinArgs([]string{"0.mp4", "1.mp4"}, []Scene{{DurationMS: 3000}, {DurationMS: 3000, Transition: &Transition{Type: transitionCut}}}, profile, "out.mp4") != nil {
+		t.Fatal("hard cuts only must keep the cheap concat path")
+	}
+}
+
+func TestValidateManifestChecksTransitions(t *testing.T) {
+	manifest := validManifest()
+	manifest.Scenes[0].Transition = &Transition{Type: transitionCrossfade, DurationMS: 500}
+	if err := ValidateManifest(manifest); err == nil {
+		t.Fatal("the first scene cannot have a transition")
+	}
+
+	manifest = validManifest()
+	manifest.Scenes[1].Transition = &Transition{Type: "wipe", DurationMS: 500}
+	if err := ValidateManifest(manifest); err == nil {
+		t.Fatal("an unknown transition must be rejected")
+	}
+
+	manifest = validManifest()
+	manifest.Scenes[1].Transition = &Transition{Type: transitionCrossfade, DurationMS: 4000}
+	if err := ValidateManifest(manifest); err == nil {
+		t.Fatal("a transition longer than its scenes must be rejected")
+	}
+
+	manifest = validManifest()
+	manifest.Scenes[1].Transition = &Transition{Type: transitionCrossfade, DurationMS: 500}
+	if err := ValidateManifest(manifest); err == nil {
+		t.Fatal("a crossfade shortens the timeline, so 6000 ms no longer matches")
+	}
+	manifest.DurationMS = 5500
+	if err := ValidateManifest(manifest); err != nil {
+		t.Fatalf("overlap-aware duration must pass: %v", err)
+	}
+}
+
+func TestProcessorDucksLoopedMusicUnderNarration(t *testing.T) {
+	runner := &recordingRunner{}
+	processor := NewProcessor(runner, t.TempDir(), nil)
+	processor.download = func(_ context.Context, rawURL, destination string, _ int64) error {
+		return os.WriteFile(destination, []byte(rawURL), 0o600)
+	}
+	start := 1000
+	manifest := validManifest()
+	manifest.Audio = []AudioTrack{
+		{SourceURL: "https://example.test/music.mp3", Kind: "music", GainDB: -14, Loop: true, Duck: true},
+		{SourceURL: "https://example.test/voice.wav", Kind: "voice", StartMS: &start},
+	}
+	if _, err := processor.Process(context.Background(), "job-duck", manifest); err != nil {
+		t.Fatal(err)
+	}
+	var mix string
+	for _, command := range runner.commands {
+		if joined := strings.Join(command, " "); strings.Contains(joined, "amix") {
+			mix = joined
+		}
+	}
+	for _, expected := range []string{
+		"volume=-14dB[a0]",
+		"[0:a:0][a1]amix=inputs=2:duration=longest:normalize=0[speech]",
+		"[speech]asplit=2[sc0][speechmix]",
+		"[sc0]apad=whole_dur=6.000[scpad0]",
+		"[a0][scpad0]sidechaincompress=threshold=0.02:ratio=12:attack=20:release=300[duck0]",
+		"[duck0]afade=t=out:st=5.000:d=1[music0]",
+		"[speechmix][music0]amix=inputs=2",
+		"alimiter=limit=0.95,apad[aout]",
+		"-t 6.000",
+	} {
+		if !strings.Contains(mix, expected) {
+			t.Fatalf("missing %q in mix command:\n%s", expected, mix)
+		}
+	}
+
+	runner = &recordingRunner{}
+	processor = NewProcessor(runner, t.TempDir(), nil)
+	processor.download = func(_ context.Context, rawURL, destination string, _ int64) error {
+		return os.WriteFile(destination, []byte(rawURL), 0o600)
+	}
+	plain := validManifest()
+	plain.Audio = []AudioTrack{{SourceURL: "https://example.test/music.mp3", Kind: "music", GainDB: -14}}
+	if _, err := processor.Process(context.Background(), "job-plain", plain); err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range runner.commands {
+		if strings.Contains(strings.Join(command, " "), "sidechaincompress") {
+			t.Fatal("music without duck must not be compressed")
+		}
+	}
+}
+
 func validManifest() Manifest {
 	return Manifest{
 		ContractVersion: 1,

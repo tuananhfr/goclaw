@@ -20,6 +20,10 @@ const (
 	ContractVersion = 1
 	maxScenes       = 60
 	maxSourceBytes  = int64(2 << 30)
+
+	transitionCut       = "cut"
+	transitionCrossfade = "crossfade"
+	transitionFadeBlack = "fade_black"
 )
 
 type Manifest struct {
@@ -34,13 +38,20 @@ type Manifest struct {
 }
 
 type Scene struct {
-	UUID       string         `json:"uuid"`
-	AssetUUID  string         `json:"asset_uuid,omitempty"`
-	SourceURL  string         `json:"source_url"`
-	MIMEType   string         `json:"mime_type"`
-	DurationMS int            `json:"duration_ms"`
-	Motion     string         `json:"motion,omitempty"`
-	Transition map[string]any `json:"transition,omitempty"`
+	UUID       string      `json:"uuid"`
+	AssetUUID  string      `json:"asset_uuid,omitempty"`
+	SourceURL  string      `json:"source_url"`
+	MIMEType   string      `json:"mime_type"`
+	DurationMS int         `json:"duration_ms"`
+	Motion     string      `json:"motion,omitempty"`
+	Transition *Transition `json:"transition,omitempty"`
+}
+
+// Transition is how a scene enters: a hard cut, a crossfade that overlaps the
+// scene before it, or a dip through black that does not shorten the film.
+type Transition struct {
+	Type       string `json:"type"`
+	DurationMS int    `json:"duration_ms"`
 }
 
 type AudioTrack struct {
@@ -50,6 +61,30 @@ type AudioTrack struct {
 	// StartMS places a clip at a fixed offset and disables looping; nil keeps
 	// the background-music behaviour of looping for the whole video.
 	StartMS *int `json:"start_ms,omitempty"`
+	// Loop repeats a track for the whole video even when StartMS is set.
+	Loop bool `json:"loop,omitempty"`
+	// Duck pushes this track under everything else while anyone is speaking.
+	Duck bool `json:"duck,omitempty"`
+}
+
+func (s Scene) transitionKind() string {
+	if s.Transition == nil || strings.TrimSpace(s.Transition.Type) == "" {
+		return transitionCut
+	}
+	return s.Transition.Type
+}
+
+// timelineDuration is the joined length: only a crossfade overlaps, so only it
+// makes the film shorter than the sum of its scenes.
+func timelineDuration(scenes []Scene) int {
+	total := 0
+	for index, scene := range scenes {
+		total += scene.DurationMS
+		if index > 0 && scene.transitionKind() == transitionCrossfade {
+			total -= scene.Transition.DurationMS
+		}
+	}
+	return total
 }
 
 type SubtitleCue struct {
@@ -129,7 +164,7 @@ func ValidateManifest(manifest Manifest) error {
 		return errors.New("subtitle mode must be mux or burn")
 	}
 	totalDuration := 0
-	for _, scene := range manifest.Scenes {
+	for index, scene := range manifest.Scenes {
 		if strings.TrimSpace(scene.UUID) == "" || scene.DurationMS < 1000 || scene.DurationMS > 30000 {
 			return errors.New("invalid scene UUID or duration")
 		}
@@ -139,9 +174,26 @@ func ValidateManifest(manifest Manifest) error {
 		if !strings.HasPrefix(scene.MIMEType, "image/") && !strings.HasPrefix(scene.MIMEType, "video/") {
 			return fmt.Errorf("scene %s has unsupported MIME type", scene.UUID)
 		}
+		if scene.Transition != nil {
+			// A transition is how a scene enters, so the first scene cannot have one.
+			if index == 0 {
+				return errors.New("the first scene cannot have a transition")
+			}
+			kind := scene.transitionKind()
+			if kind != transitionCut && kind != transitionCrossfade && kind != transitionFadeBlack {
+				return fmt.Errorf("scene %s has an unknown transition %q", scene.UUID, kind)
+			}
+			if kind != transitionCut {
+				duration := scene.Transition.DurationMS
+				if duration < 200 || duration > 1500 || duration >= scene.DurationMS || duration >= manifest.Scenes[index-1].DurationMS {
+					return fmt.Errorf("scene %s has a transition longer than its scenes", scene.UUID)
+				}
+			}
+		}
 		totalDuration += scene.DurationMS
 	}
-	if totalDuration > 600000 || manifest.DurationMS > 0 && manifest.DurationMS != totalDuration {
+	joined := timelineDuration(manifest.Scenes)
+	if totalDuration > 600000 || manifest.DurationMS > 0 && manifest.DurationMS != joined {
 		return errors.New("manifest duration does not match its scene timeline")
 	}
 	for _, track := range manifest.Audio {
@@ -186,28 +238,30 @@ func (p *Processor) Process(ctx context.Context, jobID string, manifest Manifest
 		normalized = append(normalized, clip)
 	}
 
-	concatPath := filepath.Join(jobDir, "concat.txt")
-	var concat strings.Builder
-	for _, clip := range normalized {
-		concat.WriteString("file '")
-		concat.WriteString(strings.ReplaceAll(filepath.ToSlash(clip), "'", "'\\''"))
-		concat.WriteString("'\n")
-	}
-	if err := os.WriteFile(concatPath, []byte(concat.String()), 0o600); err != nil {
-		return Result{}, fmt.Errorf("write concat manifest: %w", err)
-	}
-
 	outputPath := filepath.Join(jobDir, "output.mp4")
-	concatOutput := outputPath
+	joinOutput := outputPath
 	if len(manifest.Audio) > 0 || len(manifest.Subtitles) > 0 {
-		concatOutput = filepath.Join(jobDir, "timeline.mp4")
+		joinOutput = filepath.Join(jobDir, "timeline.mp4")
 	}
-	concatArgs := []string{"-y", "-f", "concat", "-safe", "0", "-i", concatPath, "-c", "copy", "-movflags", "+faststart", "-map_metadata", "-1", concatOutput}
-	if _, err := p.runner.Run(ctx, "ffmpeg", concatArgs...); err != nil {
+	joinCommand := joinArgs(normalized, manifest.Scenes, manifest.Output, joinOutput)
+	if joinCommand == nil {
+		concatPath := filepath.Join(jobDir, "concat.txt")
+		var concat strings.Builder
+		for _, clip := range normalized {
+			concat.WriteString("file '")
+			concat.WriteString(strings.ReplaceAll(filepath.ToSlash(clip), "'", "'\\''"))
+			concat.WriteString("'\n")
+		}
+		if err := os.WriteFile(concatPath, []byte(concat.String()), 0o600); err != nil {
+			return Result{}, fmt.Errorf("write concat manifest: %w", err)
+		}
+		joinCommand = []string{"-y", "-f", "concat", "-safe", "0", "-i", concatPath, "-c", "copy", "-movflags", "+faststart", "-map_metadata", "-1", joinOutput}
+	}
+	if _, err := p.runner.Run(ctx, "ffmpeg", joinCommand...); err != nil {
 		return Result{}, fmt.Errorf("assemble timeline: %w", err)
 	}
-	if concatOutput != outputPath {
-		if err := p.decorate(ctx, jobDir, concatOutput, outputPath, manifest); err != nil {
+	if joinOutput != outputPath {
+		if err := p.decorate(ctx, jobDir, joinOutput, outputPath, manifest); err != nil {
 			return Result{}, err
 		}
 	}
@@ -221,6 +275,62 @@ func (p *Processor) Process(ctx context.Context, jobID string, manifest Manifest
 		return Result{}, fmt.Errorf("output runs %d ms but the manifest is %d ms", result.DurationMS, expected)
 	}
 	return result, nil
+}
+
+// joinArgs joins the normalized clips with their transitions, or returns nil
+// when every cut is hard and the cheap stream-copy concat still applies.
+func joinArgs(clips []string, scenes []Scene, profile OutputProfile, output string) []string {
+	blended := false
+	for index, scene := range scenes {
+		if index > 0 && scene.transitionKind() != transitionCut {
+			blended = true
+		}
+	}
+	if !blended || len(clips) != len(scenes) {
+		return nil
+	}
+
+	args := []string{"-y"}
+	for _, clip := range clips {
+		args = append(args, "-i", clip)
+	}
+	filters := make([]string, 0, len(scenes)*3)
+	video, audio := "[0:v]", "[0:a]"
+	total := scenes[0].DurationMS
+	for index := 1; index < len(scenes); index++ {
+		scene := scenes[index]
+		kind := scene.transitionKind()
+		nextVideo := fmt.Sprintf("[v%d]", index)
+		nextAudio := fmt.Sprintf("[a%d]", index)
+		if kind == transitionCut {
+			filters = append(filters, fmt.Sprintf("%s%s[%d:v][%d:a]concat=n=2:v=1:a=1%s%s", video, audio, index, index, nextVideo, nextAudio))
+			total += scene.DurationMS
+			video, audio = nextVideo, nextAudio
+			continue
+		}
+		duration := scene.Transition.DurationMS
+		seconds := strconv.FormatFloat(float64(duration)/1000, 'f', 3, 64)
+		effect := "fade"
+		if kind == transitionFadeBlack {
+			effect = "fadeblack"
+			// Dip qua đen không được làm phim ngắn đi, nên nối thêm đúng khoảng đó
+			// vào đuôi đoạn đã ghép trước khi cho hai đoạn chồng nhau.
+			paddedVideo := fmt.Sprintf("[p%d]", index)
+			paddedAudio := fmt.Sprintf("[q%d]", index)
+			filters = append(filters, fmt.Sprintf("%stpad=stop_mode=clone:stop_duration=%s%s", video, seconds, paddedVideo))
+			filters = append(filters, fmt.Sprintf("%sapad=pad_dur=%s%s", audio, seconds, paddedAudio))
+			video, audio = paddedVideo, paddedAudio
+			total += duration
+		}
+		offset := strconv.FormatFloat(float64(total-duration)/1000, 'f', 3, 64)
+		filters = append(filters, fmt.Sprintf("%s[%d:v]xfade=transition=%s:duration=%s:offset=%s%s", video, index, effect, seconds, offset, nextVideo))
+		filters = append(filters, fmt.Sprintf("%s[%d:a]acrossfade=d=%s%s", audio, index, seconds, nextAudio))
+		total += scene.DurationMS - duration
+		video, audio = nextVideo, nextAudio
+	}
+	return append(args, "-filter_complex", strings.Join(filters, ";"), "-map", video, "-map", audio,
+		"-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", strconv.Itoa(profile.FPS),
+		"-c:a", "aac", "-ar", "48000", "-ac", "2", "-b:a", "192k", "-movflags", "+faststart", "-map_metadata", "-1", output)
 }
 
 func absInt(value int) int {
@@ -239,7 +349,7 @@ func (p *Processor) decorate(ctx context.Context, jobDir, timeline, output strin
 			return fmt.Errorf("download audio track %d: %w", index+1, err)
 		}
 		audioPaths = append(audioPaths, path)
-		if track.StartMS == nil {
+		if track.Loop || track.StartMS == nil {
 			args = append(args, "-stream_loop", "-1")
 		}
 		args = append(args, "-i", path)
@@ -256,12 +366,20 @@ func (p *Processor) decorate(ctx context.Context, jobDir, timeline, output strin
 		}
 	}
 
+	// -t, not -shortest: a subtitle track ends at its last cue and -shortest cut
+	// the whole video there; looped music is endless by design.
+	total := manifest.DurationMS
+	if total <= 0 {
+		total = timelineDuration(manifest.Scenes)
+	}
+
 	args = append(args, "-map", "0:v:0")
 	if len(audioPaths) > 0 {
-		parts := make([]string, 0, len(audioPaths)+2)
+		parts := make([]string, 0, len(audioPaths)+6)
 		// Every normalized scene carries an audio track (its own or silence), so
 		// the clips' native sound survives the mix instead of being replaced.
 		labels := []string{"[0:a:0]"}
+		ducked := make([]string, 0, len(manifest.Audio))
 		for index, track := range manifest.Audio {
 			label := fmt.Sprintf("a%d", index)
 			filter := fmt.Sprintf("[%d:a]volume=%gdB", index+1, track.GainDB)
@@ -269,11 +387,34 @@ func (p *Processor) decorate(ctx context.Context, jobDir, timeline, output strin
 				filter += fmt.Sprintf(",adelay=delays=%d:all=1", *track.StartMS)
 			}
 			parts = append(parts, filter+"["+label+"]")
+			if track.Duck {
+				ducked = append(ducked, "["+label+"]")
+				continue
+			}
 			labels = append(labels, "["+label+"]")
+		}
+		mixLabels := labels
+		if len(ducked) > 0 {
+			// Nhạc phải chìm xuống khi có người nói, nên tiếng nói vừa là nguồn
+			// điều khiển sidechain vừa là một nhánh của bản trộn cuối.
+			parts = append(parts, fmt.Sprintf("%samix=inputs=%d:duration=longest:normalize=0[speech]", strings.Join(labels, ""), len(labels)))
+			parts = append(parts, fmt.Sprintf("[speech]asplit=%d%s[speechmix]", len(ducked)+1, strings.Join(sidechainLabels(len(ducked)), "")))
+			seconds := strconv.FormatFloat(float64(total)/1000, 'f', 3, 64)
+			fade := strconv.FormatFloat(maxFloat(float64(total)/1000-1, 0), 'f', 3, 64)
+			mixLabels = []string{"[speechmix]"}
+			for index, music := range ducked {
+				output := fmt.Sprintf("[duck%d]", index)
+				// sidechaincompress dừng khi nhánh điều khiển hết, nên nhánh đó phải
+				// dài bằng cả video, không thì nhạc tắt sau câu nói cuối.
+				parts = append(parts, fmt.Sprintf("[sc%d]apad=whole_dur=%s[scpad%d]", index, seconds, index))
+				parts = append(parts, fmt.Sprintf("%s[scpad%d]sidechaincompress=threshold=0.02:ratio=12:attack=20:release=300%s", music, index, output))
+				parts = append(parts, fmt.Sprintf("%safade=t=out:st=%s:d=1[music%d]", output, fade, index))
+				mixLabels = append(mixLabels, fmt.Sprintf("[music%d]", index))
+			}
 		}
 		// normalize=0 keeps each track at its own gain; the limiter stops the sum
 		// of clip sound and narration from clipping.
-		parts = append(parts, fmt.Sprintf("%samix=inputs=%d:duration=longest:normalize=0[mixed]", strings.Join(labels, ""), len(labels)))
+		parts = append(parts, fmt.Sprintf("%samix=inputs=%d:duration=longest:normalize=0[mixed]", strings.Join(mixLabels, ""), len(mixLabels)))
 		parts = append(parts, "[mixed]alimiter=limit=0.95,apad[aout]")
 		args = append(args, "-filter_complex", strings.Join(parts, ";"), "-map", "[aout]", "-c:a", "aac", "-b:a", "192k")
 	} else {
@@ -290,19 +431,26 @@ func (p *Processor) decorate(ctx context.Context, jobDir, timeline, output strin
 		subtitleInput := 1 + len(audioPaths)
 		args = append(args, "-map", fmt.Sprintf("%d:s:0", subtitleInput), "-c:s", "mov_text", "-metadata:s:s:0", "language=vie")
 	}
-	// -t, not -shortest: a subtitle track ends at its last cue and -shortest cut
-	// the whole video there; looped music is endless by design.
-	total := manifest.DurationMS
-	if total <= 0 {
-		for _, scene := range manifest.Scenes {
-			total += scene.DurationMS
-		}
-	}
 	args = append(args, "-t", strconv.FormatFloat(float64(total)/1000, 'f', 3, 64), "-movflags", "+faststart", "-map_metadata", "-1", output)
 	if _, err := p.runner.Run(ctx, "ffmpeg", args...); err != nil {
 		return fmt.Errorf("mix audio and subtitles: %w", err)
 	}
 	return nil
+}
+
+func sidechainLabels(count int) []string {
+	labels := make([]string, 0, count)
+	for index := 0; index < count; index++ {
+		labels = append(labels, fmt.Sprintf("[sc%d]", index))
+	}
+	return labels
+}
+
+func maxFloat(value, floor float64) float64 {
+	if value < floor {
+		return floor
+	}
+	return value
 }
 
 func renderSRT(cues []SubtitleCue) string {
