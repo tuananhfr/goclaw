@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -108,7 +109,10 @@ func TestVideoJobsHandlerCreateReplayGetCancelAndOutput(t *testing.T) {
 	if terminal.Status != video.JobSucceeded || len(terminal.Outputs) != 1 {
 		t.Fatalf("terminal job = %#v", terminal)
 	}
-	output, err := server.Client().Get(terminal.Outputs[0].DownloadURL)
+	if !strings.HasPrefix(terminal.Outputs[0].DownloadURL, "/v1/video/jobs/") {
+		t.Fatalf("download URL must be a path the caller resolves, got %q", terminal.Outputs[0].DownloadURL)
+	}
+	output, err := server.Client().Get(server.URL + terminal.Outputs[0].DownloadURL)
 	if err != nil {
 		t.Fatal(err)
 	}

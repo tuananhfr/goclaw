@@ -131,37 +131,39 @@ type JobUsage struct {
 }
 
 type Job struct {
-	ID                string      `json:"id"`
-	ExternalJobUUID   string      `json:"external_job_uuid"`
-	ProviderJobID     *string     `json:"provider_job_id"`
-	Status            JobStatus   `json:"status"`
-	Progress          int         `json:"progress"`
-	Message           *string     `json:"message"`
-	Outputs           []JobOutput `json:"outputs"`
-	Usage             *JobUsage   `json:"usage,omitempty"`
-	Error             *JobError   `json:"error,omitempty"`
-	CreatedAt         string      `json:"created_at"`
-	ChangedAt         string      `json:"changed_at"`
-	IdempotencyKey    string      `json:"-"`
-	RequestHash       string      `json:"-"`
-	Request           JobRequest  `json:"-"`
-	Scenario          string      `json:"-"`
-	OutputToken       string      `json:"-"`
-	OutputBaseURL     string      `json:"-"`
-	Sequence          int         `json:"-"`
-	CallbackDelivered bool        `json:"-"`
+	ID                string            `json:"id"`
+	ExternalJobUUID   string            `json:"external_job_uuid"`
+	ProviderJobID     *string           `json:"provider_job_id"`
+	Status            JobStatus         `json:"status"`
+	Progress          int               `json:"progress"`
+	Message           *string           `json:"message"`
+	Outputs           []JobOutput       `json:"outputs"`
+	Usage             *JobUsage         `json:"usage,omitempty"`
+	Error             *JobError         `json:"error,omitempty"`
+	CreatedAt         string            `json:"created_at"`
+	ChangedAt         string            `json:"changed_at"`
+	IdempotencyKey    string            `json:"-"`
+	RequestHash       string            `json:"-"`
+	Request           JobRequest        `json:"-"`
+	Scenario          string            `json:"-"`
+	OutputToken       string            `json:"-"`
+	OutputBaseURL     string            `json:"-"`
+	Sequence          int               `json:"-"`
+	CallbackDelivered bool              `json:"-"`
+	ProviderState     map[string]string `json:"-"`
 }
 
 type persistedJob struct {
 	Job
-	IdempotencyKey    string     `json:"idempotency_key"`
-	RequestHash       string     `json:"request_hash"`
-	Request           JobRequest `json:"request"`
-	Scenario          string     `json:"scenario"`
-	OutputToken       string     `json:"output_token"`
-	OutputBaseURL     string     `json:"output_base_url"`
-	Sequence          int        `json:"sequence"`
-	CallbackDelivered bool       `json:"callback_delivered"`
+	IdempotencyKey    string            `json:"idempotency_key"`
+	RequestHash       string            `json:"request_hash"`
+	Request           JobRequest        `json:"request"`
+	Scenario          string            `json:"scenario"`
+	OutputToken       string            `json:"output_token"`
+	OutputBaseURL     string            `json:"output_base_url"`
+	Sequence          int               `json:"sequence"`
+	CallbackDelivered bool              `json:"callback_delivered"`
+	ProviderState     map[string]string `json:"provider_state,omitempty"`
 }
 
 type CallbackEvent struct {
@@ -180,6 +182,8 @@ type CallbackEvent struct {
 	Error           *JobError   `json:"error"`
 	OccurredAt      string      `json:"occurred_at"`
 }
+
+var errJobTerminal = errors.New("job is terminal")
 
 type JobAPIError struct {
 	Status int
@@ -331,9 +335,16 @@ type JobService struct {
 	delay            time.Duration
 	mediaWorkerURL   string
 	mediaWorkerToken string
+	outputDir        string
+	providers        map[string]RenderProvider
+	cancelMu         sync.Mutex
+	cancels          map[string]context.CancelFunc
 }
 
-func NewJobService(registry ModelRegistry, store *FileJobStore, httpClient *http.Client, delay time.Duration) *JobService {
+// providerRenderTimeout bounds one provider job including queue wait and download.
+const providerRenderTimeout = 30 * time.Minute
+
+func NewJobService(registry ModelRegistry, store *FileJobStore, httpClient *http.Client, delay time.Duration, options ...JobServiceOption) *JobService {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 30 * time.Minute}
 	}
@@ -347,6 +358,10 @@ func NewJobService(registry ModelRegistry, store *FileJobStore, httpClient *http
 		delay:            delay,
 		mediaWorkerURL:   strings.TrimRight(strings.TrimSpace(os.Getenv("GOCLAW_MEDIA_WORKER_URL")), "/"),
 		mediaWorkerToken: strings.TrimSpace(os.Getenv("GOCLAW_MEDIA_WORKER_TOKEN")),
+		cancels:          make(map[string]context.CancelFunc),
+	}
+	for _, option := range options {
+		option(service)
 	}
 	for _, job := range store.Active() {
 		service.start(job.ID)
@@ -370,7 +385,12 @@ func (s *JobService) Create(request JobRequest, idempotencyKey, outputBaseURL st
 		}
 		return publicJob(existing), true, nil
 	}
+	provider := s.providerFor(request)
 	scenario := stringOption(request.ProviderOptions, "scenario", "success")
+	if provider != nil {
+		// Drupal always sends its mock scenario; a real provider must not act it out.
+		scenario = "success"
+	}
 	if scenario == "provider-unavailable" {
 		return Job{}, false, &JobAPIError{Status: http.StatusServiceUnavailable, Code: "MODEL_UNAVAILABLE", Err: errors.New("mock provider is unavailable")}
 	}
@@ -378,11 +398,15 @@ func (s *JobService) Create(request JobRequest, idempotencyKey, outputBaseURL st
 		return Job{}, false, &JobAPIError{Status: http.StatusBadRequest, Code: "INVALID_REQUEST", Err: errors.New("Idempotency-Key must contain 8 to 64 characters")}
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	providerID := "mock-provider-job-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:16]
+	var providerID *string
+	if provider == nil {
+		mockID := "mock-provider-job-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:16]
+		providerID = &mockID
+	}
 	job := Job{
 		ID:              "goclaw-video-job-" + uuid.NewString(),
 		ExternalJobUUID: request.ExternalJobUUID,
-		ProviderJobID:   &providerID,
+		ProviderJobID:   providerID,
 		Status:          JobQueued,
 		Progress:        0,
 		Outputs:         []JobOutput{},
@@ -416,6 +440,9 @@ func (s *JobService) Cancel(id string) (Job, error) {
 		job.Progress = min(job.Progress, 99)
 		job.Error = nil
 		message := "Mock provider cancellation confirmed."
+		if s.providerFor(job.Request) != nil {
+			message = "Đã huỷ job, đang báo nhà cung cấp dừng render."
+		}
 		job.Message = &message
 		job.ChangedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		job.Sequence++
@@ -424,6 +451,7 @@ func (s *JobService) Cancel(id string) (Job, error) {
 	if err != nil {
 		return Job{}, err
 	}
+	s.stopProvider(id)
 	event := eventFromJob(job, "cancelled")
 	s.deliver(job, event)
 	if job.Scenario == "cancel-race-success" {
@@ -448,6 +476,13 @@ func (s *JobService) Output(id string, variant int, token string) ([]byte, strin
 	if !ok || token == "" || token != job.OutputToken || variant < 0 || variant >= max(1, len(job.Outputs)) {
 		return nil, "", false
 	}
+	if s.providerFor(job.Request) != nil {
+		data, err := os.ReadFile(s.outputPath(id, variant))
+		if err != nil {
+			return nil, "", false
+		}
+		return data, "video/mp4", true
+	}
 	return slices.Clone(mockVideoFixture), "video/mp4", true
 }
 
@@ -469,6 +504,10 @@ func (s *JobService) run(id string) {
 	}
 	if job.Request.JobKind == "project.assemble" {
 		s.runAssemble(id, job)
+		return
+	}
+	if provider := s.providerFor(job.Request); provider != nil {
+		s.runProvider(id, job, provider)
 		return
 	}
 	if job.Sequence == 0 {
@@ -557,6 +596,105 @@ func (s *JobService) run(id string) {
 	}
 }
 
+func (s *JobService) providerFor(request JobRequest) RenderProvider {
+	if request.JobKind != "scene.render" || request.ModelID == nil || len(s.providers) == 0 {
+		return nil
+	}
+	model, ok := s.registry.Get(*request.ModelID)
+	if !ok {
+		return nil
+	}
+	return s.providers[model.Provider]
+}
+
+func (s *JobService) outputPath(id string, variant int) string {
+	return filepath.Join(s.outputDir, filepath.Base(id), fmt.Sprintf("%d.mp4", variant))
+}
+
+func (s *JobService) stopProvider(id string) {
+	s.cancelMu.Lock()
+	cancel := s.cancels[id]
+	s.cancelMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+func (s *JobService) runProvider(id string, job Job, provider RenderProvider) {
+	model, ok := s.registry.Get(*job.Request.ModelID)
+	if !ok {
+		_, _ = s.fail(id, "MODEL_UNAVAILABLE", "Video model is no longer in the catalog.", false)
+		return
+	}
+	if job.Sequence == 0 {
+		job, _ = s.advance(id, JobQueued, 0, "Đang gửi job tới nhà cung cấp video.", "accepted", nil, nil)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), providerRenderTimeout)
+	s.cancelMu.Lock()
+	s.cancels[id] = cancel
+	s.cancelMu.Unlock()
+	defer func() {
+		s.cancelMu.Lock()
+		delete(s.cancels, id)
+		s.cancelMu.Unlock()
+		cancel()
+	}()
+	// Cancel may have landed between the queued event and registering cancel.
+	if latest, exists := s.store.Get(id); !exists || isTerminal(latest.Status) {
+		return
+	}
+
+	update := func(change RenderUpdate) {
+		if change.ProviderState != nil {
+			// Persist first: a restart without this state resubmits and bills twice.
+			if _, err := s.store.Update(id, func(current *Job) error {
+				if change.ProviderJobID != "" {
+					providerJobID := change.ProviderJobID
+					current.ProviderJobID = &providerJobID
+				}
+				current.ProviderState = change.ProviderState
+				return nil
+			}); err != nil {
+				slog.Error("video provider state not persisted", "job_id", id, "error", err)
+			}
+		}
+		if _, err := s.advance(id, JobRunning, change.Progress, change.Message, "progress", nil, nil); err != nil && !errors.Is(err, errJobTerminal) {
+			slog.Warn("video provider progress not recorded", "job_id", id, "error", err)
+		}
+	}
+	request := RenderRequest{Job: job, Model: model, ProviderState: job.ProviderState, OutputPath: s.outputPath(id, 0)}
+	output, err := provider.Render(ctx, request, update)
+	if latest, exists := s.store.Get(id); !exists || isTerminal(latest.Status) {
+		return
+	}
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			_, _ = s.fail(id, "PROVIDER_TIMEOUT", "Nhà cung cấp video không trả kết quả kịp thời.", true)
+			return
+		}
+		var providerErr *ProviderError
+		if !errors.As(err, &providerErr) {
+			slog.Error("video provider render failed", "job_id", id, "error", err)
+			providerErr = asProviderError(err)
+		}
+		_, _ = s.fail(id, providerErr.Code, providerErr.Message, providerErr.Retryable)
+		return
+	}
+	latest, _ := s.store.Get(id)
+	checksum := output.ChecksumSHA256
+	fileSize := output.FileSize
+	duration := latest.Request.Output.DurationMS
+	result := JobOutput{
+		VariantIndex:   0,
+		DownloadURL:    outputDownloadPath(id, 0, latest.OutputToken),
+		MIMEType:       output.MIMEType,
+		ChecksumSHA256: &checksum,
+		FileSize:       &fileSize,
+		DurationMS:     &duration,
+	}
+	_, _ = s.advance(id, JobSucceeded, 100, "Đã render xong video.", "completed", []JobOutput{result}, nil)
+}
+
 func (s *JobService) runAssemble(id string, job Job) {
 	if job.Sequence == 0 {
 		job, _ = s.advance(id, JobQueued, 0, "Media worker accepted the immutable manifest.", "accepted", nil, nil)
@@ -624,12 +762,12 @@ func (s *JobService) runAssemble(id string, job Job) {
 func (s *JobService) advance(id string, status JobStatus, progress int, message, eventType string, outputs []JobOutput, jobError *JobError) (Job, error) {
 	job, err := s.store.Update(id, func(job *Job) error {
 		if isTerminal(job.Status) {
-			return errors.New("job is terminal")
+			return errJobTerminal
 		}
 		job.Status = status
 		job.Progress = progress
 		job.Message = &message
-		job.Outputs = slices.Clone(outputs)
+		job.Outputs = nonNilOutputs(outputs)
 		job.Error = jobError
 		job.Sequence++
 		job.ChangedAt = time.Now().UTC().Format(time.RFC3339Nano)
@@ -671,7 +809,7 @@ func (s *JobService) outputsFor(job Job, invalid bool) []JobOutput {
 		copyChecksum := checksumString
 		outputs = append(outputs, JobOutput{
 			VariantIndex:   index,
-			DownloadURL:    fmt.Sprintf("%s/v1/video/jobs/%s/outputs/%d?token=%s", job.OutputBaseURL, url.PathEscape(job.ID), index, url.QueryEscape(job.OutputToken)),
+			DownloadURL:    outputDownloadPath(job.ID, index, job.OutputToken),
 			MIMEType:       "video/mp4",
 			ChecksumSHA256: &copyChecksum,
 			FileSize:       &fileSize,
@@ -870,11 +1008,25 @@ func eventFromJob(job Job, eventType string) CallbackEvent {
 		Status:          job.Status,
 		Progress:        job.Progress,
 		Message:         job.Message,
-		Outputs:         slices.Clone(job.Outputs),
+		Outputs:         nonNilOutputs(job.Outputs),
 		Usage:           job.Usage,
 		Error:           job.Error,
 		OccurredAt:      job.ChangedAt,
 	}
+}
+
+// Relative on purpose: the caller resolves it against the GoClaw URL it already
+// trusts, since a proxy in front of GoClaw hides the public scheme and host.
+func outputDownloadPath(id string, variant int, token string) string {
+	return fmt.Sprintf("/v1/video/jobs/%s/outputs/%d?token=%s", url.PathEscape(id), variant, url.QueryEscape(token))
+}
+
+// Drupal rejects a callback whose outputs is not a JSON array, so nil must encode as [].
+func nonNilOutputs(outputs []JobOutput) []JobOutput {
+	if outputs == nil {
+		return []JobOutput{}
+	}
+	return slices.Clone(outputs)
 }
 
 func publicJob(job Job) Job {
@@ -886,6 +1038,7 @@ func publicJob(job Job) Job {
 	job.OutputBaseURL = ""
 	job.Sequence = 0
 	job.CallbackDelivered = false
+	job.ProviderState = nil
 	return cloneJob(job)
 }
 
@@ -912,6 +1065,7 @@ func newPersistedJob(job Job) persistedJob {
 		OutputBaseURL:     job.OutputBaseURL,
 		Sequence:          job.Sequence,
 		CallbackDelivered: job.CallbackDelivered,
+		ProviderState:     job.ProviderState,
 	}
 }
 
@@ -925,6 +1079,7 @@ func (stored persistedJob) toJob() Job {
 	job.OutputBaseURL = stored.OutputBaseURL
 	job.Sequence = stored.Sequence
 	job.CallbackDelivered = stored.CallbackDelivered
+	job.ProviderState = stored.ProviderState
 	return job
 }
 

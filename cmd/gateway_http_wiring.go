@@ -3,7 +3,9 @@ package cmd
 import (
 	"context"
 	"log/slog"
+	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/nextlevelbuilder/goclaw/internal/audio"
@@ -224,15 +226,26 @@ func (d *gatewayDeps) wireHTTPHandlersOnServer(
 	// Media upload endpoint — accepts multipart file uploads, returns temp path + MIME type.
 	d.server.SetMediaUploadHandler(httpapi.NewMediaUploadHandler())
 
-	// Tekshot Video capability catalog. The mock registry is provider-neutral and
-	// will also host official adapters without changing the public HTTP contract.
-	videoRegistry := video.MustMockRegistry()
+	// Tekshot Video capability catalog. Mock models are always listed; fal models
+	// join only when GOCLAW_VIDEO_FAL_KEY is set, without changing the HTTP contract.
+	falKey := strings.TrimSpace(os.Getenv("GOCLAW_VIDEO_FAL_KEY"))
+	videoRegistry, registryErr := video.NewRegistry(falKey != "")
+	if registryErr != nil {
+		slog.Error("video model catalog invalid, falling back to mock models", "error", registryErr)
+		videoRegistry = video.MustMockRegistry()
+		falKey = ""
+	}
 	d.server.SetVideoModelsHandler(httpapi.NewVideoModelsHandler(videoRegistry))
+	videoProviders := map[string]video.RenderProvider{}
+	if falKey != "" {
+		videoProviders[video.FalProviderName] = video.NewFalProvider(falKey)
+	}
 	videoJobStore, err := video.NewFileJobStore(filepath.Join(d.dataDir, "video-jobs"))
 	if err != nil {
 		slog.Error("video job store unavailable", "error", err)
 	} else {
-		videoJobs := video.NewJobService(videoRegistry, videoJobStore, nil, 0)
+		videoJobs := video.NewJobService(videoRegistry, videoJobStore, nil, 0,
+			video.WithRenderProviders(filepath.Join(d.dataDir, "video-outputs"), videoProviders))
 		d.server.SetVideoJobsHandler(httpapi.NewVideoJobsHandler(videoJobs))
 	}
 
