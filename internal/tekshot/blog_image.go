@@ -44,7 +44,7 @@ func blogImagePlanParameters() map[string]any {
 				"target":  map[string]any{"type": "string", "description": "\"featured\" for the article's cover, or \"section:<id>\" for one section. One image per target at most."},
 				"prompt":  map[string]any{"type": "string", "description": "What to draw, in English, 20-60 words: subject, setting, framing, lighting, mood. Photographic and realistic unless the article is abstract. No text or logos in the picture."},
 				"alt":     map[string]any{"type": "string", "description": "Alt text in the article's language, describing the picture for a reader who cannot see it."},
-				"caption": map[string]any{"type": "string", "description": "Optional caption shown under the image; empty string for none."},
+				"caption": map[string]any{"type": "string", "description": "Caption printed under the image, in the article's language. Required for every \"section:<id>\" image: a short noun phrase of 3-10 words naming what the picture shows (e.g. \"Đế pizza nhân nhồi\"), not a sentence and not a copy of the alt text. Empty string for \"featured\" only — the cover has no caption slot."},
 			},
 			"required": []string{"target", "prompt", "alt", "caption"},
 		},
