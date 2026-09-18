@@ -107,6 +107,34 @@ func ValidateModel(model Model) error {
 	if model.Limits.MaxConcurrentJobs < 1 {
 		return fmt.Errorf("max_concurrent_jobs must be positive")
 	}
+	if model.Pricing != nil {
+		if err := validatePricing(*model.Pricing); err != nil {
+			return fmt.Errorf("pricing: %w", err)
+		}
+	}
+	return nil
+}
+
+var pricingUnits = map[string]bool{"request": true, "output_second": true, "generation": true, "credit": true}
+
+func validatePricing(pricing Pricing) error {
+	if len(pricing.Currency) != 3 {
+		return fmt.Errorf("currency must be ISO-4217: %q", pricing.Currency)
+	}
+	if !pricingUnits[pricing.Unit] {
+		return fmt.Errorf("unsupported unit %q", pricing.Unit)
+	}
+	if pricing.AmountMicros < 0 {
+		return fmt.Errorf("amount_micros must be >= 0")
+	}
+	for index, variant := range pricing.Variants {
+		if len(variant.When) == 0 {
+			return fmt.Errorf("variant %d has an empty when", index)
+		}
+		if variant.AmountMicros < 0 {
+			return fmt.Errorf("variant %d amount_micros must be >= 0", index)
+		}
+	}
 	return nil
 }
 
