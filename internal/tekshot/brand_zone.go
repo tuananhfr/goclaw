@@ -22,7 +22,11 @@ type brandZone struct {
 }
 
 type brandZoneCheck struct {
-	Busy        bool
+	Busy bool
+	// Patch: vùng logo phẳng nhưng khác màu hẳn với nền quanh nó — model vẽ một
+	// mảng/khung nền riêng chờ logo, logo dán lên trông như miếng vá.
+	Patch       bool
+	PatchDelta  float64
 	Score       float64
 	Shape       string
 	AspectRatio string
@@ -40,6 +44,15 @@ const (
 	// 2026-09-14 trên 465 vùng của 93 ảnh thật: chữ thấp nhất 0.097 (chữ trắng
 	// trên nền phẳng), mặt người và vật thể 0.10-0.12, vân sàn/tường dưới 0.09.
 	brandZoneBusyScore = 0.09
+	// Mảng nền riêng: trung bình màu của vùng lệch khỏi dải viền quanh nó từ
+	// mức này (khoảng cách RGB), trong khi cả vùng lẫn viền đều phẳng. Nền tự
+	// nhiên (trời, tường, đường) liền mạch nên lệch dưới mức này; khung trắng
+	// hay khối màu vẽ sẵn chờ logo lệch rất xa.
+	brandZonePatchDelta = 48.0
+	// Độ lệch chuẩn độ sáng tối đa để coi một vùng là phẳng.
+	brandZonePatchFlatStd = 24.0
+	// Số lần sửa tối đa cho một ảnh: một lần đôi khi chưa đủ.
+	brandZoneMaxFixes = 2
 )
 
 var brandZoneShapes = []string{"square", "portrait", "landscape"}
@@ -123,13 +136,93 @@ func checkBrandZones(path string, zones map[string][]brandZone) (brandZoneCheck,
 		Shape:       brandZoneShape(bounds.Dx(), bounds.Dy()),
 		AspectRatio: brandZoneAspectRatio(bounds.Dx(), bounds.Dy()),
 	}
+	var patchZone brandZone
 	for _, zone := range zones[check.Shape] {
 		if score := brandZoneScore(img, zone); score > check.Score || check.Zone == (brandZone{}) {
 			check.Score, check.Zone = score, zone
 		}
+		if patch, delta := brandZonePatch(img, zone); patch && delta > check.PatchDelta {
+			check.Patch, check.PatchDelta, patchZone = true, delta, zone
+		}
 	}
 	check.Busy = check.Score >= brandZoneBusyScore
+	if !check.Busy && check.Patch {
+		check.Zone = patchZone
+	}
 	return check, nil
+}
+
+// needsFix: vùng logo bị chữ/chi tiết chiếm, hoặc bị tô một mảng màu riêng.
+func (c brandZoneCheck) needsFix() bool {
+	return c.Busy || c.Patch
+}
+
+type colorStats struct {
+	r, g, b, lumSum, lumSq float64
+	n                      int
+}
+
+func (c *colorStats) add(img image.Image, x, y int) {
+	r, g, b, _ := img.At(x, y).RGBA()
+	rf, gf, bf := float64(r>>8), float64(g>>8), float64(b>>8)
+	lum := 0.2126*rf + 0.7152*gf + 0.0722*bf
+	c.r += rf
+	c.g += gf
+	c.b += bf
+	c.lumSum += lum
+	c.lumSq += lum * lum
+	c.n++
+}
+
+func (c colorStats) mean() (float64, float64, float64) {
+	n := float64(max(1, c.n))
+	return c.r / n, c.g / n, c.b / n
+}
+
+func (c colorStats) lumStd() float64 {
+	if c.n == 0 {
+		return 0
+	}
+	n := float64(c.n)
+	mean := c.lumSum / n
+	return math.Sqrt(math.Max(0, c.lumSq/n-mean*mean))
+}
+
+// brandZonePatch so màu vùng logo với dải viền quanh nó (rộng bằng nửa vùng).
+// Chỉ báo khi vùng và viền đều phẳng mà màu lệch nhau xa: đó là mảng nền riêng
+// model tô chờ logo, không phải cảnh tự nhiên.
+func brandZonePatch(img image.Image, zone brandZone) (bool, float64) {
+	bounds := img.Bounds()
+	w, h := float64(bounds.Dx()), float64(bounds.Dy())
+	zx0, zy0 := zone.Left*w, zone.Top*h
+	zx1, zy1 := (zone.Left+zone.Width)*w, (zone.Top+zone.Height)*h
+	if zx1-zx0 < 8 || zy1-zy0 < 8 {
+		return false, 0
+	}
+	padX, padY := (zx1-zx0)/2, (zy1-zy0)/2
+	rx0, ry0 := math.Max(0, zx0-padX), math.Max(0, zy0-padY)
+	rx1, ry1 := math.Min(w, zx1+padX), math.Min(h, zy1+padY)
+
+	step := max(1, int(math.Max(rx1-rx0, ry1-ry0))/brandZoneSampleMax)
+	var inside, ring colorStats
+	for y := int(ry0); y < int(ry1); y += step {
+		for x := int(rx0); x < int(rx1); x += step {
+			fx, fy := float64(x), float64(y)
+			if fx >= zx0 && fx < zx1 && fy >= zy0 && fy < zy1 {
+				inside.add(img, bounds.Min.X+x, bounds.Min.Y+y)
+			} else {
+				ring.add(img, bounds.Min.X+x, bounds.Min.Y+y)
+			}
+		}
+	}
+	if inside.n < 16 || ring.n < 16 {
+		return false, 0
+	}
+	ir, ig, ib := inside.mean()
+	or, og, ob := ring.mean()
+	delta := math.Sqrt((ir-or)*(ir-or) + (ig-og)*(ig-og) + (ib-ob)*(ib-ob))
+	flat := inside.lumStd() <= brandZonePatchFlatStd && ring.lumStd() <= brandZonePatchFlatStd
+	return flat && delta >= brandZonePatchDelta, delta
 }
 
 // brandZoneScore là tỉ lệ cặp ô kề nhau có chênh sáng đủ lớn để là một cạnh.
@@ -186,8 +279,9 @@ func brandZoneScore(img image.Image, zone brandZone) float64 {
 	return float64(edges) / float64(pairs)
 }
 
-// regenerateForBrandZone sửa ảnh đúng một lần khi vùng logo bị chữ hay chi tiết
-// chiếm. Đo không được hoặc sửa hỏng thì giữ ảnh cũ: mất ảnh tệ hơn logo đè.
+// regenerateForBrandZone sửa ảnh khi vùng logo bị chữ hay chi tiết chiếm, hoặc
+// bị tô một mảng màu khác nền; tối đa brandZoneMaxFixes lần, đo lại sau mỗi lần.
+// Đo không được hoặc sửa hỏng thì giữ ảnh đang có: mất ảnh tệ hơn logo đè.
 func regenerateForBrandZone(
 	media []agent.MediaResult,
 	check func(path string) (brandZoneCheck, error),
@@ -202,26 +296,59 @@ func regenerateForBrandZone(
 		slog.Warn("tekshot brand zone: cannot measure generated image", "path", path, "error", err)
 		return media
 	}
-	if !result.Busy {
+	if !result.needsFix() {
 		// Ghi cả lượt sạch: không có dòng này thì "đã đo, sạch" và "không hề đo"
 		// trông giống hệt nhau trong log.
 		slog.Info("tekshot brand zone: logo area is calm", "path", path, "score", result.Score, "shape", result.Shape)
 		return media
 	}
-	slog.Info("tekshot brand zone: logo area is busy, regenerating once", "path", path, "score", result.Score, "shape", result.Shape)
-	fixed, err := fix(brandZoneFixMessage(path, result))
-	if err != nil || len(fixed) == 0 {
-		slog.Warn("tekshot brand zone: regeneration failed, keeping the first image", "path", path, "error", err)
-		return media
+	current := media
+	for attempt := 1; attempt <= brandZoneMaxFixes; attempt++ {
+		slog.Info("tekshot brand zone: logo area needs a fix, regenerating",
+			"path", path, "attempt", attempt, "busy", result.Busy, "score", result.Score,
+			"patch", result.Patch, "patch_delta", result.PatchDelta, "shape", result.Shape)
+		fixed, err := fix(brandZoneFixMessage(path, result))
+		if err != nil || len(fixed) == 0 {
+			slog.Warn("tekshot brand zone: regeneration failed, keeping the current image", "path", path, "error", err)
+			return current
+		}
+		current = fixed[len(fixed)-1:]
+		path = current[0].Path
+		if attempt == brandZoneMaxFixes {
+			break
+		}
+		next, err := check(path)
+		if err != nil {
+			slog.Warn("tekshot brand zone: cannot measure fixed image", "path", path, "error", err)
+			return current
+		}
+		if !next.needsFix() {
+			slog.Info("tekshot brand zone: logo area is calm after fix", "path", path, "attempt", attempt, "score", next.Score)
+			return current
+		}
+		result = next
 	}
-	return fixed[len(fixed)-1:]
+	return current
 }
 
 func brandZoneFixMessage(path string, check brandZoneCheck) string {
+	if !check.Busy && check.Patch {
+		return fmt.Sprintf("[System] You must call create_image now — do not reply with plain text. "+
+			"The image you just produced has a separately coloured patch, panel or block in the brand mark area: the %s, from %d%% to %d%% of the width (from the left) and %d%% to %d%% of the height (from the top), where the brand logo is placed in post-production. "+
+			"Edit that image: set reference_image_path to exactly %q and aspect_ratio to %q. "+
+			"Keep the composition, subject, colours, headline wording and every other element as they are, but repaint that area as a seamless continuation of the surrounding background — the same colour, brightness, gradient and texture as the image right next to it — with no patch, panel, frame, badge or colour change. "+
+			"Do not draw a logo, frame, box or placeholder anywhere.",
+			brandZonePositionLabel(check.Zone),
+			int(math.Floor(check.Zone.Left*100)), int(math.Ceil((check.Zone.Left+check.Zone.Width)*100)),
+			int(math.Floor(check.Zone.Top*100)), int(math.Ceil((check.Zone.Top+check.Zone.Height)*100)),
+			path,
+			check.AspectRatio,
+		)
+	}
 	return fmt.Sprintf("[System] You must call create_image now — do not reply with plain text. "+
 		"The image you just produced has text or busy detail inside the brand mark area: the %s, about %d%% of the width and %d%% of the height, where the brand logo is placed in post-production. "+
 		"Edit that image: set reference_image_path to exactly %q and aspect_ratio to %q. "+
-		"Keep the composition, subject, colours, headline wording and every other element as they are, but move any text, label or important detail out of that area and let the area become a calm, uncluttered continuation of the background. "+
+		"Keep the composition, subject, colours, headline wording and every other element as they are, but move any text, label or important detail out of that area and let the area become a calm, uncluttered continuation of the surrounding background, with the same colour and texture as the image right next to it (no patch or panel). "+
 		"Do not draw a logo, frame, box or placeholder anywhere.",
 		brandZonePositionLabel(check.Zone),
 		int(math.Round(check.Zone.Width*100)),

@@ -32,8 +32,8 @@ Prompt định dùng có chứa yếu tố cấm → DỪNG, không sinh ảnh. 
 đề xuất chụp ảnh thật hoặc dựng infographic thay thế.
 
 INFOGRAPHIC: chỉ đưa lên hình những con số có nguồn kèm theo. Không thêm số
-nào khác. Ghi nguồn và kỳ dữ liệu ngay trên hình, góc dưới, cỡ chữ đọc được
-trên điện thoại. Không bản đồ hành chính tự vẽ.
+nào khác. Ghi nguồn và kỳ dữ liệu ngay trên hình, góc dưới KHÔNG trùng vùng logo
+(BRAND MARK AREA), cỡ chữ đọc được trên điện thoại. Không bản đồ hành chính tự vẽ.
 
 ẢNH THẬT: được chỉnh sáng, tương phản, cân bằng trắng, khử nhiễu, cắt cúp —
 đó là chỉnh kỹ thuật, không đổi bản chất. KHÔNG được thêm/bớt nguyên liệu,
