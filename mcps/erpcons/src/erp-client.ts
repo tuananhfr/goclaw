@@ -88,10 +88,50 @@ export class ErpClient {
     return trimResponse(raw, tool);
   }
 
+  /** Nhận diện công ty: không truyền `company` thì là danh sách trong phạm vi + công ty mặc định. */
+  async fetchBranding(company?: number): Promise<Record<string, unknown>> {
+    const path = company === undefined ? "/assistant/branding" : `/assistant/branding/${company}`;
+    return this.getJson<Record<string, unknown>>(path, {});
+  }
+
+  /**
+   * Tải một tệp ẢNH công khai của site (logo), cùng origin với API.
+   *
+   * Chỉ nhận đường dẫn tương đối gốc rồi tự ghép với origin của `baseUrl`: dù
+   * phản hồi của Drupal có bị ai chèn URL lạ thì sidecar cũng không đi ra host
+   * khác.
+   */
+  async fetchSiteImage(path: string, maxBytes: number): Promise<{ data: Buffer; mimeType: string }> {
+    let decoded = "";
+    try {
+      decoded = decodeURIComponent(path);
+    } catch {
+      // Để trống: câu kiểm tra bên dưới sẽ từ chối.
+    }
+    if (!/^\/(?!\/)[^?#\\]*$/.test(path) || decoded === "" || decoded.split("/").includes("..")) {
+      throw new ToolInputError("Đường dẫn tệp logo không an toàn.");
+    }
+
+    const response = await this.send(new URL(path, new URL(this.baseUrl).origin), "image/*");
+    const mimeType = (response.headers.get("content-type") ?? "").split(";")[0].trim();
+    if (!mimeType.startsWith("image/")) {
+      throw new ErpRequestError("Tệp logo không phải ảnh.", 502);
+    }
+    const data = Buffer.from(await response.arrayBuffer());
+    if (data.length > maxBytes) {
+      throw new ErpRequestError(`Tệp logo quá lớn (${Math.round(data.length / 1024)}KB).`, 413);
+    }
+    return { data, mimeType };
+  }
+
   private async getJson<T>(path: string, query: Record<string, string>): Promise<T> {
     const url = new URL(this.baseUrl.replace(/\/$/, "") + path);
     for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
+    const response = await this.send(url, "application/json");
+    return (await response.json()) as T;
+  }
 
+  private async send(url: URL, accept: string): Promise<Response> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -102,7 +142,7 @@ export class ErpClient {
         redirect: "error",
         headers: {
           "X-ERP-Assistant-Token": this.token,
-          Accept: "application/json",
+          Accept: accept,
         },
         signal: controller.signal,
       });
@@ -123,7 +163,7 @@ export class ErpClient {
       throw new ErpRequestError(messageForStatus(response.status), response.status);
     }
 
-    return (await response.json()) as T;
+    return response;
   }
 }
 
