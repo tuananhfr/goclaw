@@ -182,7 +182,7 @@ func TestRegenerateOnlyWhenBusyAndAtMostOnce(t *testing.T) {
 	fixCalls := 0
 	fix := func(message string) ([]agent.MediaResult, error) {
 		fixCalls++
-		if !strings.Contains(message, "/ws/generated/a.png") || !strings.Contains(message, "aspect_ratio") {
+		if !strings.Contains(message, "/ws/generated/") || !strings.Contains(message, "aspect_ratio") {
 			t.Fatalf("fix message must edit the produced image: %s", message)
 		}
 		return []agent.MediaResult{{Path: "/ws/generated/b.png"}, {Path: "/ws/generated/c.png"}}, nil
@@ -196,9 +196,43 @@ func TestRegenerateOnlyWhenBusyAndAtMostOnce(t *testing.T) {
 	busy := func(string) (brandZoneCheck, error) {
 		return brandZoneCheck{Busy: true, AspectRatio: "1:1", Zone: brandZone{Width: 0.3, Height: 0.3}}, nil
 	}
-	got := regenerateForBrandZone(original, busy, fix)
+	busyThenCalm := func(path string) (brandZoneCheck, error) {
+		if path == "/ws/generated/c.png" {
+			return brandZoneCheck{}, nil
+		}
+		return busy(path)
+	}
+	got := regenerateForBrandZone(original, busyThenCalm, fix)
 	if fixCalls != 1 || len(got) != 1 || got[0].Path != "/ws/generated/c.png" {
-		t.Fatalf("busy image must be regenerated exactly once and keep one image, got %v after %d fixes", got, fixCalls)
+		t.Fatalf("a busy image fixed on the first try must stop after one fix, got %v after %d fixes", got, fixCalls)
+	}
+
+	fixCalls = 0
+	got = regenerateForBrandZone(original, busy, fix)
+	if fixCalls != brandZoneMaxFixes || len(got) != 1 || got[0].Path != "/ws/generated/c.png" {
+		t.Fatalf("an image that stays busy must be fixed at most %d times, got %v after %d fixes", brandZoneMaxFixes, got, fixCalls)
+	}
+}
+
+func TestPatchInBrandZoneIsDetected(t *testing.T) {
+	sky := color.RGBA{R: 150, G: 190, B: 235, A: 255}
+	img := image.NewRGBA(image.Rect(0, 0, 400, 400))
+	for y := 0; y < 400; y++ {
+		for x := 0; x < 400; x++ {
+			img.Set(x, y, sky)
+		}
+	}
+	zone := brandZone{Left: 0.05, Top: 0.05, Width: 0.25, Height: 0.2}
+	if patch, _ := brandZonePatch(img, zone); patch {
+		t.Fatal("a seamless background must not count as a patch")
+	}
+	for y := 20; y < 100; y++ {
+		for x := 20; x < 120; x++ {
+			img.Set(x, y, color.RGBA{R: 255, G: 255, B: 255, A: 255})
+		}
+	}
+	if patch, delta := brandZonePatch(img, zone); !patch {
+		t.Fatalf("a white block in the brand zone must count as a patch, delta %.1f", delta)
 	}
 }
 
