@@ -43,9 +43,18 @@ services:
       # Trống = mặc định 15 phút, khớp với GOCLAW_MCP_USER_IDLE_TTL nên người
       # quay lại sau lúc nhàn rỗi không phải chờ Drupal. 0 = tắt cache.
       - ERP_CATALOG_CACHE_MS=${ERPCONS_CATALOG_CACHE_MS:-}
+      # Bộ nhớ định tuyến "cách hỏi -> capability" (src/route-memory.ts). Nằm ở
+      # volume riêng của sidecar, KHÔNG đụng DB của ERPcons hay GoClaw. Xoá tệp
+      # là trợ lý quên thói quen, không mất dữ liệu nào.
+      - ERP_ROUTE_MEMORY_FILE=/data/route-memory.json
+    volumes:
+      - erpcons-mcp-data:/data
     expose:
       - "3300"
     networks:
       - default
       - goclaw-net
     restart: unless-stopped
+
+volumes:
+  erpcons-mcp-data:

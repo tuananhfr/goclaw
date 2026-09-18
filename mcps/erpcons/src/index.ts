@@ -26,17 +26,28 @@
  * kết nối là mở đường cho người này đọc dữ liệu người kia — đúng thứ mà toàn bộ
  * thiết kế token-theo-user sinh ra để chặn.
  */
+import { createHash } from "node:crypto";
 import express from "express";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { dropCachedCatalog, getCachedCatalog, setCachedCatalog } from "./catalog-cache.js";
 import { ErpClient } from "./erp-client.js";
 import { createMcpServer } from "./mcp-server.js";
+import { RouteMemory } from "./route-memory.js";
 
 const PORT = parseInt(process.env.PORT ?? "3300", 10);
 const ERP_API_BASE = (process.env.ERP_API_BASE ?? "").replace(/\/$/, "");
 const REQUEST_TIMEOUT_MS = parseInt(process.env.ERP_TIMEOUT_MS ?? "20000", 10);
 
 const TOKEN_HEADER = "x-erp-assistant-token";
+
+// Trống = chỉ nhớ trong RAM, khởi động lại là quên. Compose gắn volume cho tệp này.
+const routeMemory = new RouteMemory(process.env.ERP_ROUTE_MEMORY_FILE ?? "");
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.on(signal, () => {
+    routeMemory.flush();
+    process.exit(0);
+  });
+}
 
 const app = express();
 const sessions = new Map<
@@ -108,7 +119,12 @@ app.get("/sse", async (req, res) => {
   const catalogMs = Date.now() - catalogStart;
 
   const toolCount = Object.keys(catalog).length;
-  const server = createMcpServer(catalog, client);
+  // Băm token làm khoá người dùng: sidecar không biết uid, và kho định tuyến
+  // không có lý do giữ token thô.
+  const routing = token === ""
+    ? undefined
+    : { memory: routeMemory, userKey: createHash("sha256").update(token).digest("hex").slice(0, 32) };
+  const server = createMcpServer(catalog, client, routing);
   const transport = new SSEServerTransport("/messages", res);
   sessions.set(transport.sessionId, { transport, server });
 

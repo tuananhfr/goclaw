@@ -258,7 +258,45 @@ export function trimResponse(raw: Record<string, unknown>, tool: CatalogTool): u
     delete out.pager;
   }
 
+  addReadableDates(out, 0);
   return out;
+}
+
+const TIMESTAMP_FIELD = /^(created|changed)$|_at$|[a-z]At$/;
+const VN_OFFSET_MS = 7 * 3_600_000;
+const MAX_DATE_DEPTH = 4;
+
+/**
+ * Thêm `<trường>_text` = "dd/mm/yyyy HH:mm" (GMT+7) cạnh mỗi timestamp giây.
+ *
+ * Drupal trả `created`/`changed` là số giây; mô hình không tự đổi được nên
+ * phải chạy Python (từng lỗi múi giờ, mất thêm 2 lượt). Giữ nguyên số gốc — chỉ
+ * THÊM trường, không thay. Tự cộng lệch múi giờ thay vì dùng Intl để không phụ
+ * thuộc bộ dữ liệu ICU của image.
+ */
+export function addReadableDates(value: unknown, depth: number): void {
+  if (depth > MAX_DATE_DEPTH || value === null || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    for (const item of value) addReadableDates(item, depth + 1);
+    return;
+  }
+  const record = value as Record<string, unknown>;
+  for (const [key, field] of Object.entries(record)) {
+    if (TIMESTAMP_FIELD.test(key) && !(`${key}_text` in record)) {
+      const seconds = typeof field === "number"
+        ? field
+        : typeof field === "string" && /^\d{10}$/.test(field) ? Number(field) : NaN;
+      if (seconds >= 1e9 && seconds < 1e10) record[`${key}_text`] = formatVietnamTime(seconds);
+    } else {
+      addReadableDates(field, depth + 1);
+    }
+  }
+}
+
+function formatVietnamTime(seconds: number): string {
+  const d = new Date(seconds * 1000 + VN_OFFSET_MS);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${two(d.getUTCDate())}/${two(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${two(d.getUTCHours())}:${two(d.getUTCMinutes())}`;
 }
 
 function pick(value: unknown, keep: string[]): unknown {
