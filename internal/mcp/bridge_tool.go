@@ -358,7 +358,7 @@ func (t *BridgeTool) persistImageContent(ctx context.Context, result *mcpgo.Call
 	var mediaFiles []bus.MediaFile
 	var refs []string
 	for i, c := range result.Content {
-		data, mimeType, ok := imageContentData(c)
+		data, mimeType, assistantOnly, ok := imageContentData(c)
 		if !ok || data == "" {
 			continue
 		}
@@ -383,6 +383,12 @@ func (t *BridgeTool) persistImageContent(ctx context.Context, result *mcpgo.Call
 			refs = append(refs, fmt.Sprintf("[MCP image content %d could not be saved: %v]", i, err))
 			continue
 		}
+		// Agent-only assets (e.g. a logo to embed in a document) are saved but
+		// kept out of Media and the MEDIA: prefix — both attach the file to the chat.
+		if assistantOnly {
+			refs = append(refs, "Image saved for your use (not sent to the user): "+outPath)
+			continue
+		}
 		mediaFiles = append(mediaFiles, bus.MediaFile{
 			Path:     outPath,
 			MimeType: mimeType,
@@ -393,25 +399,38 @@ func (t *BridgeTool) persistImageContent(ctx context.Context, result *mcpgo.Call
 	return mediaFiles, strings.Join(refs, "\n")
 }
 
-func imageContentData(content mcpgo.Content) (data string, mimeType string, ok bool) {
+// imageContentData reads an MCP image item. assistantOnly follows the MCP
+// `annotations.audience` field: set, and without "user", means the image is
+// an asset for the agent rather than something to show the user.
+func imageContentData(content mcpgo.Content) (data string, mimeType string, assistantOnly bool, ok bool) {
 	raw, err := json.Marshal(content)
 	if err != nil {
-		return "", "", false
+		return "", "", false, false
 	}
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {
-		return "", "", false
+		return "", "", false, false
 	}
 	typ, _ := m["type"].(string)
 	if typ != "image" {
-		return "", "", false
+		return "", "", false, false
 	}
 	data, _ = m["data"].(string)
 	mimeType, _ = m["mimeType"].(string)
 	if mimeType == "" {
 		mimeType, _ = m["MIMEType"].(string)
 	}
-	return data, mimeType, true
+	if annotations, _ := m["annotations"].(map[string]any); annotations != nil {
+		if audience, _ := annotations["audience"].([]any); len(audience) > 0 {
+			assistantOnly = true
+			for _, role := range audience {
+				if role == "user" {
+					assistantOnly = false
+				}
+			}
+		}
+	}
+	return data, mimeType, assistantOnly, true
 }
 
 func extFromMime(mimeType string) string {

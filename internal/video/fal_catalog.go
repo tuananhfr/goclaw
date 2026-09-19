@@ -1,7 +1,7 @@
 package video
 
 // Bump when a fal model's capabilities change so Drupal refreshes its cache.
-const FalCatalogVersion = "2026-09-17T15:00:00Z"
+const FalCatalogVersion = "2026-09-19T00:00:00Z"
 
 const FalProviderName = "fal"
 
@@ -44,8 +44,12 @@ func falModels() []Model {
 				"enable_prompt_expansion": map[string]any{"type": "boolean", "default": false, "title": "Để AI mở rộng prompt"},
 			}),
 			UISchema: map[string]any{"order": []string{"enable_prompt_expansion", "seed"}},
-			Pricing:  &Pricing{Currency: "USD", Unit: "second", AmountMinor: 4},
-			Limits:   Limits{MaxConcurrentJobs: 2, MaxRequestsPerMinute: intPtr(10)},
+			// 580p nội suy giữa 480p và 720p; đối chiếu lại bảng giá fal trước khi deploy.
+			Pricing: &Pricing{Currency: "USD", Unit: "output_second", AmountMicros: 40000, Variants: []PricingVariant{
+				{When: map[string]any{"resolution": "580p"}, AmountMicros: 60000},
+				{When: map[string]any{"resolution": "720p"}, AmountMicros: 80000},
+			}},
+			Limits: Limits{MaxConcurrentJobs: 2, MaxRequestsPerMinute: intPtr(10)},
 		},
 		{
 			SchemaVersion:   1,
@@ -74,8 +78,10 @@ func falModels() []Model {
 				"generate_audio": map[string]any{"type": "boolean", "default": true, "title": "Tạo tiếng (tiếng động, không khí)"},
 			}),
 			UISchema: map[string]any{"order": []string{"generate_audio"}},
-			Pricing:  &Pricing{Currency: "USD", Unit: "second", AmountMinor: 14},
-			Limits:   Limits{MaxConcurrentJobs: 2, MaxRequestsPerMinute: intPtr(10)},
+			Pricing: &Pricing{Currency: "USD", Unit: "output_second", AmountMicros: 140000, Variants: []PricingVariant{
+				{When: map[string]any{"generate_audio": false}, AmountMicros: 70000},
+			}},
+			Limits: Limits{MaxConcurrentJobs: 2, MaxRequestsPerMinute: intPtr(10)},
 		},
 		{
 			SchemaVersion:   1,
@@ -100,7 +106,7 @@ func falModels() []Model {
 			},
 			Defaults:         Defaults{Operation: "image-to-video", DurationMS: 5000, AspectRatio: "9:16", Resolution: "1080p", OutputCount: 1},
 			ParametersSchema: objectSchema(map[string]any{}),
-			Pricing:          &Pricing{Currency: "USD", Unit: "second", AmountMinor: 12},
+			Pricing:          &Pricing{Currency: "USD", Unit: "output_second", AmountMicros: 115000},
 			Limits:           Limits{MaxConcurrentJobs: 2, MaxRequestsPerMinute: intPtr(10)},
 		},
 	}

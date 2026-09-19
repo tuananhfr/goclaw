@@ -94,11 +94,20 @@ type Defaults struct {
 	OutputCount int    `json:"output_count"`
 }
 
+// PricingVariant overrides the base amount when every key in When matches the
+// job's parameters (resolution, generate_audio, …). Most-specific match wins.
+type PricingVariant struct {
+	When         map[string]any `json:"when"`
+	AmountMicros int64          `json:"amount_micros"`
+}
+
+// Pricing is in micro units of Currency per Unit: 115000 = 0.115 USD per second.
 type Pricing struct {
-	Currency    string  `json:"currency"`
-	Unit        string  `json:"unit"`
-	AmountMinor int     `json:"amount_minor"`
-	EffectiveAt *string `json:"effective_at"`
+	Currency     string           `json:"currency"`
+	Unit         string           `json:"unit"`
+	AmountMicros int64            `json:"amount_micros"`
+	Variants     []PricingVariant `json:"variants,omitempty"`
+	EffectiveAt  *string          `json:"effective_at"`
 }
 
 type Limits struct {

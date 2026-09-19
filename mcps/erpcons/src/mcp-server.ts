@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z, type ZodRawShape, type ZodTypeAny } from "zod";
+import { registerBrandingTool } from "./branding.js";
 import { ErpClient, ErpRequestError, ToolInputError } from "./erp-client.js";
 import { intentKey, type Favorite, type RouteMemory, type RouteSuggestion } from "./route-memory.js";
 import { normalize, tokenize } from "./text.js";
@@ -69,6 +70,11 @@ export function createMcpServer(catalog: Catalog, client: ErpClient, routing?: R
     registerDirectoryTools(server, catalog, client, routing);
   } else {
     registerLegacyTools(server, catalog, client);
+  }
+  // Catalog rỗng = người chưa được bật tra cứu (hoặc không có token): không có
+  // danh tính nào để hỏi Drupal công ty của họ.
+  if (Object.keys(catalog).length > 0) {
+    registerBrandingTool(server, client);
   }
 
   return server;
