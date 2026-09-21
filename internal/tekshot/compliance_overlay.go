@@ -30,11 +30,7 @@ const (
 // complianceChecks là C2–C22 của Bộ Prompt v3.0, gắn nhãn profile áp dụng.
 // Rỗng = áp cho mọi profile. C1 (nhãn quảng cáo ở dòng đầu) đã bỏ 2026-09-14:
 // nhãn không được nằm trong bài, nên còn C1 thì mọi bài quảng bá bị CHẶN.
-var complianceChecks = []struct {
-	Code     string
-	Profiles []string
-	Rule     string
-}{
+var complianceChecks = []complianceCheck{
 	{"C2", nil, "Mọi khẳng định về sản phẩm, giá, khuyến mại, kỹ thuật, năng lực, thu nhập có nguồn còn hiệu lực?"},
 	{"C3", nil, "Có từ tuyệt đối (nhất/số một/duy nhất/tốt nhất/hàng đầu/đầu tiên) mà không có tài liệu? → BỎ TỪ."},
 	{"C4", nil, "Có so sánh trực tiếp, xếp hạng, hoặc nêu tên cơ sở kinh doanh ngoài hệ sinh thái?"},
@@ -69,14 +65,24 @@ var complianceWarnings = []struct {
 	{"W5", "Địa chỉ, tên đơn vị hành chính trong bài có khớp nguồn?"},
 }
 
-// applicableChecks lọc C theo profile của trang.
+type complianceCheck struct {
+	Code     string
+	Profiles []string
+	Rule     string
+}
+
+// applicableChecks lọc C mặc định theo profile của trang.
 func applicableChecks(codes []string) []string {
+	return applicableChecksFrom(complianceChecks, codes)
+}
+
+func applicableChecksFrom(checks []complianceCheck, codes []string) []string {
 	set := make(map[string]bool, len(codes))
 	for _, code := range codes {
 		set[strings.ToUpper(strings.TrimSpace(code))] = true
 	}
-	out := make([]string, 0, len(complianceChecks))
-	for _, check := range complianceChecks {
+	out := make([]string, 0, len(checks))
+	for _, check := range checks {
 		if len(check.Profiles) == 0 {
 			out = append(out, check.Code+". "+check.Rule)
 			continue
@@ -118,12 +124,12 @@ func buildCompliancePrompt(profile *pageProfile, post map[string]any) string {
 	}
 
 	sb.WriteString("\n## NHÓM CHẶN\n")
-	for _, line := range applicableChecks(profile.Codes) {
+	for _, line := range applicableChecksFrom(profile.Rules.ComplianceChecks, profile.Codes) {
 		sb.WriteString(line + "\n")
 	}
 	sb.WriteString("\n## NHÓM CẢNH BÁO\n")
-	for _, warning := range complianceWarnings {
-		sb.WriteString(warning.Code + ". " + warning.Rule + "\n")
+	for _, warning := range profile.Rules.ComplianceWarnings {
+		sb.WriteString(warning.Code + ". " + warning.Text + "\n")
 	}
 
 	sb.WriteString("\n## ĐẦU RA\n")

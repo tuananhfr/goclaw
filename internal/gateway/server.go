@@ -155,6 +155,7 @@ func (s *Server) BuildMux() *http.ServeMux {
 	mux.HandleFunc("/v1/agent-sessions", s.handleAgentSession)
 	mux.HandleFunc("/v1/tekshot/jobs", s.handleTekshotJobs)
 	mux.HandleFunc("/v1/tekshot/jobs/", s.handleTekshotJob)
+	mux.HandleFunc("/v1/tekshot/governance", s.handleTekshotGovernance)
 	mux.HandleFunc("/v1/tekshot/draft-jobs", s.handleTekshotDraftJobs)
 	mux.HandleFunc("/v1/tekshot/draft-jobs/", s.handleTekshotDraftJob)
 	mux.HandleFunc("/v1/tekshot/scheduled-callback-jobs", s.handleTekshotScheduledCallbackJobs)

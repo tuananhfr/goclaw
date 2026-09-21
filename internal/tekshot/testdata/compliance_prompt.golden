@@ -1,0 +1,43 @@
+Bạn nhận một bài đã soạn xong. Nhiệm vụ KHÔNG phải viết lại bài, mà là kiểm tra nghĩa vụ và trả về danh sách sửa bắt buộc.
+Bạn KHÔNG được tự sửa bài. Chỉ nêu chỗ sai và cách sửa. Người quyết định.
+
+## BÀI CẦN SOÁT
+Tiêu đề: Tiêu đề
+Nhãn tuân thủ đang đặt: —
+Khối giới hạn thông tin: —
+Tự chấm rủi ro: LOW — lý do: —
+
+Nội dung:
+Nội dung
+
+## NGỮ CẢNH TRANG
+Profile: P3 + P6. Pháp nhân: Công ty Mẫu.
+Cấm riêng của trang:
+- Cấm A
+
+## NHÓM CHẶN
+C2. Mọi khẳng định về sản phẩm, giá, khuyến mại, kỹ thuật, năng lực, thu nhập có nguồn còn hiệu lực?
+C3. Có từ tuyệt đối (nhất/số một/duy nhất/tốt nhất/hàng đầu/đầu tiên) mà không có tài liệu? → BỎ TỪ.
+C4. Có so sánh trực tiếp, xếp hạng, hoặc nêu tên cơ sở kinh doanh ngoài hệ sinh thái?
+C5. Có nêu công dụng chữa bệnh, tác dụng sức khỏe, GIÁ TRỊ DINH DƯỠNG, hoặc MỨC ĐỘ PHÙ HỢP VỚI NHÓM ĐỐI TƯỢNG cho thực phẩm? → CHẶN, không ngoại lệ.
+C8. Đã thực sự dùng hoặc hiểu rõ sản phẩm này chưa, và đã kiểm tra tài liệu pháp lý của bên quảng cáo chưa? Chưa → CHẶN.
+C9. Mọi tên, logo, nhãn hiệu, hình ảnh bên thứ ba trong bài có số văn bản đồng ý còn hiệu lực? Không → CHẶN.
+C10. Có lời chứng, phát ngôn gán cho người thật thiếu văn bản xác nhận, hoặc chữ mẫu chưa xóa? → CHẶN.
+C17. Có mô tả tính năng sinh trắc học (nhận diện khuôn mặt, chấm công bằng khuôn mặt, nhận diện khách quen, nhận diện biển số) mà KHÔNG nêu điều kiện triển khai về cơ sở pháp lý xử lý dữ liệu? → CHẶN.
+C18. Có số liệu hiệu năng mô hình AI không kèm điều kiện đo và kỳ đo? → CHẶN.
+
+## NHÓM CẢNH BÁO
+W1. Khối giới hạn thông tin có ghi thời hạn và điều kiện áp dụng?
+W2. Bài đã đặt lịch rà soát cho ngày hết hạn (khuyến mại / nguồn / uỷ quyền nhãn hiệu)?
+W3. Có dữ kiện nào trong bài mâu thuẫn với một nguồn khác?
+W4. [Thực phẩm bảo vệ sức khỏe] Khuyến cáo bắt buộc đã chép NGUYÊN VĂN?
+W5. Địa chỉ, tên đơn vị hành chính trong bài có khớp nguồn?
+
+## ĐẦU RA
+Trả lời CHỈ bằng một object JSON:
+{"ket_luan":"DUOC_DANG|CAN_SUA|CHAN","loi_chan":[{"ma":"C2","trich_doan":"","sua_the_nao":""}],"canh_bao":[{"ma":"W1","noi_dung":""}],"lich_ra_soat_de_xuat":{"ngay":"YYYY-MM-DD","ly_do":""}}
+
+Có bất kỳ lỗi chặn nào → ket_luan phải là CHAN. Chỉ có cảnh báo → CAN_SUA. Sạch cả hai → DUOC_DANG.
+`trich_doan` chép NGUYÊN VĂN đoạn trong bài gây ra lỗi, không diễn giải lại.
+Chỉ gắn lỗi khi bài THỰC SỰ vi phạm. Một cổng chặn nhầm mọi thứ thì người duyệt sẽ bỏ qua nó.
+Không gọi bất kỳ tool nào. Trả lời bằng JSON dạng văn bản thuần.

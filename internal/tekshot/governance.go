@@ -27,6 +27,8 @@ type pageProfile struct {
 	ForbiddenTops []string
 	BlockCTAPhone bool
 	LegalEntity   string
+	// Rules là bộ luật hệ thống hiệu lực: bản admin sửa trên Studio, khối nào không sửa thì mặc định.
+	Rules governanceRules
 }
 
 func pageProfileFromRequest(request map[string]any) *pageProfile {
@@ -43,6 +45,7 @@ func pageProfileFromRequest(request map[string]any) *pageProfile {
 		ForbiddenTops: stringSliceFromAny(raw["chu_de_bi_cam"]),
 		BlockCTAPhone: boolFromMap(raw, "cam_cta_thu_sdt"),
 		LegalEntity:   stringFromMap(raw, "phap_nhan"),
+		Rules:         resolveGovernanceRules(raw["system_rules"]),
 	}
 	if len(profile.Codes) == 0 {
 		return nil
@@ -74,25 +77,14 @@ func buildGovernancePrompt(profile *pageProfile) string {
 	}
 	var sb strings.Builder
 
-	sb.WriteString("\n=== LUẬT NỘI DUNG BẮT BUỘC (Kim chỉ nam LÕI v3.0) ===\n")
-	sb.WriteString("Bạn KHÔNG phải nhà báo. Trang này KHÔNG phải cơ quan báo chí và KHÔNG phải trang thông tin điện tử tổng hợp.\n\n")
+	sb.WriteString("\n=== LUẬT NỘI DUNG BẮT BUỘC (Kim chỉ nam LÕI " + governanceVersion + ") ===\n")
+	sb.WriteString(profile.Rules.Preamble + "\n\n")
 
 	sb.WriteString("## PHẦN I — RÀNG BUỘC TUYỆT ĐỐI\n")
-	sb.WriteString("1. NGUỒN. Chỉ dùng dữ kiện có trong nguồn được cấp. KHÔNG dùng kiến thức nền về địa phương, sản phẩm, doanh nghiệp, quy định pháp luật, giá cả. ĐẶC BIỆT: tên đơn vị hành chính Việt Nam trong kiến thức nền của bạn gần như chắc chắn đã lỗi thời sau sắp xếp 01/7/2025. Nội dung cũ trên website nhà là nguồn Cấp 3, KHÔNG phải Cấp 1.\n")
-	sb.WriteString("2. DỪNG KHI THIẾU. Thiếu nguồn cho một dữ kiện → xuất exception, KHÔNG suy đoán, KHÔNG làm tròn, KHÔNG viết mơ hồ để né.\n")
-	sb.WriteString("3. KHÔNG BÁO HÓA. Cấm phóng sự, điều tra, phỏng vấn, tổng hợp tin. Cấm các cụm: \"theo ghi nhận của chúng tôi\", \"phóng viên\", \"trao đổi với chúng tôi\", \"nguồn tin riêng\", \"người dân bức xúc\", \"bản tin\", \"tin nóng\", \"độc quyền\", \"khẩn\".\n")
-	sb.WriteString("4. KHÔNG XẾP HẠNG BÊN NGOÀI. Cấm \"top N\", \"điểm danh\", \"N thương hiệu tốt nhất\" khi nêu tên cơ sở kinh doanh ngoài hệ sinh thái. Được phép: so sánh giữa các lựa chọn TRONG NHÀ.\n")
-	sb.WriteString("5. KHÔNG LÃNG MẠN HÓA: hiền hòa, chất phác, mộc mạc, nguyên sơ, bình dị, nếp sống xưa, chưa bị đô thị hóa.\n")
-	sb.WriteString("6. KHÔNG GÁN Ý NGHĨA cho hoa văn, màu sắc, kiến trúc, nghi lễ nếu nguồn không nêu rõ.\n")
-	sb.WriteString("7. KHÔNG DỮ LIỆU CÁ NHÂN: tên, mô tả, ảnh, SĐT, địa chỉ của khách hàng, nhân viên, ứng viên, người dân, chủ đại lý. Ngoại lệ duy nhất: người đại diện pháp nhân trong vai trò đã công bố công khai.\n")
-	sb.WriteString("8. KHÔNG BÊN THỨ BA THIẾU GIẤY. Không nêu tên, logo, nhãn hiệu, hình ảnh cơ sở của khách hàng, đối tác, nhà cung cấp, nhà sản xuất khi nguồn không kèm số văn bản đồng ý.\n")
-	sb.WriteString("9. KHÔNG LỜI CHỨNG BỊA. Không gán phát ngôn, đánh giá, trải nghiệm cho người có thật khi không có văn bản xác nhận đúng câu chữ.\n")
-	sb.WriteString("10. TÊN HÀNH CHÍNH. Nhắc tên cũ thì viết \"[tên mới] (trước đây thuộc [tên cũ])\", không viết ngược.\n")
-	sb.WriteString("11. KHÔNG CÔNG DỤNG SỨC KHỎE cho thực phẩm: chữa bệnh, phòng bệnh, hỗ trợ điều trị, GIÁ TRỊ DINH DƯỠNG, MỨC ĐỘ PHÙ HỢP VỚI NHÓM ĐỐI TƯỢNG (trẻ nhỏ, người già, phụ nữ mang thai).\n")
-	sb.WriteString("12. KHÔNG TỪ TUYỆT ĐỐI: nhất, số một, duy nhất, tốt nhất, hàng đầu, đầu tiên — trừ khi nguồn kèm tài liệu chứng minh.\n")
-	sb.WriteString("13. KHÔNG CON SỐ ĐẦU TƯ THIẾU CƠ SỞ: mức tiết kiệm, thời gian hoàn vốn, doanh thu, lợi nhuận dự kiến. Nêu số thì phải ghi điều kiện tính ngay tại chỗ.\n")
-	sb.WriteString("14. KHÔNG XUI KHÁCH VI PHẠM. Không mô tả tính năng theo cách hứa một kết quả mà khách chỉ đạt được nếu bỏ qua nghĩa vụ pháp lý của họ — đặc biệt tính năng thu thập dữ liệu sinh trắc học. Mô tả năng lực kỹ thuật phải kèm điều kiện triển khai.\n")
-	sb.WriteString("15. KHÔNG BIỂU TƯỢNG NHÀ NƯỚC ở bất kỳ đâu, kể cả làm nền.\n\n")
+	for _, rule := range profile.Rules.AbsoluteRules {
+		sb.WriteString(rule.Code + ". " + rule.Text + "\n")
+	}
+	sb.WriteString("\n")
 
 	sb.WriteString("## PHẦN II — RÀNG BUỘC RIÊNG CỦA TRANG NÀY\n")
 	sb.WriteString(fmt.Sprintf("Profile: %s. Pháp nhân vận hành: %s.\n",
@@ -123,16 +115,55 @@ func buildGovernancePrompt(profile *pageProfile) string {
 	}
 
 	sb.WriteString("\n## TỰ CHẤM RỦI RO — bắt buộc kèm mỗi bài\n")
-	sb.WriteString("- LOW: bài kiến thức, cẩm nang, thông báo vận hành; không con số độc quyền, không tên người, không lời hứa.\n")
-	sb.WriteString("- MEDIUM: bài quảng bá sản phẩm nhà, có giá hoặc khuyến mại, không tên khách hàng.\n")
-	sb.WriteString("- HIGH: có tên khách hàng, số liệu kết quả, con số đầu tư, nội dung sinh trắc học, số liệu kỹ thuật có hậu quả an toàn, hoặc chủ đề văn hoá/di sản.\n")
-	sb.WriteString("Bạn PHẢI viết ly_do_cham_risk. Bạn đang tự chấm rủi ro cho bài do chính bạn viết — điểm mù của bạn nằm ở đúng chỗ bạn tự tin nhất. Viết lý do ra để người duyệt kiểm tra được suy luận.\n")
+	for _, level := range profile.Rules.RiskLevels {
+		sb.WriteString("- " + level.Code + ": " + level.Text + "\n")
+	}
+	sb.WriteString(profile.Rules.RiskReasonRule + "\n")
 
 	sb.WriteString("\n## KHI CHẠM LẰN RANH\n")
-	sb.WriteString("Điền `exception` thay vì cố viết cho xong: ghi rõ chạm luật nào, TRÍCH NGUYÊN VĂN đoạn gây ra, và đề xuất TỐI THIỂU HAI phương án thay thế. KHÔNG tự chọn phương án. KHÔNG tự gỡ cờ. Khi có exception thì để `content` rỗng.\n")
+	sb.WriteString(profile.Rules.ExceptionRule + "\n")
 
 	return sb.String()
 }
+
+const governanceVersion = "v3.0"
+
+// Các khối dưới đây vừa dựng prompt vừa được /v1/tekshot/governance trả ra
+// nguyên văn, nên màn hình Kim chỉ nam luôn hiện đúng thứ model nhận.
+const governancePreamble = "Bạn KHÔNG phải nhà báo. Trang này KHÔNG phải cơ quan báo chí và KHÔNG phải trang thông tin điện tử tổng hợp."
+
+type governanceRule struct {
+	Code string `json:"code"`
+	Text string `json:"text"`
+}
+
+var absoluteRules = []governanceRule{
+	{"1", "NGUỒN. Chỉ dùng dữ kiện có trong nguồn được cấp. KHÔNG dùng kiến thức nền về địa phương, sản phẩm, doanh nghiệp, quy định pháp luật, giá cả. ĐẶC BIỆT: tên đơn vị hành chính Việt Nam trong kiến thức nền của bạn gần như chắc chắn đã lỗi thời sau sắp xếp 01/7/2025. Nội dung cũ trên website nhà là nguồn Cấp 3, KHÔNG phải Cấp 1."},
+	{"2", "DỪNG KHI THIẾU. Thiếu nguồn cho một dữ kiện → xuất exception, KHÔNG suy đoán, KHÔNG làm tròn, KHÔNG viết mơ hồ để né."},
+	{"3", "KHÔNG BÁO HÓA. Cấm phóng sự, điều tra, phỏng vấn, tổng hợp tin. Cấm các cụm: \"theo ghi nhận của chúng tôi\", \"phóng viên\", \"trao đổi với chúng tôi\", \"nguồn tin riêng\", \"người dân bức xúc\", \"bản tin\", \"tin nóng\", \"độc quyền\", \"khẩn\"."},
+	{"4", "KHÔNG XẾP HẠNG BÊN NGOÀI. Cấm \"top N\", \"điểm danh\", \"N thương hiệu tốt nhất\" khi nêu tên cơ sở kinh doanh ngoài hệ sinh thái. Được phép: so sánh giữa các lựa chọn TRONG NHÀ."},
+	{"5", "KHÔNG LÃNG MẠN HÓA: hiền hòa, chất phác, mộc mạc, nguyên sơ, bình dị, nếp sống xưa, chưa bị đô thị hóa."},
+	{"6", "KHÔNG GÁN Ý NGHĨA cho hoa văn, màu sắc, kiến trúc, nghi lễ nếu nguồn không nêu rõ."},
+	{"7", "KHÔNG DỮ LIỆU CÁ NHÂN: tên, mô tả, ảnh, SĐT, địa chỉ của khách hàng, nhân viên, ứng viên, người dân, chủ đại lý. Ngoại lệ duy nhất: người đại diện pháp nhân trong vai trò đã công bố công khai."},
+	{"8", "KHÔNG BÊN THỨ BA THIẾU GIẤY. Không nêu tên, logo, nhãn hiệu, hình ảnh cơ sở của khách hàng, đối tác, nhà cung cấp, nhà sản xuất khi nguồn không kèm số văn bản đồng ý."},
+	{"9", "KHÔNG LỜI CHỨNG BỊA. Không gán phát ngôn, đánh giá, trải nghiệm cho người có thật khi không có văn bản xác nhận đúng câu chữ."},
+	{"10", "TÊN HÀNH CHÍNH. Nhắc tên cũ thì viết \"[tên mới] (trước đây thuộc [tên cũ])\", không viết ngược."},
+	{"11", "KHÔNG CÔNG DỤNG SỨC KHỎE cho thực phẩm: chữa bệnh, phòng bệnh, hỗ trợ điều trị, GIÁ TRỊ DINH DƯỠNG, MỨC ĐỘ PHÙ HỢP VỚI NHÓM ĐỐI TƯỢNG (trẻ nhỏ, người già, phụ nữ mang thai)."},
+	{"12", "KHÔNG TỪ TUYỆT ĐỐI: nhất, số một, duy nhất, tốt nhất, hàng đầu, đầu tiên — trừ khi nguồn kèm tài liệu chứng minh."},
+	{"13", "KHÔNG CON SỐ ĐẦU TƯ THIẾU CƠ SỞ: mức tiết kiệm, thời gian hoàn vốn, doanh thu, lợi nhuận dự kiến. Nêu số thì phải ghi điều kiện tính ngay tại chỗ."},
+	{"14", "KHÔNG XUI KHÁCH VI PHẠM. Không mô tả tính năng theo cách hứa một kết quả mà khách chỉ đạt được nếu bỏ qua nghĩa vụ pháp lý của họ — đặc biệt tính năng thu thập dữ liệu sinh trắc học. Mô tả năng lực kỹ thuật phải kèm điều kiện triển khai."},
+	{"15", "KHÔNG BIỂU TƯỢNG NHÀ NƯỚC ở bất kỳ đâu, kể cả làm nền."},
+}
+
+var riskLevels = []governanceRule{
+	{riskLow, "bài kiến thức, cẩm nang, thông báo vận hành; không con số độc quyền, không tên người, không lời hứa."},
+	{riskMedium, "bài quảng bá sản phẩm nhà, có giá hoặc khuyến mại, không tên khách hàng."},
+	{riskHigh, "có tên khách hàng, số liệu kết quả, con số đầu tư, nội dung sinh trắc học, số liệu kỹ thuật có hậu quả an toàn, hoặc chủ đề văn hoá/di sản."},
+}
+
+const riskReasonRule = "Bạn PHẢI viết ly_do_cham_risk. Bạn đang tự chấm rủi ro cho bài do chính bạn viết — điểm mù của bạn nằm ở đúng chỗ bạn tự tin nhất. Viết lý do ra để người duyệt kiểm tra được suy luận."
+
+const exceptionRule = "Điền `exception` thay vì cố viết cho xong: ghi rõ chạm luật nào, TRÍCH NGUYÊN VĂN đoạn gây ra, và đề xuất TỐI THIỂU HAI phương án thay thế. KHÔNG tự chọn phương án. KHÔNG tự gỡ cờ. Khi có exception thì để `content` rỗng."
 
 func orDash(value string) string {
 	if strings.TrimSpace(value) == "" {
