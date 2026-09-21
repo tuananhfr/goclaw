@@ -19,7 +19,7 @@ const (
 	TekshotJobTypeCommentReplyMatch = "comment_reply_match"
 
 	// Drupal chặn 100 dòng trước (CommentReplyRules::MAX_RULES); đây chỉ là chốt cuối.
-	commentReplyMaxRules = 100
+	commentReplyMaxRules = 50
 	// Bình luận dài bất thường không được đẩy prompt đi quá xa khỏi danh sách tình huống.
 	commentReplyMaxMessageRunes = 2000
 	commentReplyTimeout         = 60 * time.Second
@@ -77,12 +77,18 @@ func commentKindLabel(kind string) string {
 
 func buildCommentReplyMatchPrompt(request map[string]any, rules []commentReplyRule) string {
 	comment, _ := request["comment"].(map[string]any)
+	post, _ := request["post"].(map[string]any)
+	postTitle := headRunes(stringFromMap(post, "title"), commentReplyMaxMessageRunes)
+	postContent := headRunes(stringFromMap(post, "content"), commentReplyMaxMessageRunes)
 	message := headRunes(stringFromMap(comment, "message"), commentReplyMaxMessageRunes)
 	if message == "" {
 		message = "(không có chữ)"
 	}
 
 	var sb strings.Builder
+	sb.WriteString("## Post context\\n")
+	sb.WriteString("Title: " + postTitle + "\\n")
+	sb.WriteString("Content:\\n<<<\\n" + postContent + "\\n>>>\\n\\n")
 	sb.WriteString("Phân loại MỘT bình luận của khách trên Facebook Page")
 	if page := strings.TrimSpace(stringFromMap(request, "page_name")); page != "" {
 		sb.WriteString(" \"" + page + "\"")
@@ -97,9 +103,11 @@ func buildCommentReplyMatchPrompt(request map[string]any, rules []commentReplyRu
 		sb.WriteString(fmt.Sprintf("- %d: %s\n", rule.Index, rule.Situation))
 	}
 	sb.WriteString("\n## Cách trả lời\n")
+	sb.WriteString("Chỉ phân loại, không được tự suy ra câu trả lời. Với công trình cụ thể (nhà riêng, móng, nứt, võng, lún, thấm, nâng tầng, bản vẽ), giá/chi phí hoặc nhắc đối thủ: chỉ chọn một tình huống chuyển tuyến được liệt kê rõ; nếu không có thì trả rule_index 0. Không được ép một câu hỏi rủi ro vào tình huống kỹ thuật chung.\n")
 	sb.WriteString("Chỉ trả về đúng object JSON: {\"rule_index\": <số của tình huống>}\n")
 	sb.WriteString("Trả {\"rule_index\": 0} khi không tình huống nào khớp rõ ràng hoặc khi còn phân vân. Không ép chọn.\n")
 	sb.WriteString("Không gọi công cụ. Không giải thích. Không viết câu trả lời cho khách.\n")
+	sb.WriteString("A rule is valid only when both the customer comment and that rule directly concern the post context above. Otherwise return rule_index 0.\\n")
 	return sb.String()
 }
 
@@ -113,6 +121,11 @@ func commentReplyRawIndex(reply string) (int, bool) {
 		return 0, false
 	}
 	return index, true
+}
+
+func hasCommentReplyPostContext(request map[string]any) bool {
+	post, ok := request["post"].(map[string]any)
+	return ok && (strings.TrimSpace(stringFromMap(post, "title")) != "" || strings.TrimSpace(stringFromMap(post, "content")) != "")
 }
 
 // parseCommentReplyMatch trả số tình huống hoặc 0; số ngoài danh sách bị loại, không đoán.
@@ -134,12 +147,15 @@ func parseCommentReplyMatch(reply string, rules []commentReplyRule) int {
 func (s *JobService) runCommentReplyMatch(ctx context.Context, job *store.TekshotJob, request map[string]any) (any, string, error) {
 	// Request mang nội dung bình luận của khách: không giữ lại sau khi chọn xong.
 	defer s.clearJobRequest(job)
-	if s.agents == nil {
-		return nil, "", fmt.Errorf("agent router is not configured")
-	}
 	rules := commentReplyRulesFromRequest(request)
 	if len(rules) == 0 {
 		return map[string]any{"rule_index": 0}, "No reply rules", nil
+	}
+	if !hasCommentReplyPostContext(request) {
+		return map[string]any{"rule_index": 0}, "No Studio post context", nil
+	}
+	if s.agents == nil {
+		return nil, "", fmt.Errorf("agent router is not configured")
 	}
 	loop, err := s.agents.Get(store.WithTenantID(ctx, store.MasterTenantID), job.AgentKey)
 	if err != nil {

@@ -35,6 +35,7 @@ func (f *fakeReplyAgent) Run(_ context.Context, req agent.RunRequest) (*agent.Ru
 func commentReplyRequest(message, kind string) map[string]any {
 	return map[string]any{
 		"page_name": "Quán Mẫu",
+		"post":      map[string]any{"title": "Fresh bread", "content": "A post about bread combos."},
 		"comment":   map[string]any{"message": message, "kind": kind},
 		"rules": []any{
 			map[string]any{"index": float64(1), "situation": "Khách hỏi giá"},
@@ -104,6 +105,16 @@ func TestCommentReplyPromptNamesAStickerWithoutText(t *testing.T) {
 	}
 }
 
+func TestCommentReplyPromptFailsClosedForSensitiveTopics(t *testing.T) {
+	request := commentReplyRequest("nhà em bị nứt có nâng tầng được không", "text")
+	prompt := buildCommentReplyMatchPrompt(request, commentReplyRulesFromRequest(request))
+	for _, want := range []string{"công trình cụ thể", "giá/chi phí", "đối thủ", "rule_index 0"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt is missing safety rule %q", want)
+		}
+	}
+}
+
 func TestMatchCommentReplyRestrictsTools(t *testing.T) {
 	fake := &fakeReplyAgent{replies: []string{`{"rule_index": 1}`}}
 	job := choiceJob()
@@ -156,5 +167,27 @@ func TestMatchCommentReplyFailsClosedOnError(t *testing.T) {
 func TestCommentReplyMatchIsASupportedJobType(t *testing.T) {
 	if !isSupportedTekshotJobType(TekshotJobTypeCommentReplyMatch) {
 		t.Fatalf("%s must be accepted by the job API", TekshotJobTypeCommentReplyMatch)
+	}
+}
+
+func TestCommentReplyPromptIncludesPostContext(t *testing.T) {
+	request := commentReplyRequest("how much", "text")
+	prompt := buildCommentReplyMatchPrompt(request, commentReplyRulesFromRequest(request))
+	for _, want := range []string{"## Post context", "Fresh bread", "A post about bread combos.", "directly concern the post context"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt is missing %q", want)
+		}
+	}
+}
+
+func TestRunCommentReplyMatchFailsClosedWithoutPostContext(t *testing.T) {
+	request := commentReplyRequest("how much", "text")
+	delete(request, "post")
+	result, _, err := (&JobService{}).runCommentReplyMatch(context.Background(), choiceJob(), request)
+	if err != nil {
+		t.Fatalf("missing context must not require an agent: %v", err)
+	}
+	if result.(map[string]any)["rule_index"] != 0 {
+		t.Fatalf("missing post context must select no rule, got %#v", result)
 	}
 }
