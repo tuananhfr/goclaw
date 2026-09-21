@@ -34,7 +34,7 @@ func TestBuildGovernanceCatalogCarriesEveryPromptBlock(t *testing.T) {
 	}
 
 	// Prompt thật phải chứa từng luật đúng như catalog trả ra.
-	prompt := buildGovernancePrompt(&pageProfile{Codes: []string{"P1"}})
+	prompt := buildGovernancePrompt(&pageProfile{Codes: []string{"P1"}, Rules: defaultGovernanceRules()})
 	for _, rule := range catalog.AbsoluteRules {
 		if !strings.Contains(prompt, rule.Code+". "+rule.Text) {
 			t.Fatalf("prompt missing rule %s", rule.Code)

@@ -19,6 +19,7 @@ func TestBuildGovernancePromptMatchesGolden(t *testing.T) {
 		ForbiddenTops: []string{"Chủ đề X"},
 		BlockCTAPhone: true,
 		LegalEntity:   "Công ty Mẫu",
+		Rules:         defaultGovernanceRules(),
 	}
 	got := buildGovernancePrompt(profile)
 

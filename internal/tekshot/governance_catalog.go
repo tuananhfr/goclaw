@@ -1,7 +1,5 @@
 package tekshot
 
-import "strings"
-
 // GovernanceComplianceCheck là một mục C của Prompt D. Profiles rỗng = áp cho mọi profile.
 type GovernanceComplianceCheck struct {
 	Code     string   `json:"code"`
@@ -24,30 +22,24 @@ type GovernanceCatalog struct {
 }
 
 // BuildGovernanceCatalog không lọc theo profile: phía Drupal quyết định ai thấy phần nào.
+// Đây là bản MẶC ĐỊNH trong code; bản admin sửa nằm ở Drupal và đi theo từng request.
 func BuildGovernanceCatalog() GovernanceCatalog {
-	checks := make([]GovernanceComplianceCheck, 0, len(complianceChecks))
-	for _, check := range complianceChecks {
+	rules := defaultGovernanceRules()
+	checks := make([]GovernanceComplianceCheck, 0, len(rules.ComplianceChecks))
+	for _, check := range rules.ComplianceChecks {
 		profiles := append([]string{}, check.Profiles...)
 		checks = append(checks, GovernanceComplianceCheck{Code: check.Code, Profiles: profiles, Rule: check.Rule})
 	}
-	warnings := make([]governanceRule, 0, len(complianceWarnings))
-	for _, warning := range complianceWarnings {
-		warnings = append(warnings, governanceRule{Code: warning.Code, Text: warning.Rule})
-	}
-	branches := map[string]string{}
-	for _, branch := range []string{"UPLOAD", "REF", "INFO"} {
-		branches[branch] = strings.TrimSpace(mediaBranchRules(branch))
-	}
 	return GovernanceCatalog{
 		Version:            governanceVersion,
-		Preamble:           governancePreamble,
-		AbsoluteRules:      append([]governanceRule{}, absoluteRules...),
-		RiskLevels:         append([]governanceRule{}, riskLevels...),
-		RiskReasonRule:     riskReasonRule,
-		ExceptionRule:      exceptionRule,
+		Preamble:           rules.Preamble,
+		AbsoluteRules:      rules.AbsoluteRules,
+		RiskLevels:         rules.RiskLevels,
+		RiskReasonRule:     rules.RiskReasonRule,
+		ExceptionRule:      rules.ExceptionRule,
 		ComplianceChecks:   checks,
-		ComplianceWarnings: warnings,
-		ImageRules:         strings.TrimSpace(imageRulesBlock),
-		MediaBranchRules:   branches,
+		ComplianceWarnings: rules.ComplianceWarnings,
+		ImageRules:         rules.ImageRules,
+		MediaBranchRules:   rules.MediaBranchRules,
 	}
 }

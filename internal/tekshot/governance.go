@@ -27,6 +27,8 @@ type pageProfile struct {
 	ForbiddenTops []string
 	BlockCTAPhone bool
 	LegalEntity   string
+	// Rules là bộ luật hệ thống hiệu lực: bản admin sửa trên Studio, khối nào không sửa thì mặc định.
+	Rules governanceRules
 }
 
 func pageProfileFromRequest(request map[string]any) *pageProfile {
@@ -43,6 +45,7 @@ func pageProfileFromRequest(request map[string]any) *pageProfile {
 		ForbiddenTops: stringSliceFromAny(raw["chu_de_bi_cam"]),
 		BlockCTAPhone: boolFromMap(raw, "cam_cta_thu_sdt"),
 		LegalEntity:   stringFromMap(raw, "phap_nhan"),
+		Rules:         resolveGovernanceRules(raw["system_rules"]),
 	}
 	if len(profile.Codes) == 0 {
 		return nil
@@ -75,10 +78,10 @@ func buildGovernancePrompt(profile *pageProfile) string {
 	var sb strings.Builder
 
 	sb.WriteString("\n=== LUẬT NỘI DUNG BẮT BUỘC (Kim chỉ nam LÕI " + governanceVersion + ") ===\n")
-	sb.WriteString(governancePreamble + "\n\n")
+	sb.WriteString(profile.Rules.Preamble + "\n\n")
 
 	sb.WriteString("## PHẦN I — RÀNG BUỘC TUYỆT ĐỐI\n")
-	for _, rule := range absoluteRules {
+	for _, rule := range profile.Rules.AbsoluteRules {
 		sb.WriteString(rule.Code + ". " + rule.Text + "\n")
 	}
 	sb.WriteString("\n")
@@ -112,13 +115,13 @@ func buildGovernancePrompt(profile *pageProfile) string {
 	}
 
 	sb.WriteString("\n## TỰ CHẤM RỦI RO — bắt buộc kèm mỗi bài\n")
-	for _, level := range riskLevels {
+	for _, level := range profile.Rules.RiskLevels {
 		sb.WriteString("- " + level.Code + ": " + level.Text + "\n")
 	}
-	sb.WriteString(riskReasonRule + "\n")
+	sb.WriteString(profile.Rules.RiskReasonRule + "\n")
 
 	sb.WriteString("\n## KHI CHẠM LẰN RANH\n")
-	sb.WriteString(exceptionRule + "\n")
+	sb.WriteString(profile.Rules.ExceptionRule + "\n")
 
 	return sb.String()
 }

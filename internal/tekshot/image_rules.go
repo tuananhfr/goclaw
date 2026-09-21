@@ -42,21 +42,39 @@ hạng mục chưa thi công. Với ảnh sản phẩm, quy tắc nội bộ là
 AI, kể cả khi có nhãn.
 `
 
-// mediaBranchRules là ràng buộc riêng theo nhánh của bài. Rỗng cho nhánh AI:
-// lớp cấm ở trên đã đủ.
-func mediaBranchRules(branch string) string {
-	// UPLOAD/REF/AI là từ vựng hiện tại; REAL/PRODUCT/INFO là của bài viết
-	// trước đợt tách trục và vẫn phải đọc được.
+// defaultMediaBranchRules là ràng buộc riêng theo nhánh của bài. Không có nhánh
+// AI: lớp cấm ở trên đã đủ.
+var defaultMediaBranchRules = map[string]string{
+	"UPLOAD": "BÀI NÀY CẦN ẢNH THẬT. KHÔNG sinh ảnh. Xuất brief chụp cho người đi thực địa: chủ thể cần chụp (cụ thể, không mô tả cảm xúc), bối cảnh, khung giờ ánh sáng, số ảnh tối thiểu, và những gì phải tránh.",
+	"REF":    "BÀI NÀY DỰNG TỪ ẢNH THẬT TRONG KHO. Ảnh kho được chọn sẵn là chỗ dựa về chủ thể, chất liệu và không khí — bám sát nó thay vì tưởng tượng lại từ đầu.",
+	"INFO":   "BÀI NÀY DÙNG INFOGRAPHIC. Tỷ lệ 4:5 dọc, tối đa 7 điểm dữ liệu một hình. Nhãn bắt buộc trên hình: \"Đồ họa tạo bằng AI. Nguồn số liệu: [tên nguồn].\"",
+}
+
+// mediaBranchKey gộp từ vựng cũ: UPLOAD/REF/AI là hiện tại; REAL/PRODUCT/INFO
+// là của bài viết trước đợt tách trục và vẫn phải đọc được.
+func mediaBranchKey(branch string) string {
 	switch strings.ToUpper(strings.TrimSpace(branch)) {
 	case "UPLOAD", "REAL", "PRODUCT":
-		return "\nBÀI NÀY CẦN ẢNH THẬT. KHÔNG sinh ảnh. Xuất brief chụp cho người đi thực địa: chủ thể cần chụp (cụ thể, không mô tả cảm xúc), bối cảnh, khung giờ ánh sáng, số ảnh tối thiểu, và những gì phải tránh.\n"
+		return "UPLOAD"
 	case "REF":
-		return "\nBÀI NÀY DỰNG TỪ ẢNH THẬT TRONG KHO. Ảnh kho được chọn sẵn là chỗ dựa về chủ thể, chất liệu và không khí — bám sát nó thay vì tưởng tượng lại từ đầu.\n"
+		return "REF"
 	case "INFO":
-		return "\nBÀI NÀY DÙNG INFOGRAPHIC. Tỷ lệ 4:5 dọc, tối đa 7 điểm dữ liệu một hình. Nhãn bắt buộc trên hình: \"Đồ họa tạo bằng AI. Nguồn số liệu: [tên nguồn].\"\n"
+		return "INFO"
 	default:
 		return ""
 	}
+}
+
+func mediaBranchRules(branch string) string {
+	return mediaBranchRulesFrom(defaultMediaBranchRules, branch)
+}
+
+func mediaBranchRulesFrom(rules map[string]string, branch string) string {
+	text := rules[mediaBranchKey(branch)]
+	if text == "" {
+		return ""
+	}
+	return "\n" + text + "\n"
 }
 
 // imageGuidanceFor dựng khối luật cho một lượt sinh ảnh tự động.
@@ -64,10 +82,12 @@ func mediaBranchRules(branch string) string {
 // Trả rỗng khi trang chưa bật luật: lượt sinh ảnh giữ nguyên hành vi cũ, đúng
 // nguyên tắc bật-theo-page của cả đợt này. Chỉ automatedImagePrompt gọi nó.
 func imageGuidanceFor(request map[string]any) string {
-	if pageProfileFromRequest(request) == nil {
+	profile := pageProfileFromRequest(request)
+	if profile == nil {
 		return ""
 	}
-	return imageRulesBlock + mediaBranchRules(stringFromMap(request, "loai_anh"))
+	return "\n" + profile.Rules.ImageRules + "\n" +
+		mediaBranchRulesFrom(profile.Rules.MediaBranchRules, stringFromMap(request, "loai_anh"))
 }
 
 // aiImageLabel là nhãn phải nằm ở DÒNG ĐẦU caption. Drupal chèn bằng code chứ
