@@ -173,10 +173,18 @@ func TestCommentReplyMatchIsASupportedJobType(t *testing.T) {
 func TestCommentReplyPromptIncludesPostContext(t *testing.T) {
 	request := commentReplyRequest("how much", "text")
 	prompt := buildCommentReplyMatchPrompt(request, commentReplyRulesFromRequest(request))
-	for _, want := range []string{"## Post context", "Fresh bread", "A post about bread combos.", "directly concern the post context"} {
+	for _, want := range []string{
+		"## Post context\n",
+		"Title: Fresh bread\n",
+		"Content:\n<<<\nA post about bread combos.\n>>>\n\n",
+		"directly concern the post context above. Otherwise return rule_index 0.\n",
+	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt is missing %q", want)
 		}
+	}
+	if strings.Contains(prompt, "\\n") {
+		t.Error("prompt must contain real newlines, not literal backslash-n sequences")
 	}
 }
 

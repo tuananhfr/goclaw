@@ -86,9 +86,9 @@ func buildCommentReplyMatchPrompt(request map[string]any, rules []commentReplyRu
 	}
 
 	var sb strings.Builder
-	sb.WriteString("## Post context\\n")
-	sb.WriteString("Title: " + postTitle + "\\n")
-	sb.WriteString("Content:\\n<<<\\n" + postContent + "\\n>>>\\n\\n")
+	sb.WriteString("## Post context\n")
+	sb.WriteString("Title: " + postTitle + "\n")
+	sb.WriteString("Content:\n<<<\n" + postContent + "\n>>>\n\n")
 	sb.WriteString("Phân loại MỘT bình luận của khách trên Facebook Page")
 	if page := strings.TrimSpace(stringFromMap(request, "page_name")); page != "" {
 		sb.WriteString(" \"" + page + "\"")
@@ -107,7 +107,7 @@ func buildCommentReplyMatchPrompt(request map[string]any, rules []commentReplyRu
 	sb.WriteString("Chỉ trả về đúng object JSON: {\"rule_index\": <số của tình huống>}\n")
 	sb.WriteString("Trả {\"rule_index\": 0} khi không tình huống nào khớp rõ ràng hoặc khi còn phân vân. Không ép chọn.\n")
 	sb.WriteString("Không gọi công cụ. Không giải thích. Không viết câu trả lời cho khách.\n")
-	sb.WriteString("A rule is valid only when both the customer comment and that rule directly concern the post context above. Otherwise return rule_index 0.\\n")
+	sb.WriteString("A rule is valid only when both the customer comment and that rule directly concern the post context above. Otherwise return rule_index 0.\n")
 	return sb.String()
 }
 
