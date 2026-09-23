@@ -1,11 +1,11 @@
 import { useTranslation } from "react-i18next";
 import { Switch } from "@/components/ui/switch";
 
-/** Codex fast tier is only advertised by the gpt-5.4 / 5.5 / 5.6 families.
+/** Codex fast tier is only advertised by the gpt-5.4 / 5.5 / 5.6 / 6 families.
  * Mirrors codexFastTierSupported in internal/providers/codex_build.go. */
 export function fastTierSupported(model: string): boolean {
   const bare = model.includes("/") ? model.slice(model.lastIndexOf("/") + 1) : model;
-  return ["gpt-5.4", "gpt-5.5", "gpt-5.6"].some((p) => bare.startsWith(p));
+  return ["gpt-5.4", "gpt-5.5", "gpt-5.6", "gpt-6"].some((p) => bare.startsWith(p));
 }
 
 interface FastModeSectionProps {

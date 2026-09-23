@@ -166,13 +166,13 @@ func (p *CodexProvider) buildRequestBody(req ChatRequest, stream bool) map[strin
 }
 
 // codexFastTierSupported mirrors the Codex CLI model catalog: fast tier is
-// advertised only by the gpt-5.4 / gpt-5.5 / gpt-5.6 families. Unsupported
+// advertised only by the gpt-5.4 / gpt-5.5 / gpt-5.6 / gpt-6 families. Unsupported
 // models must not send service_tier — the CLI strips it the same way.
 func codexFastTierSupported(model string) bool {
 	if idx := strings.LastIndex(model, "/"); idx >= 0 {
 		model = model[idx+1:]
 	}
-	for _, prefix := range []string{"gpt-5.4", "gpt-5.5", "gpt-5.6"} {
+	for _, prefix := range []string{"gpt-5.4", "gpt-5.5", "gpt-5.6", "gpt-6"} {
 		if strings.HasPrefix(model, prefix) {
 			return true
 		}

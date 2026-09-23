@@ -84,15 +84,17 @@ func acpModels() []ModelInfo {
 // chatGPTOAuthModels returns models available via ChatGPT OAuth integration.
 // The ChatGPT backend exposes no /v1/models endpoint, so this list is curated
 // by hand and must track https://learn.chatgpt.com/docs/models. Only models
-// still selectable when signed in with ChatGPT belong here — gpt-5.4 and
-// gpt-5.4-mini retire 2026-08-31 (they stay on the OpenAI API), and the 5.1 /
-// 5.2 / gpt-5.3-codex generations are already deprecated on this path.
+// still selectable when signed in with ChatGPT belong here, in the backend's
+// priority order (checked against /backend-api/codex/models on 2026-09-23).
+// gpt-5.3-codex-spark is no longer served; gpt-5.5 retires 2026-10-14.
 func chatGPTOAuthModels() []ModelInfo {
 	return withReasoningCapabilities([]ModelInfo{
+		{ID: "gpt-6-astra", Name: "GPT-6 Astra"},
+		{ID: "gpt-6-sol", Name: "GPT-6 Sol"},
+		{ID: "gpt-6-luna", Name: "GPT-6 Luna"},
 		{ID: "gpt-5.6-sol", Name: "GPT-5.6 Sol"},
 		{ID: "gpt-5.6-terra", Name: "GPT-5.6 Terra"},
 		{ID: "gpt-5.6-luna", Name: "GPT-5.6 Luna"},
 		{ID: "gpt-5.5", Name: "GPT-5.5"},
-		{ID: "gpt-5.3-codex-spark", Name: "GPT-5.3 Codex Spark"},
 	})
 }

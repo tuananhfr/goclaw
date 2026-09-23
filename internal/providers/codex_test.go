@@ -47,8 +47,8 @@ func TestCodexProviderName(t *testing.T) {
 
 func TestCodexProviderDefaultModel(t *testing.T) {
 	p := NewCodexProvider("test", &staticTokenSource{token: "test"}, "", "")
-	if p.DefaultModel() != "gpt-5.6-terra" {
-		t.Errorf("DefaultModel() = %q, want %q", p.DefaultModel(), "gpt-5.6-terra")
+	if p.DefaultModel() != "gpt-6-luna" {
+		t.Errorf("DefaultModel() = %q, want %q", p.DefaultModel(), "gpt-6-luna")
 	}
 
 	p2 := NewCodexProvider("test", &staticTokenSource{token: "test"}, "", "o3")
@@ -1118,6 +1118,7 @@ func TestCodexProviderBuildRequestBodyFastMode(t *testing.T) {
 		wantTier any // nil = service_tier must be absent
 	}{
 		{"fast on gpt-5.6", "gpt-5.6-terra", map[string]any{OptFastMode: true}, "priority"},
+		{"fast on gpt-6", "gpt-6-sol", map[string]any{OptFastMode: true}, "priority"},
 		{"fast on alias-prefixed model", "openai-codex/gpt-5.6-sol", map[string]any{OptFastMode: true}, "priority"},
 		{"fast on gpt-5.5", "gpt-5.5", map[string]any{OptFastMode: true}, "priority"},
 		{"fast off", "gpt-5.6-terra", map[string]any{OptFastMode: false}, nil},
