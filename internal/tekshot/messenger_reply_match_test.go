@@ -49,9 +49,26 @@ func TestMessengerReplyPromptMarksTheTurnAndFencesCustomerText(t *testing.T) {
 func TestMessengerReplyPromptListsTheZeroRules(t *testing.T) {
 	request := messengerReplyRequest("alo")
 	prompt := buildMessengerReplyMatchPrompt(request, messengerReplyLinesFromRequest(request), commentReplyRulesFromRequest(request), false)
-	for _, want := range []string{"chưa phải câu hỏi hoàn chỉnh", "trọn vẹn", "khiếu nại", "không chắc", "[Voice]"} {
+	for _, want := range []string{"chưa phải câu hỏi hoàn chỉnh", "ý khác hẳn", "không tình huống nào nói tới", "khiếu nại", "không chắc", "[Voice]"} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt misses zero rule %q", want)
+		}
+	}
+}
+
+// Production 2026-09-24: "có gói tekshot studio đúng ko? giá cả như nào ạ?" với tình huống
+// "khách hỏi về giá của tekshot studio" bị trả 0 vì luật 0 lấy "giá cụ thể" làm ví dụ.
+func TestMessengerReplyPromptPicksASituationOnTheSameTopic(t *testing.T) {
+	request := messengerReplyRequest("bên bạn có gói tekshot studio đúng ko? giá cả như nào ạ?")
+	prompt := buildMessengerReplyMatchPrompt(request, messengerReplyLinesFromRequest(request), commentReplyRulesFromRequest(request), false)
+	for _, want := range []string{"câu trả lời đầy đủ do chủ Page soạn", "nói đúng chủ đề khách hỏi", "không tính là ý riêng"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt misses the pick rule %q", want)
+		}
+	}
+	for _, banned := range []string{"giá cụ thể", "tồn kho"} {
+		if strings.Contains(prompt, banned) {
+			t.Fatalf("prompt still tells the model a price question has no answer: %q", banned)
 		}
 	}
 }

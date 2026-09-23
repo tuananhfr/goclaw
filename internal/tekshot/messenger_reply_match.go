@@ -104,10 +104,16 @@ func buildMessengerReplyMatchPrompt(request map[string]any, lines []messengerRep
 	for _, rule := range rules {
 		sb.WriteString(fmt.Sprintf("- %d: %s\n", rule.Index, rule.Situation))
 	}
+	// Model chỉ thấy tên tình huống, không thấy câu trả lời: phải nói rõ câu trả lời đã có sẵn,
+	// không thì nó tự cho rằng câu hỏi về giá/chi tiết "không có trong tình huống" và trả 0.
+	sb.WriteString("\n## Cách chọn\n")
+	sb.WriteString("Mỗi tình huống đã có câu trả lời đầy đủ do chủ Page soạn; bạn không thấy câu trả lời đó và không cần đoán nó chứa gì. ")
+	sb.WriteString("Tình huống nói đúng chủ đề khách hỏi (vd. tình huống \"khách hỏi giá X\" và khách hỏi giá X) thì chọn tình huống đó.\n")
 	sb.WriteString("\n## Trả {\"rule_index\": 0} khi\n")
 	sb.WriteString("1. Lượt cần trả lời chưa phải câu hỏi hoàn chỉnh (\"alo\", \"shop ơi\", \"cho em hỏi\") — trừ khi có tình huống chào hỏi phù hợp.\n")
-	sb.WriteString("2. Tình huống không trả lời trọn vẹn lượt đó (khách hỏi 2 ý, tình huống chỉ đáp 1 ý).\n")
-	sb.WriteString("3. Câu hỏi cần thông tin không có trong tình huống (giá cụ thể, tồn kho, đơn riêng của khách).\n")
+	sb.WriteString("2. Khách hỏi thêm một ý khác hẳn mà tình huống không nói tới (vd. hỏi giá VÀ hỏi địa chỉ). ")
+	sb.WriteString("Câu xác nhận, chào hỏi, câu đệm đi kèm câu hỏi chính (\"có gói X đúng không\", \"cho mình hỏi\", \"ạ\") không tính là ý riêng.\n")
+	sb.WriteString("3. Khách hỏi chủ đề mà không tình huống nào nói tới.\n")
 	sb.WriteString("4. Nội dung nhạy cảm: khiếu nại, đổi trả, chê, đòi gặp người — trừ khi có tình huống nói rõ trường hợp đó.\n")
 	sb.WriteString("5. Lượt chỉ có [Voice], [File] hoặc [Video] mà không tình huống nào nói rõ loại đó.\n")
 	sb.WriteString("6. Còn không chắc. Không ép chọn.\n\n")
