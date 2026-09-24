@@ -80,3 +80,55 @@ func TestNormalizedPresentation(t *testing.T) {
 		t.Fatal("unsynced template must fail")
 	}
 }
+
+func TestSpliceBlogBlockReplacesOnlyThatBlock(t *testing.T) {
+	orig := blockBaseDocument()
+	spliced, err := spliceBlogBlock(orig, "s1", 0, map[string]any{"type": "paragraph", "text": "Mới."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := enforceBlogRewriteScope(orig, spliced, "block:s1:0"); err != nil {
+		t.Fatalf("splice must satisfy the scope guard: %v", err)
+	}
+	if orig["sections"].([]any)[0].(map[string]any)["blocks"].([]any)[0].(map[string]any)["text"] == "Mới." {
+		t.Fatal("original must not be mutated")
+	}
+	for _, miss := range []struct {
+		id    string
+		index int
+	}{{"s1", 2}, {"zz", 0}} {
+		if _, err := spliceBlogBlock(orig, miss.id, miss.index, map[string]any{"type": "paragraph", "text": "x"}); err == nil {
+			t.Errorf("%s:%d must fail", miss.id, miss.index)
+		}
+	}
+	if _, err := spliceBlogBlock(orig, "s1", 0, nil); err == nil {
+		t.Error("a nil block must fail")
+	}
+}
+
+func TestBlogBlockCollectorKeepsTheBlockType(t *testing.T) {
+	c := NewBlogBlockCollector("s1", 0, "paragraph", validBlogSnapshot())
+	if res := c.Execute(nil, map[string]any{"reply": "x", "block": map[string]any{"type": "list", "items": []any{"a"}}}); !res.IsError {
+		t.Fatal("another type must be rejected")
+	}
+	if res := c.Execute(nil, map[string]any{"reply": "", "block": map[string]any{"type": "paragraph", "text": "a"}}); !res.IsError {
+		t.Fatal("an empty reply must be rejected")
+	}
+	if res := c.Execute(nil, map[string]any{"reply": "x", "block": map[string]any{"type": "paragraph", "text": " "}}); !res.IsError {
+		t.Fatal("an empty paragraph must be rejected inside the run, where the model can still fix it")
+	}
+	if res := c.Execute(nil, map[string]any{"reply": "ok", "block": map[string]any{"text": "Gọn hơn."}}); res.IsError {
+		t.Fatalf("a missing type defaults to the original: %s", res.ForLLM)
+	}
+	got := c.Report()["block"].(map[string]any)
+	if got["type"] != "paragraph" || got["text"] != "Gọn hơn." {
+		t.Fatalf("unexpected block: %v", got)
+	}
+	if !strings.Contains(c.Description(), "s1") {
+		t.Fatal("description must name the section")
+	}
+	image := NewBlogBlockCollector("s1", 1, "image", validBlogSnapshot())
+	if res := image.Execute(nil, map[string]any{"reply": "x", "block": map[string]any{"type": "image", "file_id": float64(999), "alt": "a"}}); !res.IsError {
+		t.Fatal("an image outside the snapshot must be rejected")
+	}
+}

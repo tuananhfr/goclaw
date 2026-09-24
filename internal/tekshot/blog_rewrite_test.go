@@ -172,3 +172,50 @@ func TestBlogBlockAt(t *testing.T) {
 		}
 	}
 }
+
+func TestEnforceBlogRewriteScopeForABlock(t *testing.T) {
+	orig := blockBaseDocument()
+	changed := func(mut func(d map[string]any)) map[string]any {
+		d := cloneJSON(orig)
+		mut(d)
+		return d
+	}
+	block := func(d map[string]any, s, i int) map[string]any {
+		return d["sections"].([]any)[s].(map[string]any)["blocks"].([]any)[i].(map[string]any)
+	}
+	onlyTarget := changed(func(d map[string]any) { block(d, 0, 0)["text"] = "Camera AI đếm sản phẩm." })
+	if err := enforceBlogRewriteScope(orig, onlyTarget, "block:s1:0"); err != nil {
+		t.Fatalf("the target block alone must pass: %v", err)
+	}
+	mustFail := map[string]map[string]any{
+		"another block": changed(func(d map[string]any) {
+			block(d, 0, 0)["text"] = "x"
+			block(d, 0, 1)["items"] = []any{"Khác"}
+		}),
+		"block type": changed(func(d map[string]any) { block(d, 0, 0)["type"] = "callout" }),
+		"section heading": changed(func(d map[string]any) {
+			block(d, 0, 0)["text"] = "x"
+			d["sections"].([]any)[0].(map[string]any)["heading"] = "A2"
+		}),
+		"another section": changed(func(d map[string]any) { d["sections"].([]any)[1].(map[string]any)["heading"] = "B2" }),
+		"title":           changed(func(d map[string]any) { d["title"] = "Khác" }),
+		"an extra block": changed(func(d map[string]any) {
+			s := d["sections"].([]any)[0].(map[string]any)
+			s["blocks"] = append(s["blocks"].([]any), map[string]any{"type": "paragraph", "text": "thêm"})
+		}),
+	}
+	for name, doc := range mustFail {
+		if err := enforceBlogRewriteScope(orig, doc, "block:s1:0"); err == nil {
+			t.Errorf("%s changed: the guard must fail", name)
+		}
+	}
+	if err := enforceBlogRewriteScope(orig, onlyTarget, "block:s1:5"); err == nil {
+		t.Error("an index past the end must fail")
+	}
+	if err := enforceBlogRewriteScope(orig, onlyTarget, "block:zz:0"); err == nil {
+		t.Error("an unknown section must fail")
+	}
+	if err := enforceBlogRewriteScope(orig, onlyTarget, "fragment:s1:0"); err == nil {
+		t.Error("a fragment scope has no document to compare")
+	}
+}

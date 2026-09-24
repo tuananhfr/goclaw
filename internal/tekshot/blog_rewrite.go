@@ -184,8 +184,8 @@ func validateBlogScope(scope string) error {
 }
 
 // enforceBlogRewriteScope is the guarantee the chat makes to the editor: an
-// edit scoped to one section cannot silently rewrite the rest, and a layout
-// change cannot touch a word. Compared on canonical JSON, not on trust.
+// edit scoped to one section or one block cannot silently rewrite the rest,
+// and a layout change cannot touch a word. Compared on canonical JSON, not on trust.
 func enforceBlogRewriteScope(original, updated map[string]any, scope string) error {
 	if err := validateBlogScope(scope); err != nil {
 		return err
@@ -201,6 +201,12 @@ func enforceBlogRewriteScope(original, updated map[string]any, scope string) err
 			return fmt.Errorf("presentation scope changed the document text")
 		}
 		return nil
+	}
+	if target, ok := parseBlogBlockScope(scope); ok {
+		if target.Fragment {
+			return fmt.Errorf("fragment scope returns a passage, not a document")
+		}
+		return enforceBlogBlockScope(original, updated, target)
 	}
 
 	sectionID := strings.TrimPrefix(scope, blogScopeSectionPrfx)
@@ -228,12 +234,78 @@ func enforceBlogRewriteScope(original, updated map[string]any, scope string) err
 	if !found {
 		return fmt.Errorf("section %s does not exist in the document", sectionID)
 	}
+	return blogTopLevelUnchanged(original, updated, "section scope "+sectionID)
+}
+
+func enforceBlogBlockScope(original, updated map[string]any, target blogBlockScope) error {
+	label := fmt.Sprintf("block scope %s:%d", target.SectionID, target.Index)
+	origSections, _ := original["sections"].([]any)
+	newSections, _ := updated["sections"].([]any)
+	if len(origSections) != len(newSections) {
+		return fmt.Errorf("%s changed the number of sections", label)
+	}
+	found := false
+	for i := range origSections {
+		origSec, _ := origSections[i].(map[string]any)
+		newSec, _ := newSections[i].(map[string]any)
+		id := stringFromMap(origSec, "id")
+		if stringFromMap(newSec, "id") != id {
+			return fmt.Errorf("%s changed section order or ids", label)
+		}
+		if id != target.SectionID {
+			if canonicalJSON(origSec) != canonicalJSON(newSec) {
+				return fmt.Errorf("%s changed section %s", label, id)
+			}
+			continue
+		}
+		found = true
+		if err := blogSectionOnlyBlockChanged(origSec, newSec, target.Index, label); err != nil {
+			return err
+		}
+	}
+	if !found {
+		return fmt.Errorf("section %s does not exist in the document", target.SectionID)
+	}
+	return blogTopLevelUnchanged(original, updated, label)
+}
+
+func blogSectionOnlyBlockChanged(origSec, newSec map[string]any, index int, label string) error {
+	for _, key := range []string{"heading", "level"} {
+		if canonicalJSON(origSec[key]) != canonicalJSON(newSec[key]) {
+			return fmt.Errorf("%s changed the section %s", label, key)
+		}
+	}
+	origBlocks, _ := origSec["blocks"].([]any)
+	newBlocks, _ := newSec["blocks"].([]any)
+	if len(origBlocks) != len(newBlocks) {
+		return fmt.Errorf("%s changed the number of blocks", label)
+	}
+	if index < 0 || index >= len(origBlocks) {
+		return fmt.Errorf("%s points past the end of the section", label)
+	}
+	for i := range origBlocks {
+		if i != index {
+			if canonicalJSON(origBlocks[i]) != canonicalJSON(newBlocks[i]) {
+				return fmt.Errorf("%s changed block %d", label, i)
+			}
+			continue
+		}
+		origBlock, _ := origBlocks[i].(map[string]any)
+		newBlock, _ := newBlocks[i].(map[string]any)
+		if stringFromMap(origBlock, "type") != stringFromMap(newBlock, "type") {
+			return fmt.Errorf("%s changed the block type", label)
+		}
+	}
+	return nil
+}
+
+func blogTopLevelUnchanged(original, updated map[string]any, label string) error {
 	for key, value := range original {
 		if key == "sections" {
 			continue
 		}
 		if canonicalJSON(value) != canonicalJSON(updated[key]) {
-			return fmt.Errorf("section scope %s changed document.%s", sectionID, key)
+			return fmt.Errorf("%s changed document.%s", label, key)
 		}
 	}
 	for key := range updated {
@@ -241,7 +313,7 @@ func enforceBlogRewriteScope(original, updated map[string]any, scope string) err
 			continue
 		}
 		if _, exists := original[key]; !exists && updated[key] != nil {
-			return fmt.Errorf("section scope %s added document.%s", sectionID, key)
+			return fmt.Errorf("%s added document.%s", label, key)
 		}
 	}
 	return nil

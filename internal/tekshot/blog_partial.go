@@ -15,6 +15,7 @@ import (
 const (
 	blogSectionToolName      = "submit_blog_section"
 	blogPresentationToolName = "submit_blog_presentation"
+	blogBlockToolName        = "submit_blog_block"
 )
 
 // blogCollector is what runBlogCollector drives: an ephemeral tool that keeps
@@ -72,6 +73,66 @@ func (t *BlogSectionCollector) Execute(_ context.Context, args map[string]any) *
 }
 
 func (t *BlogSectionCollector) Report() map[string]any { return cloneJSON(t.report) }
+
+// BlogBlockCollector accepts one rewritten block of the same type as the
+// original. The block is validated here, inside the run, so the model can fix
+// exactly what failed instead of the job failing after the run.
+type BlogBlockCollector struct {
+	sectionID string
+	index     int
+	blockType string
+	snapshot  blogSnapshot
+	report    map[string]any
+}
+
+func NewBlogBlockCollector(sectionID string, index int, blockType string, snapshot blogSnapshot) *BlogBlockCollector {
+	return &BlogBlockCollector{sectionID: sectionID, index: index, blockType: blockType, snapshot: snapshot}
+}
+
+func (t *BlogBlockCollector) Name() string { return blogBlockToolName }
+
+func (t *BlogBlockCollector) Description() string {
+	return fmt.Sprintf("Submit the rewritten block %d (type %q) of section %q. Send only that block and keep its type; every other part of the article is kept as it is.", t.index, t.blockType, t.sectionID)
+}
+
+func (t *BlogBlockCollector) Parameters() map[string]any {
+	document := blogSubmissionParameters()["properties"].(map[string]any)["document"].(map[string]any)
+	section := document["properties"].(map[string]any)["sections"].(map[string]any)["items"].(map[string]any)
+	block := section["properties"].(map[string]any)["blocks"].(map[string]any)["items"]
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"reply": map[string]any{"type": "string", "description": "Short note to the editor about what changed, in the article language"},
+			"block": block,
+		},
+		"required": []string{"reply", "block"},
+	}
+}
+
+func (t *BlogBlockCollector) Execute(_ context.Context, args map[string]any) *tools.Result {
+	if strings.TrimSpace(stringFromMap(args, "reply")) == "" {
+		return tools.ErrorResult("MODEL_OUTPUT_INVALID: reply is required")
+	}
+	block, ok := args["block"].(map[string]any)
+	if !ok {
+		return tools.ErrorResult("MODEL_OUTPUT_INVALID: block must be an object")
+	}
+	switch kind := strings.TrimSpace(stringFromMap(block, "type")); {
+	case kind == "":
+		block["type"] = t.blockType
+	case kind != t.blockType:
+		return tools.ErrorResult(fmt.Sprintf("MODEL_OUTPUT_INVALID: block.type must stay %q, got %q", t.blockType, kind))
+	}
+	normalised, err := validateBlogBlock(block, t.sectionID, t.snapshot)
+	if err != nil {
+		return tools.ErrorResult("MODEL_OUTPUT_INVALID: " + err.Error())
+	}
+	t.report = map[string]any{"reply": stringFromMap(args, "reply"), "block": normalised}
+	return tools.SilentResult("Block captured.")
+}
+
+func (t *BlogBlockCollector) Report() map[string]any { return cloneJSON(t.report) }
 
 // BlogPresentationCollector accepts a template choice alone.
 type BlogPresentationCollector struct {
@@ -144,6 +205,33 @@ func spliceBlogSection(original map[string]any, section map[string]any) (map[str
 		}
 	}
 	return nil, fmt.Errorf("section %s does not exist in the document", id)
+}
+
+// spliceBlogBlock returns a copy of original with one block replaced; the
+// section and the position must exist, nothing else moves.
+func spliceBlogBlock(original map[string]any, sectionID string, index int, block map[string]any) (map[string]any, error) {
+	if block == nil {
+		return nil, fmt.Errorf("block must be an object")
+	}
+	doc := cloneJSON(original)
+	if doc == nil {
+		return nil, fmt.Errorf("document could not be cloned")
+	}
+	sections, _ := doc["sections"].([]any)
+	for _, raw := range sections {
+		section, _ := raw.(map[string]any)
+		if stringFromMap(section, "id") != sectionID {
+			continue
+		}
+		blocks, _ := section["blocks"].([]any)
+		if index < 0 || index >= len(blocks) {
+			return nil, fmt.Errorf("block %d of section %s does not exist", index, sectionID)
+		}
+		blocks[index] = block
+		section["blocks"] = blocks
+		return doc, nil
+	}
+	return nil, fmt.Errorf("section %s does not exist in the document", sectionID)
 }
 
 // normalizedPresentation re-checks the presentation React sent back against
