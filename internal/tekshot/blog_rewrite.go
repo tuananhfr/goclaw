@@ -74,8 +74,8 @@ func blogBlockAt(document map[string]any, sectionID string, index int) (map[stri
 }
 
 // runBlogRewrite: scope "all" gets the whole document back from the model;
-// "section:<id>" and "presentation" only ever receive the changed part and
-// splice it into the original — the model never has to echo the article.
+// every narrower scope only receives the changed part — Go splices a section
+// or a block into the original, a fragment goes back to the editor verbatim.
 func (s *JobService) runBlogRewrite(ctx context.Context, job *store.TekshotJob, request map[string]any) (any, string, error) {
 	if strings.TrimSpace(stringFromMap(request, "instruction")) == "" {
 		return nil, "", fmt.Errorf("instruction is required")
@@ -100,57 +100,108 @@ func (s *JobService) runBlogRewrite(ctx context.Context, job *store.TekshotJob, 
 	if err != nil {
 		return nil, "", fmt.Errorf("current presentation is invalid: %w", err)
 	}
-	emptySEO := map[string]any{"meta_title": "", "meta_description": "", "keywords": "", "focus_keyword": ""}
-	traceTags := []string{"tekshot", "blog", "rewrite"}
-
-	var collector blogCollector
-	switch {
-	case scope == blogScopePresentation:
-		collector = NewBlogPresentationCollector(snap)
-	case strings.HasPrefix(scope, blogScopeSectionPrfx):
-		id := strings.TrimPrefix(scope, blogScopeSectionPrfx)
-		if !blogHasSection(original, id) {
-			return nil, "", fmt.Errorf("section %s does not exist in the document", id)
-		}
-		collector = NewBlogSectionCollector(id)
-	default:
-		collector = NewBlogDocumentCollector(snap)
-	}
-
-	report, usage, err := s.runBlogCollector(ctx, job, buildBlogRewritePrompt(request, scope), "tekshot blog rewrite", traceTags, collector)
+	collector, err := newBlogRewriteCollector(scope, original, request, snap)
 	if err != nil {
 		return nil, "", err
 	}
 
-	var result map[string]any
-	switch {
-	case scope == blogScopePresentation:
-		result = map[string]any{"reply": report["reply"], "document": original, "presentation": report["presentation"], "seo": emptySEO}
-	case strings.HasPrefix(scope, blogScopeSectionPrfx):
-		section, _ := report["section"].(map[string]any)
-		spliced, err := spliceBlogSection(original, section)
-		if err != nil {
-			return nil, "", fmt.Errorf("MODEL_OUTPUT_INVALID: %w", err)
-		}
-		updated, err := validateBlogDocument(spliced, snap)
-		if err != nil {
-			return nil, "", fmt.Errorf("MODEL_OUTPUT_INVALID: %w", err)
-		}
-		if err := enforceBlogRewriteScope(original, updated, scope); err != nil {
-			return nil, "", fmt.Errorf("MODEL_OUTPUT_INVALID: %w", err)
-		}
-		var presentation any
-		if currentPresentation != nil {
-			presentation = currentPresentation
-		}
-		result = map[string]any{"reply": report["reply"], "document": updated, "presentation": presentation, "seo": emptySEO}
-	default:
-		result = report
+	traceTags := []string{"tekshot", "blog", "rewrite"}
+	report, usage, err := s.runBlogCollector(ctx, job, buildBlogRewritePrompt(request, scope), "tekshot blog rewrite", traceTags, collector)
+	if err != nil {
+		return nil, "", err
+	}
+	result, err := assembleBlogRewriteResult(scope, original, report, currentPresentation, snap)
+	if err != nil {
+		return nil, "", fmt.Errorf("MODEL_OUTPUT_INVALID: %w", err)
 	}
 	if usage != nil {
 		result["usage"] = usage
 	}
 	return result, "Blog document rewritten (" + scope + ")", nil
+}
+
+// newBlogRewriteCollector picks the output tool for a scope and refuses a
+// target that is not in the document the editor sent, before any model call.
+func newBlogRewriteCollector(scope string, original, request map[string]any, snap blogSnapshot) (blogCollector, error) {
+	switch {
+	case scope == blogScopePresentation:
+		return NewBlogPresentationCollector(snap), nil
+	case strings.HasPrefix(scope, blogScopeSectionPrfx):
+		id := strings.TrimPrefix(scope, blogScopeSectionPrfx)
+		if !blogHasSection(original, id) {
+			return nil, fmt.Errorf("section %s does not exist in the document", id)
+		}
+		return NewBlogSectionCollector(id), nil
+	}
+	target, ok := parseBlogBlockScope(scope)
+	if !ok {
+		return NewBlogDocumentCollector(snap), nil
+	}
+	block, found := blogBlockAt(original, target.SectionID, target.Index)
+	if !found {
+		return nil, fmt.Errorf("block %d of section %s does not exist in the document", target.Index, target.SectionID)
+	}
+	blockType := stringFromMap(block, "type")
+	if !target.Fragment {
+		return NewBlogBlockCollector(target.SectionID, target.Index, blockType, snap), nil
+	}
+	if blockType != "paragraph" && blockType != "callout" {
+		return nil, fmt.Errorf("a passage can only be edited inside a paragraph or callout; block %d of section %s is a %s", target.Index, target.SectionID, blockType)
+	}
+	selection := blogSelectionText(request)
+	if strings.TrimSpace(selection) == "" {
+		return nil, fmt.Errorf("fragment scope needs selection.text")
+	}
+	if !strings.Contains(stringFromMap(block, "text"), selection) {
+		return nil, fmt.Errorf("the selected passage is no longer in block %d of section %s", target.Index, target.SectionID)
+	}
+	return NewBlogFragmentCollector(), nil
+}
+
+func blogSelectionText(request map[string]any) string {
+	selection, _ := request["selection"].(map[string]any)
+	return stringFromMap(selection, "text")
+}
+
+// assembleBlogRewriteResult turns what the collector captured into the job
+// result. Every spliced document is validated and scope-guarded again here.
+func assembleBlogRewriteResult(scope string, original, report, currentPresentation map[string]any, snap blogSnapshot) (map[string]any, error) {
+	emptySEO := map[string]any{"meta_title": "", "meta_description": "", "keywords": "", "focus_keyword": ""}
+	if scope == blogScopePresentation {
+		return map[string]any{"reply": report["reply"], "document": original, "presentation": report["presentation"], "seo": emptySEO}, nil
+	}
+	target, isBlockScope := parseBlogBlockScope(scope)
+	if isBlockScope && target.Fragment {
+		return map[string]any{"reply": report["reply"], "text": report["text"]}, nil
+	}
+	var spliced map[string]any
+	var err error
+	switch {
+	case strings.HasPrefix(scope, blogScopeSectionPrfx):
+		section, _ := report["section"].(map[string]any)
+		spliced, err = spliceBlogSection(original, section)
+	case isBlockScope:
+		block, _ := report["block"].(map[string]any)
+		spliced, err = spliceBlogBlock(original, target.SectionID, target.Index, block)
+	default:
+		return report, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	updated, err := validateBlogDocument(spliced, snap)
+	if err != nil {
+		return nil, err
+	}
+	if err := enforceBlogRewriteScope(original, updated, scope); err != nil {
+		return nil, err
+	}
+	// Assigned only when set: a nil map inside an interface would not be nil.
+	var presentation any
+	if currentPresentation != nil {
+		presentation = currentPresentation
+	}
+	return map[string]any{"reply": report["reply"], "document": updated, "presentation": presentation, "seo": emptySEO}, nil
 }
 
 func blogHasSection(document map[string]any, id string) bool {
@@ -355,12 +406,17 @@ func cloneJSON(value map[string]any) map[string]any {
 
 func buildBlogRewritePrompt(request map[string]any, scope string) string {
 	var sb strings.Builder
+	target, isBlockScope := parseBlogBlockScope(scope)
 	toolName := blogFinalToolName
 	switch {
 	case scope == blogScopePresentation:
 		toolName = blogPresentationToolName
 	case strings.HasPrefix(scope, blogScopeSectionPrfx):
 		toolName = blogSectionToolName
+	case isBlockScope && target.Fragment:
+		toolName = blogFragmentToolName
+	case isBlockScope:
+		toolName = blogBlockToolName
 	}
 	writeBlogContract(&sb, request, toolName)
 	sb.WriteString("TASK: revise an existing article according to the USER INSTRUCTION, within SCOPE.\n\n")
@@ -376,6 +432,10 @@ func buildBlogRewritePrompt(request map[string]any, scope string) string {
 	case strings.HasPrefix(scope, blogScopeSectionPrfx):
 		id := strings.TrimPrefix(scope, blogScopeSectionPrfx)
 		sb.WriteString("section:" + id + " — rewrite ONLY the section whose id is \"" + id + "\". Call " + blogSectionToolName + " with that single section (keep id \"" + id + "\", heading and level may change if asked). Every other section and field is kept automatically; do not resubmit them.\n")
+	case isBlockScope && target.Fragment:
+		writeBlogFragmentScope(&sb, request, target)
+	case isBlockScope:
+		writeBlogBlockScope(&sb, request, target)
 	default:
 		sb.WriteString("all — you may change any part of the document and the presentation, but keep existing file_id values and keep the article on the same topic unless the instruction says otherwise.\n")
 	}
@@ -385,4 +445,27 @@ func buildBlogRewritePrompt(request map[string]any, scope string) string {
 	sb.WriteString(strings.TrimSpace(stringFromMap(request, "instruction")))
 	sb.WriteString("\n")
 	return sb.String()
+}
+
+func writeBlogBlockScope(sb *strings.Builder, request map[string]any, target blogBlockScope) {
+	document, _ := request["document"].(map[string]any)
+	block, _ := blogBlockAt(document, target.SectionID, target.Index)
+	blockType := stringFromMap(block, "type")
+	fmt.Fprintf(sb, "block:%s:%d — rewrite ONLY block number %d (counting from 0) of section %q; it is a %s block. Call %s with that single block and keep type %q. Every other block, section and field is kept automatically; do not resubmit them. Keep roughly the original length unless the instruction asks otherwise.\n",
+		target.SectionID, target.Index, target.Index, target.SectionID, blockType, blogBlockToolName, blockType)
+	sb.WriteString("\n## TARGET BLOCK\n")
+	sb.WriteString(compactJSON(block))
+	sb.WriteString("\n")
+}
+
+func writeBlogFragmentScope(sb *strings.Builder, request map[string]any, target blogBlockScope) {
+	document, _ := request["document"].(map[string]any)
+	block, _ := blogBlockAt(document, target.SectionID, target.Index)
+	fmt.Fprintf(sb, "fragment:%s:%d — the editor highlighted a passage inside block number %d (counting from 0) of section %q. Rewrite ONLY that passage. Call %s with text = the replacement passage alone: no line breaks, inline **bold**, *italic* and [text](https://…) only, same language as the passage. Never repeat the rest of the block. The replacement must read naturally between the words right before and after the passage. If the instruction asks to delete the passage, send text exactly %s.\n",
+		target.SectionID, target.Index, target.Index, target.SectionID, blogFragmentToolName, blogFragmentDeleteToken)
+	sb.WriteString("\n## TARGET BLOCK\n")
+	sb.WriteString(compactJSON(block))
+	sb.WriteString("\n\n## SELECTED PASSAGE\n\"\"\"\n")
+	sb.WriteString(blogSelectionText(request))
+	sb.WriteString("\n\"\"\"\n")
 }

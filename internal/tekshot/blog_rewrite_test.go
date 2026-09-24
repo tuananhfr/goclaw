@@ -219,3 +219,129 @@ func TestEnforceBlogRewriteScopeForABlock(t *testing.T) {
 		t.Error("a fragment scope has no document to compare")
 	}
 }
+
+func TestNewBlogRewriteCollectorChecksTheTarget(t *testing.T) {
+	orig := blockBaseDocument()
+	withSelection := func(text string) map[string]any {
+		return map[string]any{"selection": map[string]any{"start": float64(0), "end": float64(len([]rune(text))), "text": text}}
+	}
+	cases := []struct {
+		scope   string
+		request map[string]any
+		tool    string
+	}{
+		{"all", nil, blogFinalToolName},
+		{"presentation", nil, blogPresentationToolName},
+		{"section:s2", nil, blogSectionToolName},
+		{"block:s1:1", nil, blogBlockToolName},
+		{"fragment:s1:0", withSelection("Camera AI"), blogFragmentToolName},
+	}
+	for _, c := range cases {
+		collector, err := newBlogRewriteCollector(c.scope, orig, c.request, validBlogSnapshot())
+		if err != nil {
+			t.Errorf("%s: %v", c.scope, err)
+			continue
+		}
+		if collector.Name() != c.tool {
+			t.Errorf("%s: tool %s, want %s", c.scope, collector.Name(), c.tool)
+		}
+	}
+	failing := []struct {
+		name    string
+		scope   string
+		request map[string]any
+	}{
+		{"unknown section", "section:zz", nil},
+		{"block past the end", "block:s1:2", nil},
+		{"fragment without selection", "fragment:s1:0", nil},
+		{"selection no longer in the block", "fragment:s1:0", withSelection("không có trong đoạn")},
+		{"fragment inside a list", "fragment:s1:1", withSelection("Nhanh")},
+	}
+	for _, c := range failing {
+		if _, err := newBlogRewriteCollector(c.scope, orig, c.request, validBlogSnapshot()); err == nil {
+			t.Errorf("%s: expected an error", c.name)
+		}
+	}
+}
+
+func TestAssembleBlogRewriteResult(t *testing.T) {
+	snap := validBlogSnapshot()
+	original, err := validateBlogDocument(blockBaseDocument(), snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := map[string]any{"template": "editorial", "options": map[string]any{}}
+
+	out, err := assembleBlogRewriteResult("block:s1:0", original, map[string]any{
+		"reply": "Gọn lại.",
+		"block": map[string]any{"type": "paragraph", "text": "Camera AI đếm sản phẩm."},
+	}, current, snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := out["document"].(map[string]any)
+	if got := doc["sections"].([]any)[0].(map[string]any)["blocks"].([]any)[0].(map[string]any)["text"]; got != "Camera AI đếm sản phẩm." {
+		t.Fatalf("block not spliced: %v", got)
+	}
+	if out["presentation"].(map[string]any)["template"] != "editorial" {
+		t.Fatal("the current presentation must ride along")
+	}
+	if out["seo"].(map[string]any)["meta_title"] != "" {
+		t.Fatal("a scoped result carries an empty seo block")
+	}
+
+	if _, err := assembleBlogRewriteResult("block:s1:0", original, map[string]any{
+		"reply": "x", "block": map[string]any{"type": "callout", "text": "y"},
+	}, nil, snap); err == nil {
+		t.Fatal("a block of another type must fail the guard")
+	}
+
+	fragment, err := assembleBlogRewriteResult("fragment:s1:0", original, map[string]any{"reply": "Gọn lại.", "text": "Camera"}, current, snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, has := fragment["document"]; has || fragment["text"] != "Camera" || fragment["reply"] != "Gọn lại." {
+		t.Fatalf("a fragment result is the passage only: %v", fragment)
+	}
+
+	section, err := assembleBlogRewriteResult("section:s2", original, map[string]any{
+		"reply":   "x",
+		"section": map[string]any{"id": "s2", "heading": "B2", "level": float64(2), "blocks": []any{map[string]any{"type": "paragraph", "text": "b2"}}},
+	}, nil, snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if section["presentation"] != nil {
+		t.Fatal("no current presentation must stay nil")
+	}
+}
+
+func TestBuildBlogRewritePromptForABlockAndAFragment(t *testing.T) {
+	request := map[string]any{
+		"instruction":  "Gọn lại",
+		"document":     blockBaseDocument(),
+		"presentation": nil,
+		"snapshot":     map[string]any{"website": map[string]any{"language": "vi"}},
+		"selection":    map[string]any{"start": float64(0), "end": float64(9), "text": "Camera AI"},
+	}
+	block := buildBlogRewritePrompt(request, "block:s1:1")
+	for _, want := range []string{blogBlockToolName, "## TARGET BLOCK", "\"type\":\"list\"", "block:s1:1", "USER INSTRUCTION:\nGọn lại"} {
+		if !strings.Contains(block, want) {
+			t.Errorf("block prompt lacks %q", want)
+		}
+	}
+	fragment := buildBlogRewritePrompt(request, "fragment:s1:0")
+	for _, want := range []string{blogFragmentToolName, "## TARGET BLOCK", "## SELECTED PASSAGE\n\"\"\"\nCamera AI\n\"\"\"", blogFragmentDeleteToken} {
+		if !strings.Contains(fragment, want) {
+			t.Errorf("fragment prompt lacks %q", want)
+		}
+	}
+	for _, prompt := range []string{block, fragment} {
+		if strings.Contains(prompt, "calling "+blogFinalToolName) {
+			t.Error("a scoped prompt must not ask for the whole document")
+		}
+		if strings.Contains(prompt, "create_image") {
+			t.Fatal("prompt must never mention image generation")
+		}
+	}
+}
