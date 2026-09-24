@@ -132,3 +132,36 @@ func TestBlogBlockCollectorKeepsTheBlockType(t *testing.T) {
 		t.Fatal("an image outside the snapshot must be rejected")
 	}
 }
+
+func TestBlogFragmentCollectorReturnsOnlyThePassage(t *testing.T) {
+	rejected := map[string]map[string]any{
+		"empty reply": {"reply": "", "text": "x"},
+		"empty text":  {"reply": "x", "text": "  "},
+		"line break":  {"reply": "x", "text": "dòng 1\ndòng 2"},
+		"too long":    {"reply": "x", "text": strings.Repeat("a", 5001)},
+	}
+	for name, args := range rejected {
+		if res := NewBlogFragmentCollector().Execute(nil, args); !res.IsError {
+			t.Errorf("%s must be rejected", name)
+		}
+	}
+	c := NewBlogFragmentCollector()
+	if res := c.Execute(nil, map[string]any{"reply": "Gọn lại.", "text": "  đếm **nhanh** hơn  "}); res.IsError {
+		t.Fatalf("valid passage rejected: %s", res.ForLLM)
+	}
+	if got := c.Report()["text"]; got != "đếm **nhanh** hơn" {
+		t.Fatalf("text must be trimmed, got %q", got)
+	}
+	for _, token := range []string{"%%DELETE_PASSAGE%%", "`%%DELETE_PASSAGE%%`", "\"%%delete_passage%%\"", " %%DELETE_PASSAGE%%\n"} {
+		d := NewBlogFragmentCollector()
+		if res := d.Execute(nil, map[string]any{"reply": "Đã xoá.", "text": token}); res.IsError {
+			t.Fatalf("%q rejected: %s", token, res.ForLLM)
+		}
+		if d.Report()["text"] != blogFragmentDeleteToken {
+			t.Errorf("%q must normalise to the delete token", token)
+		}
+	}
+	if !strings.Contains(c.Description(), blogFragmentDeleteToken) {
+		t.Fatal("description must teach the delete token")
+	}
+}

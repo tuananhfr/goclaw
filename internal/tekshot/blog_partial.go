@@ -16,6 +16,11 @@ const (
 	blogSectionToolName      = "submit_blog_section"
 	blogPresentationToolName = "submit_blog_presentation"
 	blogBlockToolName        = "submit_blog_block"
+	blogFragmentToolName     = "submit_blog_fragment"
+	// Same token as tekshot_studio's post fragment edit: an empty answer is
+	// ambiguous, a sentinel is not.
+	blogFragmentDeleteToken = "%%DELETE_PASSAGE%%"
+	blogFragmentMaxRunes    = 5000
 )
 
 // blogCollector is what runBlogCollector drives: an ephemeral tool that keeps
@@ -133,6 +138,59 @@ func (t *BlogBlockCollector) Execute(_ context.Context, args map[string]any) *to
 }
 
 func (t *BlogBlockCollector) Report() map[string]any { return cloneJSON(t.report) }
+
+// BlogFragmentCollector accepts the replacement for a highlighted passage.
+// Go never splices it: the editor holds the exact offsets and does the
+// splice, the same contract as the Facebook post fragment edit.
+type BlogFragmentCollector struct {
+	report map[string]any
+}
+
+func NewBlogFragmentCollector() *BlogFragmentCollector { return &BlogFragmentCollector{} }
+
+func (t *BlogFragmentCollector) Name() string { return blogFragmentToolName }
+
+func (t *BlogFragmentCollector) Description() string {
+	return "Submit the replacement for the highlighted passage only, as one inline passage without line breaks. Never resend the rest of the block. To delete the passage, send text exactly " + blogFragmentDeleteToken + "."
+}
+
+func (t *BlogFragmentCollector) Parameters() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"reply": map[string]any{"type": "string", "description": "Short note to the editor about what changed, in the article language"},
+			"text":  map[string]any{"type": "string", "description": "The replacement passage alone; inline **bold**, *italic*, [text](https://…) allowed; or " + blogFragmentDeleteToken},
+		},
+		"required": []string{"reply", "text"},
+	}
+}
+
+func (t *BlogFragmentCollector) Execute(_ context.Context, args map[string]any) *tools.Result {
+	reply := strings.TrimSpace(stringFromMap(args, "reply"))
+	if reply == "" {
+		return tools.ErrorResult("MODEL_OUTPUT_INVALID: reply is required")
+	}
+	raw := stringFromMap(args, "text")
+	// Models wrap the sentinel in quotes or backticks; accept those, nothing looser.
+	if strings.EqualFold(strings.Trim(raw, " \t\r\n\"'`"), blogFragmentDeleteToken) {
+		t.report = map[string]any{"reply": reply, "text": blogFragmentDeleteToken}
+		return tools.SilentResult("Deletion captured.")
+	}
+	text := strings.TrimSpace(raw)
+	switch {
+	case text == "":
+		return tools.ErrorResult("MODEL_OUTPUT_INVALID: text must not be empty — to delete the passage send " + blogFragmentDeleteToken)
+	case strings.ContainsAny(text, "\r\n"):
+		return tools.ErrorResult("MODEL_OUTPUT_INVALID: text must be one inline passage without line breaks")
+	case len([]rune(text)) > blogFragmentMaxRunes:
+		return tools.ErrorResult(fmt.Sprintf("MODEL_OUTPUT_INVALID: text exceeds %d characters", blogFragmentMaxRunes))
+	}
+	t.report = map[string]any{"reply": reply, "text": text}
+	return tools.SilentResult("Passage captured.")
+}
+
+func (t *BlogFragmentCollector) Report() map[string]any { return cloneJSON(t.report) }
 
 // BlogPresentationCollector accepts a template choice alone.
 type BlogPresentationCollector struct {
