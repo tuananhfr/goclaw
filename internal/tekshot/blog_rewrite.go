@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/nextlevelbuilder/goclaw/internal/store"
@@ -13,7 +15,63 @@ const (
 	blogScopeAll          = "all"
 	blogScopePresentation = "presentation"
 	blogScopeSectionPrfx  = "section:"
+	blogScopeBlockPrfx    = "block:"
+	blogScopeFragmentPrfx = "fragment:"
 )
+
+// No leading zeros so one block has exactly one spelling; 999 is far past any real section.
+var blogBlockIndex = regexp.MustCompile(`^(0|[1-9][0-9]{0,2})$`)
+
+// blogBlockScope is a parsed block:/fragment: scope. Document v1 has no block
+// ids, so a block is addressed by its section id and its position.
+type blogBlockScope struct {
+	Fragment  bool
+	SectionID string
+	Index     int
+}
+
+func parseBlogBlockScope(scope string) (blogBlockScope, bool) {
+	var rest string
+	fragment := false
+	switch {
+	case strings.HasPrefix(scope, blogScopeBlockPrfx):
+		rest = strings.TrimPrefix(scope, blogScopeBlockPrfx)
+	case strings.HasPrefix(scope, blogScopeFragmentPrfx):
+		rest, fragment = strings.TrimPrefix(scope, blogScopeFragmentPrfx), true
+	default:
+		return blogBlockScope{}, false
+	}
+	cut := strings.LastIndex(rest, ":")
+	if cut <= 0 {
+		return blogBlockScope{}, false
+	}
+	sectionID, digits := rest[:cut], rest[cut+1:]
+	if len(sectionID) > 32 || !blogSectionID.MatchString(sectionID) || !blogBlockIndex.MatchString(digits) {
+		return blogBlockScope{}, false
+	}
+	index, err := strconv.Atoi(digits)
+	if err != nil {
+		return blogBlockScope{}, false
+	}
+	return blogBlockScope{Fragment: fragment, SectionID: sectionID, Index: index}, true
+}
+
+func blogBlockAt(document map[string]any, sectionID string, index int) (map[string]any, bool) {
+	sections, _ := document["sections"].([]any)
+	for _, raw := range sections {
+		section, _ := raw.(map[string]any)
+		if stringFromMap(section, "id") != sectionID {
+			continue
+		}
+		blocks, _ := section["blocks"].([]any)
+		if index < 0 || index >= len(blocks) {
+			return nil, false
+		}
+		block, ok := blocks[index].(map[string]any)
+		return block, ok
+	}
+	return nil, false
+}
 
 // runBlogRewrite: scope "all" gets the whole document back from the model;
 // "section:<id>" and "presentation" only ever receive the changed part and
@@ -115,8 +173,13 @@ func validateBlogScope(scope string) error {
 			return fmt.Errorf("scope section id %q is invalid", id)
 		}
 		return nil
+	case strings.HasPrefix(scope, blogScopeBlockPrfx), strings.HasPrefix(scope, blogScopeFragmentPrfx):
+		if _, ok := parseBlogBlockScope(scope); !ok {
+			return fmt.Errorf("scope %q is invalid (use block:<section id>:<index> or fragment:<section id>:<index>)", scope)
+		}
+		return nil
 	default:
-		return fmt.Errorf("scope %q is not supported (all | section:<id> | presentation)", scope)
+		return fmt.Errorf("scope %q is not supported (all | section:<id> | block:<id>:<n> | fragment:<id>:<n> | presentation)", scope)
 	}
 }
 

@@ -157,7 +157,7 @@ func normalizeBlogAudit(raw map[string]any, sectionIDs map[string]bool) map[stri
 				continue
 			}
 			scope := strings.TrimSpace(stringFromMap(entry, "scope"))
-			if validateBlogScope(scope) != nil || (strings.HasPrefix(scope, blogScopeSectionPrfx) && !sectionIDs[strings.TrimPrefix(scope, blogScopeSectionPrfx)]) {
+			if !isBlogAuditScope(scope, sectionIDs) {
 				scope = blogScopeAll
 			}
 			title := strings.TrimSpace(stringFromMap(entry, "title"))
@@ -174,6 +174,19 @@ func normalizeBlogAudit(raw map[string]any, sectionIDs map[string]bool) map[stri
 		"ai_readability_score": clampScore(numberFromMap(raw, "ai_readability_score")),
 		"issues":               issues,
 		"suggestions":          suggestions,
+	}
+}
+
+// isBlogAuditScope: a suggestion goes straight to blog_rewrite without a
+// selection, so only whole-article, layout and existing-section scopes are usable.
+func isBlogAuditScope(scope string, sectionIDs map[string]bool) bool {
+	switch {
+	case scope == blogScopeAll, scope == blogScopePresentation:
+		return true
+	case strings.HasPrefix(scope, blogScopeSectionPrfx):
+		return sectionIDs[strings.TrimPrefix(scope, blogScopeSectionPrfx)]
+	default:
+		return false
 	}
 }
 

@@ -108,3 +108,19 @@ func TestBlogAuditCollectorNormalizesAndKeepsEmptyAudits(t *testing.T) {
 		t.Fatal("a clean audit is a valid result, not an unreadable one")
 	}
 }
+
+func TestNormalizeBlogAuditKeepsBlockScopesOutOfSuggestions(t *testing.T) {
+	raw := map[string]any{"suggestions": []any{
+		map[string]any{"instruction": "Sửa câu đầu", "scope": "block:s1:0"},
+		map[string]any{"instruction": "Gọn lại", "scope": "fragment:s1:0"},
+		map[string]any{"instruction": "Viết lại phần 1", "scope": "section:s1"},
+	}}
+	out := normalizeBlogAudit(raw, map[string]bool{"s1": true})
+	got := []string{}
+	for _, item := range out["suggestions"].([]any) {
+		got = append(got, item.(map[string]any)["scope"].(string))
+	}
+	if strings.Join(got, ",") != "all,all,section:s1" {
+		t.Fatalf("an audit suggestion carries no selection, block scopes must fall back to all: %v", got)
+	}
+}

@@ -117,3 +117,58 @@ func TestBlogToolAllowHasNoImageTools(t *testing.T) {
 		}
 	}
 }
+
+func blockBaseDocument() map[string]any {
+	doc := rewriteBaseDocument()
+	doc["sections"].([]any)[0].(map[string]any)["blocks"] = []any{
+		map[string]any{"type": "paragraph", "text": "Camera AI giúp **đếm** sản phẩm mỗi ca."},
+		map[string]any{"type": "list", "ordered": false, "items": []any{"Nhanh", "Chính xác"}},
+	}
+	return doc
+}
+
+func TestBlogBlockScopeParsing(t *testing.T) {
+	valid := map[string]blogBlockScope{
+		"block:s1:0":           {SectionID: "s1", Index: 0},
+		"fragment:s-2:12":      {Fragment: true, SectionID: "s-2", Index: 12},
+		"block:gioi-thieu:999": {SectionID: "gioi-thieu", Index: 999},
+	}
+	for scope, want := range valid {
+		got, ok := parseBlogBlockScope(scope)
+		if !ok || got != want {
+			t.Errorf("%s: got %+v %v, want %+v", scope, got, ok, want)
+		}
+		if err := validateBlogScope(scope); err != nil {
+			t.Errorf("%s must be a valid scope: %v", scope, err)
+		}
+	}
+	invalid := []string{
+		"block:s1", "block:S1:0", "block:s1:01", "block:s1:-1", "block::0",
+		"fragment:s1:1000", "block:s1:0:1", "block:1s:0", "blocks:s1:0",
+		"fragment:" + strings.Repeat("a", 33) + ":0",
+	}
+	for _, scope := range invalid {
+		if _, ok := parseBlogBlockScope(scope); ok {
+			t.Errorf("%s must not parse", scope)
+		}
+		if err := validateBlogScope(scope); err == nil {
+			t.Errorf("%s must be rejected", scope)
+		}
+	}
+}
+
+func TestBlogBlockAt(t *testing.T) {
+	doc := blockBaseDocument()
+	block, ok := blogBlockAt(doc, "s1", 1)
+	if !ok || block["type"] != "list" {
+		t.Fatalf("block s1:1 must be the list, got %v %v", block, ok)
+	}
+	for _, miss := range []struct {
+		id    string
+		index int
+	}{{"s1", 2}, {"s1", -1}, {"zz", 0}} {
+		if _, ok := blogBlockAt(doc, miss.id, miss.index); ok {
+			t.Errorf("%s:%d must not exist", miss.id, miss.index)
+		}
+	}
+}
