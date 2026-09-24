@@ -26,13 +26,14 @@ func messengerReplyRequest(turnText string) map[string]any {
 	}
 }
 
-func TestMessengerReplyLinesKeepTheLastFifteen(t *testing.T) {
-	raw := make([]any, 0, 20)
-	for i := 0; i < 20; i++ {
+// Drupal gửi mọi tin chưa vào hồ sơ khách (tới 50); Go không được cắt bớt phần đó.
+func TestMessengerReplyLinesKeepEveryUnsummarisedMessage(t *testing.T) {
+	raw := make([]any, 0, 60)
+	for i := 0; i < 60; i++ {
 		raw = append(raw, map[string]any{"at": "x", "from": "Khách", "text": "t", "turn": false})
 	}
-	if got := messengerReplyLinesFromRequest(map[string]any{"transcript": raw}); len(got) != 15 {
-		t.Fatalf("expected 15 lines, got %d", len(got))
+	if got := messengerReplyLinesFromRequest(map[string]any{"transcript": raw}); len(got) != 50 {
+		t.Fatalf("expected 50 lines, got %d", len(got))
 	}
 }
 

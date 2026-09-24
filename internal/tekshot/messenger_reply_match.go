@@ -17,7 +17,8 @@ import (
 const (
 	TekshotJobTypeMessengerReplyMatch = "messenger_reply_match"
 
-	messengerReplyMaxLines       = 15
+	// Drupal gửi mọi tin chưa vào hồ sơ khách; hồ sơ viết lại khi đủ 50 tin nên phần đó không quá 50.
+	messengerReplyMaxLines       = 50
 	messengerReplyMaxLineRunes   = 1000
 	messengerReplyMaxMemoryRunes = 6000
 	messengerReplyTimeout        = 60 * time.Second
