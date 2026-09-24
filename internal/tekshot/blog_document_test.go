@@ -221,3 +221,45 @@ func TestBlogCollectorKeepsLastValidReport(t *testing.T) {
 		t.Fatal("Report must return a clone")
 	}
 }
+
+// Drupal's BlogDocument refuses these lengths; a document Go accepts must
+// never be one the site then rejects after a whole model run.
+func TestValidateBlogDocumentMatchesDrupalLengthLimits(t *testing.T) {
+	withField := func(mut func(d map[string]any)) map[string]any {
+		d := cloneJSON(rewriteBaseDocument())
+		mut(d)
+		return d
+	}
+	cta := func(href string) func(d map[string]any) {
+		return func(d map[string]any) {
+			d["cta"] = map[string]any{"heading": "", "text": "", "button": map[string]any{"label": "Liên hệ", "href": href}}
+		}
+	}
+	source := func(url string) func(d map[string]any) {
+		return func(d map[string]any) {
+			d["sources"] = []any{map[string]any{"title": "Nguồn", "url": url}}
+		}
+	}
+	pad := func(prefix string, total int) string { return prefix + strings.Repeat("a", total-len(prefix)) }
+
+	accepted := map[string]map[string]any{
+		"language 12":  withField(func(d map[string]any) { d["language"] = strings.Repeat("v", 12) }),
+		"cta href 500": withField(cta(pad("https://vidu.vn/", 500))),
+		"source 1000":  withField(source(pad("https://vidu.vn/", 1000))),
+	}
+	for name, doc := range accepted {
+		if _, err := validateBlogDocument(doc, validBlogSnapshot()); err != nil {
+			t.Errorf("%s must pass: %v", name, err)
+		}
+	}
+	refused := map[string]map[string]any{
+		"language 13":  withField(func(d map[string]any) { d["language"] = strings.Repeat("v", 13) }),
+		"cta href 501": withField(cta(pad("https://vidu.vn/", 501))),
+		"source 1001":  withField(source(pad("https://vidu.vn/", 1001))),
+	}
+	for name, doc := range refused {
+		if _, err := validateBlogDocument(doc, validBlogSnapshot()); err == nil {
+			t.Errorf("%s must be refused like Drupal refuses it", name)
+		}
+	}
+}

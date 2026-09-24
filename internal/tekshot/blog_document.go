@@ -228,6 +228,10 @@ func validateBlogDocument(d map[string]any, snap blogSnapshot) (map[string]any, 
 	if language == "" {
 		language = "vi"
 	}
+	// Limits below mirror BlogDocument.php, which would refuse the save after the run.
+	if len([]rune(language)) > 12 {
+		return nil, fmt.Errorf("document.language must be at most 12 characters")
+	}
 
 	leadRaw, _ := d["lead"].(map[string]any)
 	lead, err := blogStringList(leadRaw["paragraphs"], "document.lead.paragraphs", true)
@@ -296,6 +300,9 @@ func validateBlogDocument(d map[string]any, snap blogSnapshot) (map[string]any, 
 		button, _ := cta["button"].(map[string]any)
 		if label := strings.TrimSpace(stringFromMap(button, "label")); label != "" {
 			href := strings.TrimSpace(stringFromMap(button, "href"))
+			if len([]rune(href)) > 500 {
+				return nil, fmt.Errorf("document.cta.button.href must be at most 500 characters")
+			}
 			if !blogHTTPSOrPath.MatchString(href) {
 				return nil, fmt.Errorf("document.cta.button.href must be https:// or a /path")
 			}
@@ -316,6 +323,9 @@ func validateBlogDocument(d map[string]any, snap blogSnapshot) (map[string]any, 
 		for i, raw := range rawSources {
 			item, _ := raw.(map[string]any)
 			url := strings.TrimSpace(stringFromMap(item, "url"))
+			if len([]rune(url)) > 1000 {
+				return nil, fmt.Errorf("document.sources[%d].url must be at most 1000 characters", i)
+			}
 			if !blogHTTPS.MatchString(url) {
 				return nil, fmt.Errorf("document.sources[%d].url must be https://", i)
 			}
