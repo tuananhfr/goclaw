@@ -156,7 +156,10 @@ func anyStrings(v any) []string {
 type replyDataVisionRunner func(ctx context.Context, img extractedImage) (*replyDataTable, error)
 
 // readTablesFromImages: ảnh đọc hỏng được liệt kê chứ không làm hỏng cả file.
-func readTablesFromImages(ctx context.Context, images []extractedImage, run replyDataVisionRunner) ([]replyDataTable, []string) {
+// sourceFilename là tên file gốc người dùng tải lên, dùng để nhận ra ảnh đơn
+// (Ref trùng chính tên file) — Drupal đã nối tên file vào trước rồi, nối lại
+// ở đây thành "tên file · tên file · …".
+func readTablesFromImages(ctx context.Context, images []extractedImage, sourceFilename string, run replyDataVisionRunner) ([]replyDataTable, []string) {
 	var tables []replyDataTable
 	var unread []string
 	for _, img := range images {
@@ -174,10 +177,28 @@ func readTablesFromImages(ctx context.Context, images []extractedImage, run repl
 			continue
 		}
 		table.Source = "vision"
-		table.Name = strings.TrimSpace(img.Ref + " · " + table.Name)
+		table.Name = replyDataVisionTableName(img.Ref, sourceFilename, table.Name)
 		tables = append(tables, *table)
 	}
 	return tables, unread
+}
+
+// replyDataVisionTableName ghép Ref (vd "Trang 1") với tên bảng model đọc được.
+// Ảnh đơn (Ref = chính tên file nguồn) chỉ giữ tên bảng, không lặp tên file;
+// tên rỗng từ model không để lại dấu "·" lửng.
+func replyDataVisionTableName(ref, sourceFilename, name string) string {
+	ref = strings.TrimSpace(ref)
+	name = strings.TrimSpace(name)
+	if sourceFilename != "" && ref == sourceFilename {
+		if name == "" {
+			return "Bảng"
+		}
+		return name
+	}
+	if name == "" {
+		return ref
+	}
+	return strings.TrimSpace(ref + " · " + name)
 }
 
 const replyDataVisionPrompt = `The attached image comes from a shop's own file (menu, price list, product list, schedule).
@@ -259,10 +280,12 @@ func (s *JobService) runReplyDataExtract(ctx context.Context, job *store.Tekshot
 	if err != nil {
 		return nil, "", err
 	}
-	return s.replyDataResult(ctx, ext, s.replyDataVisionRunner(job))
+	// filepath.Base(srcPath) là tên file thật sự trên đĩa (đã qua safeSourceFilename),
+	// đúng bằng Ref mà knowledge_extract.py gán cho ảnh đơn — không phải "filename" thô.
+	return s.replyDataResult(ctx, ext, filepath.Base(srcPath), s.replyDataVisionRunner(job))
 }
 
-func (s *JobService) replyDataResult(ctx context.Context, ext *tableExtraction, run replyDataVisionRunner) (any, string, error) {
+func (s *JobService) replyDataResult(ctx context.Context, ext *tableExtraction, sourceFilename string, run replyDataVisionRunner) (any, string, error) {
 	var tables []replyDataTable
 	for _, t := range ext.Tables {
 		t.Source = "parsed"
@@ -270,7 +293,7 @@ func (s *JobService) replyDataResult(ctx context.Context, ext *tableExtraction, 
 			tables = append(tables, c)
 		}
 	}
-	vision, unread := readTablesFromImages(ctx, ext.Images, run)
+	vision, unread := readTablesFromImages(ctx, ext.Images, sourceFilename, run)
 	// A cancelled/timed-out run must fail the job, not complete it with whatever
 	// images happened to finish — process() would otherwise MarkCompleted over a
 	// job the caller already cancelled.

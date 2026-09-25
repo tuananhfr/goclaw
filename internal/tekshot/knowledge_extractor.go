@@ -170,7 +170,7 @@ type extractedImage struct {
 	ImagePath string `json:"image_path"`
 }
 
-// tableExtraction is the stdout contract of knowledge_extract.py --mode tables.
+// tableExtraction là hợp đồng stdout của knowledge_extract.py --mode tables.
 type tableExtraction struct {
 	OK              bool             `json:"ok"`
 	Kind            string           `json:"kind"`

@@ -197,6 +197,16 @@ def _cell(c):
     return str(c).replace("\n", " ").replace("|", "/").strip()
 
 
+def _cell_for_table(c):
+    """Như _cell, nhưng giữ "|" và đổi newline nội bộ (Alt+Enter Excel) thành
+    "; " để ReplyDataText::aliases bên PHP tách được từng tên gọi khác."""
+    if c is None:
+        return ""
+    if isinstance(c, float) and c.is_integer():
+        return str(int(c))
+    return str(c).replace("\n", "; ").strip()
+
+
 # ---------- docx ----------
 
 def extract_docx(path):
@@ -236,10 +246,10 @@ def _text_unit(lines, heading, label, n):
 
 # ---------- xlsx ----------
 
-def _sheet_rows(ws):
+def _sheet_rows(ws, cell_fn=_cell):
     rows = []
     for r in ws.iter_rows(values_only=True):
-        row = [_cell(c) for c in (r or ())]
+        row = [cell_fn(c) for c in (r or ())]
         while row and row[-1] == "":
             row.pop()
         if not any(row):
@@ -317,7 +327,7 @@ def extract_pptx(path, stats):
 
 def _table(name, rows):
     """Dòng có chữ đầu tiên là tiêu đề; bảng cần ít nhất một dòng dữ liệu."""
-    rows = [[_cell(c) for c in r] for r in rows if r and any(_cell(c) for c in r)]
+    rows = [[_cell_for_table(c) for c in r] for r in rows if r and any(_cell_for_table(c) for c in r)]
     if len(rows) < 2:
         return None
     width = max(len(r) for r in rows)
@@ -376,7 +386,7 @@ def extract_tables(path, mime, out_dir, max_scan_pages, dpi):
         wb = _open_xlsx(path)
         for ws in wb.worksheets:
             stats["sheets"] += 1
-            rows, reason = _sheet_rows(ws)
+            rows, reason = _sheet_rows(ws, _cell_for_table)
             if reason:
                 reasons.append(reason)
             t = _table(ws.title, rows)

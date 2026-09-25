@@ -78,12 +78,45 @@ func TestReadTablesFromImagesSkipsFailuresAndEmpty(t *testing.T) {
 		}
 		return nil, nil
 	}
-	tables, unread := readTablesFromImages(context.Background(), imgs, run)
+	tables, unread := readTablesFromImages(context.Background(), imgs, "menu.xlsx", run)
 	if len(tables) != 1 || tables[0].Name != "Trang 1 · Menu" || tables[0].Source != "vision" {
 		t.Fatalf("tables %+v", tables)
 	}
 	if len(unread) != 1 || unread[0] != "Trang 2" {
 		t.Fatalf("unread %v", unread)
+	}
+}
+
+func TestReadTablesFromImagesSingleImageUsesNameOnly(t *testing.T) {
+	imgs := []extractedImage{{Ref: "menu.jpg"}}
+	run := func(_ context.Context, img extractedImage) (*replyDataTable, error) {
+		return &replyDataTable{Name: "Bảng giá", Columns: []string{"A"}, Rows: [][]string{{"1"}}}, nil
+	}
+	tables, _ := readTablesFromImages(context.Background(), imgs, "menu.jpg", run)
+	if len(tables) != 1 || tables[0].Name != "Bảng giá" {
+		t.Fatalf("single-image ref must not repeat the filename, got %+v", tables)
+	}
+}
+
+func TestReadTablesFromImagesSingleImageEmptyNameFallsBack(t *testing.T) {
+	imgs := []extractedImage{{Ref: "menu.jpg"}}
+	run := func(_ context.Context, img extractedImage) (*replyDataTable, error) {
+		return &replyDataTable{Name: "", Columns: []string{"A"}, Rows: [][]string{{"1"}}}, nil
+	}
+	tables, _ := readTablesFromImages(context.Background(), imgs, "menu.jpg", run)
+	if len(tables) != 1 || tables[0].Name != "Bảng" {
+		t.Fatalf("empty vision name on a single image must fall back to a plain label, got %+v", tables)
+	}
+}
+
+func TestReadTablesFromImagesMultiPageEmptyNameHasNoDanglingSeparator(t *testing.T) {
+	imgs := []extractedImage{{Ref: "Trang 1"}}
+	run := func(_ context.Context, img extractedImage) (*replyDataTable, error) {
+		return &replyDataTable{Name: "", Columns: []string{"A"}, Rows: [][]string{{"1"}}}, nil
+	}
+	tables, _ := readTablesFromImages(context.Background(), imgs, "menu.jpg", run)
+	if len(tables) != 1 || tables[0].Name != "Trang 1" {
+		t.Fatalf("empty name on a multi-page ref must not leave a dangling separator, got %+v", tables)
 	}
 }
 
@@ -95,7 +128,7 @@ func TestReplyDataExtractIsSupported(t *testing.T) {
 
 func TestRunReplyDataExtractNoTables(t *testing.T) {
 	s := &JobService{}
-	res, progress, err := s.replyDataResult(context.Background(), &tableExtraction{OK: true}, func(context.Context, extractedImage) (*replyDataTable, error) { return nil, nil })
+	res, progress, err := s.replyDataResult(context.Background(), &tableExtraction{OK: true}, "", func(context.Context, extractedImage) (*replyDataTable, error) { return nil, nil })
 	if err != nil || progress != "Đã tách 0 bảng" {
 		t.Fatalf("err=%v progress=%q", err, progress)
 	}
@@ -116,7 +149,7 @@ func TestRunReplyDataExtractCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	ext := &tableExtraction{OK: true, Images: []extractedImage{{Ref: "Trang 1"}}}
-	_, _, err := s.replyDataResult(ctx, ext, func(context.Context, extractedImage) (*replyDataTable, error) {
+	_, _, err := s.replyDataResult(ctx, ext, "", func(context.Context, extractedImage) (*replyDataTable, error) {
 		t.Fatal("must not run vision on an already-cancelled context")
 		return nil, nil
 	})
