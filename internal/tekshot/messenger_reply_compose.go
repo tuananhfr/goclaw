@@ -2,6 +2,7 @@ package tekshot
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"regexp"
@@ -38,8 +39,9 @@ const (
 )
 
 var (
-	messengerVerdictKeyPattern   = regexp.MustCompile(`(?i)["']?verdict["']?\s*[:=]\s*`)
-	messengerVerdictTokenPattern = regexp.MustCompile(`(?i)\b(PASS|FAIL)\b`)
+	messengerVerdictKeyPattern = regexp.MustCompile(`(?i)["']?verdict["']?\s*[:=]\s*`)
+	// \b coi "-" là biên: phải bắt cả đuôi dính liền để "PASS-WITH-ISSUES" không bị đọc là PASS.
+	messengerVerdictTokenPattern = regexp.MustCompile(`(?i)\b(PASS|FAIL)([\w-]*)`)
 )
 
 type messengerComposeScript struct {
@@ -550,24 +552,47 @@ func (s *JobService) messengerVerdict(ctx context.Context, loop agent.Agent, job
 	return parseMessengerVerdict(res.Content)
 }
 
-// parseMessengerVerdict tìm khóa "verdict" đầu tiên rồi bắt MỌI token PASS/FAIL đứng sau
-// đó (biên từ \b để "PASSED_WITH_ISSUES" không bị đọc nhầm PASS); PASS chỉ khi có ít nhất
-// một token và mọi token đều là PASS — một câu trả lời lẫn cả PASS lẫn FAIL là mơ hồ,
-// không được coi là PASS (fail-closed), và việc quét toàn bộ phần sau khóa "verdict" thay
-// vì chỉ khớp đầu tiên tránh bị một câu trả lời rườm rà nêu PASS trước rồi chốt FAIL sau.
+// parseMessengerVerdict: PASS chỉ khi verdict đúng nguyên chữ PASS; mọi thứ khác (biến thể,
+// lẫn PASS với FAIL, không đọc được) là FAIL.
 func parseMessengerVerdict(content string) string {
+	if verdict, ok := messengerVerdictFromJSON(content); ok {
+		return verdict
+	}
 	loc := messengerVerdictKeyPattern.FindStringIndex(content)
 	if loc == nil {
 		return "FAIL"
 	}
+	// Quét mọi token sau khóa, không chỉ token đầu: câu rườm rà có thể nêu PASS trước rồi chốt FAIL.
 	matches := messengerVerdictTokenPattern.FindAllStringSubmatch(content[loc[1]:], -1)
 	if len(matches) == 0 {
 		return "FAIL"
 	}
 	for _, m := range matches {
-		if !strings.EqualFold(m[1], "PASS") {
+		if !strings.EqualFold(m[1], "PASS") || m[2] != "" {
 			return "FAIL"
 		}
 	}
 	return "PASS"
+}
+
+// messengerVerdictFromJSON đọc đúng trường "verdict" khi cả câu trả lời là một object JSON.
+func messengerVerdictFromJSON(content string) (string, bool) {
+	s := strings.TrimSpace(content)
+	s = strings.TrimPrefix(s, "```json")
+	s = strings.TrimPrefix(s, "```")
+	s = strings.TrimSpace(strings.TrimSuffix(s, "```"))
+	// Go giữ khóa trùng cuối cùng: hai khóa verdict là mơ hồ, để nhánh quét token phán.
+	if len(messengerVerdictKeyPattern.FindAllStringIndex(s, -1)) != 1 {
+		return "", false
+	}
+	var out struct {
+		Verdict string `json:"verdict"`
+	}
+	if json.Unmarshal([]byte(s), &out) != nil {
+		return "", false
+	}
+	if strings.EqualFold(strings.TrimSpace(out.Verdict), "PASS") {
+		return "PASS", true
+	}
+	return "FAIL", true
 }

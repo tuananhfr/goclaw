@@ -234,6 +234,14 @@ func TestMessengerVerdictParsingIsStrict(t *testing.T) {
 		{"echoed template with both alternatives", `{"verdict": "PASS" hoặc "FAIL", "reason": "..."}`, "FAIL"},
 		{"PASSED_WITH_ISSUES is not PASS", `{"verdict": "PASSED_WITH_ISSUES"}`, "FAIL"},
 		{"rambling then a real verdict must not trust the first token", `verdict: PASS nhưng thật ra … {"verdict":"FAIL"}`, "FAIL"},
+		{"PASS-WITH-ISSUES is not PASS", `{"verdict": "PASS-WITH-ISSUES"}`, "FAIL"},
+		{"PASS-WITH-ISSUES outside JSON is not PASS", `verdict: PASS-WITH-ISSUES`, "FAIL"},
+		{"plain JSON PASS", `{"verdict":"PASS","reason":"ok"}`, "PASS"},
+		{"fenced JSON PASS", "```json\n{\"verdict\":\"PASS\",\"reason\":\"ok\"}\n```", "PASS"},
+		{"JSON FAIL", `{"verdict":"FAIL","reason":"thiếu nguồn"}`, "FAIL"},
+		{"JSON reason mentioning PASS does not flip a FAIL", `{"verdict":"FAIL","reason":"không thể PASS"}`, "FAIL"},
+		{"duplicate verdict keys are ambiguous", `{"verdict":"FAIL","verdict":"PASS"}`, "FAIL"},
+		{"mixed tokens", `verdict: PASS, FAIL`, "FAIL"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
