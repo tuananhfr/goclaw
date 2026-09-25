@@ -192,6 +192,9 @@ func TestConvertBlogImportRunsOnePassPerPart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if report["reply"] != "Đã chuyển bài dài theo 3 phần." {
+		t.Fatalf("the first part's reply only speaks for part 1, got %q", report["reply"])
+	}
 	sections := report["document"].(map[string]any)["sections"].([]any)
 	if len(sections) != 3 || sections[2].(map[string]any)["id"] != "s3" {
 		t.Fatalf("expected 3 stitched sections, got %v", sections)

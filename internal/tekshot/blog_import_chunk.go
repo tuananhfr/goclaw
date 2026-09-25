@@ -276,6 +276,8 @@ func convertBlogImport(ctx context.Context, request map[string]any, snap blogSna
 			return nil, fmt.Errorf("MODEL_OUTPUT_INVALID: stitched article: %s", err)
 		}
 		report = checked
+		// The first pass only saw part 1, so its own reply would describe part 1.
+		report["reply"] = fmt.Sprintf("Đã chuyển bài dài theo %d phần.", total)
 	}
 	if usage.TotalTokens > 0 {
 		report["usage"] = usage
