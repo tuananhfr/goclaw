@@ -421,3 +421,23 @@ func TestBlogImportJobTypeIsWired(t *testing.T) {
 		t.Fatalf("blog_import needs its own budget between 12 and 20 minutes, got %s", got)
 	}
 }
+
+// Node 118: the model wrote italics as _x_, which Drupal prints literally.
+func TestBlogImportCollectorTurnsUnderscoreEmphasisIntoSupportedMarkdown(t *testing.T) {
+	args := importArgs()
+	doc := args["document"].(map[string]any)
+	doc["lead"] = map[string]any{"paragraphs": []any{"Camera AI giúp nhà máy _giảm lỗi_ ngay từ ca đầu."}}
+	importBlocks(args)[0].(map[string]any)["text"] = "**_Mắt người mỏi sau tám giờ; camera thì không._**"
+	c := importCollector(importMarkup)
+	if res := c.Execute(context.Background(), args); res.IsError {
+		t.Fatalf("underscore emphasis is normalised, not refused: %s", res.ForLLM)
+	}
+	out := c.Report()["document"].(map[string]any)
+	if lead := out["lead"].(map[string]any)["paragraphs"].([]any)[0]; lead != "Camera AI giúp nhà máy *giảm lỗi* ngay từ ca đầu." {
+		t.Fatalf("_x_ must become *x*, got %q", lead)
+	}
+	block := out["sections"].([]any)[0].(map[string]any)["blocks"].([]any)[0].(map[string]any)
+	if block["text"] != "**Mắt người mỏi sau tám giờ; camera thì không.**" {
+		t.Fatalf("**_x_** must become **x** (bold+italic has no v1 form), got %q", block["text"])
+	}
+}

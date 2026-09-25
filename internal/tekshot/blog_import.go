@@ -326,6 +326,51 @@ func blogImportQuoted(texts []string) string {
 	return strings.Join(quoted, "; ")
 }
 
+var (
+	blogImportBoldUnderscore = regexp.MustCompile(`\*\*_([^_\n]+)_\*\*`)
+	blogImportUnderscore     = regexp.MustCompile(`(^|[\s(])_([^_\n]+?)_([\s).,;:!?]|$)`)
+	// Keys that hold text a reader sees; ids, URLs and enums are left alone.
+	blogImportTextKeys = map[string]bool{"paragraphs": true, "key_takeaways": true, "text": true, "items": true, "caption": true, "rows": true, "q": true, "a": true, "cite": true, "heading": true, "label": true}
+)
+
+// blogImportNormaliseEmphasis: InlineMarkdown in Drupal knows only **bold**
+// and *italic*, and cannot nest them, yet models copy <em> as _x_ (node 118).
+func blogImportNormaliseEmphasis(value any) any {
+	switch v := value.(type) {
+	case map[string]any:
+		for key, child := range v {
+			if blogImportTextKeys[key] {
+				v[key] = blogImportNormaliseText(child)
+			} else if _, ok := child.(string); !ok {
+				v[key] = blogImportNormaliseEmphasis(child)
+			}
+		}
+		return v
+	case []any:
+		for i, child := range v {
+			v[i] = blogImportNormaliseEmphasis(child)
+		}
+		return v
+	}
+	return value
+}
+
+func blogImportNormaliseText(value any) any {
+	switch v := value.(type) {
+	case string:
+		v = blogImportBoldUnderscore.ReplaceAllString(v, "**$1**")
+		return blogImportUnderscore.ReplaceAllString(v, "$1*$2*$3")
+	case []any:
+		for i, child := range v {
+			v[i] = blogImportNormaliseText(child)
+		}
+		return v
+	case map[string]any:
+		return blogImportNormaliseEmphasis(v)
+	}
+	return value
+}
+
 func blogImportApplyFrame(document map[string]any, frame blogImportFrame, snap blogSnapshot) {
 	if title := strings.TrimSpace(frame.Title); title != "" {
 		document["title"] = cutRunes(title, 255)
@@ -417,6 +462,7 @@ func validateBlogImport(args map[string]any, snap blogSnapshot, source blogImpor
 	if source.Frame != nil {
 		blogImportApplyFrame(rawDoc, *source.Frame, snap)
 	}
+	blogImportNormaliseEmphasis(rawDoc)
 	blogImportFillAlts(rawDoc)
 	document, err := validateBlogDocument(rawDoc, snap)
 	if err != nil {
