@@ -457,7 +457,23 @@ func (t *BlogImportCollector) Report() map[string]any { return cloneJSON(t.repor
 
 func (t *BlogImportCollector) LastError() string { return t.lastErr }
 
+// Rules shared by the first pass and the later parts of a long article.
+const (
+	blogImportRuleVerbatim      = "1. Never rewrite, shorten, translate, correct or embellish the wording. Copy every sentence exactly as it stands in the markup; your only job is to place it into the right role.\n"
+	blogImportRuleEmphasis      = "2. Keep inline emphasis as **bold**, *italic* and [text](href). Keep a link only when its href starts with https:// or /; otherwise keep just its text.\n"
+	blogImportRuleMinorHeadings = "An h4-h6 heading becomes a paragraph in **bold**. A heading followed directly by another heading becomes a **bold** paragraph at the start of the next section, because a section cannot be empty."
+	blogImportRuleMapping       = "4. core/paragraph → paragraph; core/list → list (ordered for <ol>); core/table → table; core/image whose id is listed under AVAILABLE IMAGES → image block with that file_id, its caption, and its alt (write a short factual alt only when the original has none); the first core/pullquote or core/quote → quote, later ones → callout; core/details → one faq item (summary = q, content = a); core/buttons → cta.button when its href is https:// or a /path; core/group → place its inner blocks by these same rules.\n"
+)
+
+func blogImportRuleLeftovers(language string) string {
+	return "6. Anything with no place in the document — embeds, video, gallery, columns, core/html, shortcodes, an image whose id is not under AVAILABLE IMAGES — goes to unconverted as {block_name (e.g. core/embed), excerpt (first words of its visible text or its URL, at most 200 characters), reason (one short sentence in " + language + ")}. A paragraph, heading or list always fits the document, so never list core/paragraph, core/heading or core/list in unconverted — place every one of them, however long the article. Never drop content silently and never invent content to fill a role.\n"
+}
+
 func buildBlogImportPrompt(request map[string]any) string {
+	return buildBlogImportHeadPrompt(request, 1)
+}
+
+func buildBlogImportHeadPrompt(request map[string]any, total int) string {
 	language := blogSnapshotFromRequest(request).Language
 	var images any
 	if snapshot, ok := request["snapshot"].(map[string]any); ok {
@@ -465,14 +481,17 @@ func buildBlogImportPrompt(request map[string]any) string {
 	}
 	var sb strings.Builder
 	sb.WriteString("You convert ONE existing article of a website from Gutenberg HTML into the structured blog document v1. This is a lossless re-arrangement, not an edit.\n")
+	if total > 1 {
+		sb.WriteString(fmt.Sprintf("The article is long, so it is converted in %d parts: ORIGINAL MARKUP below is PART 1 OF %d. Convert this part completely and nothing else; the later parts are converted in separate passes.\n", total, total))
+	}
 	sb.WriteString("Deliver the result by calling " + blogImportToolName + " exactly once. Never answer with plain text.\n\n")
 	sb.WriteString("RULES — code checks every one of them and rejects the submission otherwise:\n")
-	sb.WriteString("1. Never rewrite, shorten, translate, correct or embellish the wording. Copy every sentence exactly as it stands in ORIGINAL MARKUP; your only job is to place it into the right role.\n")
-	sb.WriteString("2. Keep inline emphasis as **bold**, *italic* and [text](href). Keep a link only when its href starts with https:// or /; otherwise keep just its text.\n")
-	sb.WriteString("3. Text before the first heading goes to lead.paragraphs (at least one; when the article starts with a heading, the first paragraph after it becomes the lead). Every h2/h3 opens a section (level 2 or 3) whose heading is the original heading text. An h4-h6 heading becomes a paragraph in **bold**. A heading followed directly by another heading becomes a **bold** paragraph at the start of the next section, because a section cannot be empty.\n")
-	sb.WriteString("4. core/paragraph → paragraph; core/list → list (ordered for <ol>); core/table → table; core/image whose id is listed under AVAILABLE IMAGES → image block with that file_id, its caption, and its alt (write a short factual alt only when the original has none); the first core/pullquote or core/quote → quote, later ones → callout; core/details → one faq item (summary = q, content = a); core/buttons → cta.button when its href is https:// or a /path; core/group → place its inner blocks by these same rules.\n")
+	sb.WriteString(blogImportRuleVerbatim)
+	sb.WriteString(blogImportRuleEmphasis)
+	sb.WriteString("3. Text before the first heading goes to lead.paragraphs (at least one; when the article starts with a heading, the first paragraph after it becomes the lead). Every h2/h3 opens a section (level 2 or 3) whose heading is the original heading text. " + blogImportRuleMinorHeadings + "\n")
+	sb.WriteString(blogImportRuleMapping)
 	sb.WriteString("5. Section ids are s1, s2, … in order. When the original has no heading at all, the first paragraph is the lead and one section whose heading is TITLE holds every paragraph after it; only a one-paragraph article repeats that paragraph in the section. Every block appears exactly once.\n")
-	sb.WriteString("6. Anything with no place in the document — embeds, video, gallery, columns, core/html, shortcodes, an image whose id is not under AVAILABLE IMAGES — goes to unconverted as {block_name (e.g. core/embed), excerpt (first words of its visible text or its URL, at most 200 characters), reason (one short sentence in " + language + ")}. A paragraph, heading or list always fits the document, so never list core/paragraph, core/heading or core/list in unconverted — place every one of them, however long the article. Never drop content silently and never invent content to fill a role.\n")
+	sb.WriteString(blogImportRuleLeftovers(language))
 	sb.WriteString("7. title = TITLE exactly (when TITLE is empty, use the first heading). summary = SUMMARY exactly (may be empty). key_takeaways = [] unless the original has an explicit takeaway list. sources = [] unless the original lists sources with https URLs. schema_type = Article. images.featured_file_id = FEATURED IMAGE file_id when it is under AVAILABLE IMAGES, otherwise 0.\n")
 	sb.WriteString("8. reply: one or two sentences in " + language + " for the editor — what was converted and what could not be.\n\n")
 	sb.WriteString("## TITLE\n" + strings.TrimSpace(stringFromMap(request, "title")) + "\n\n")
@@ -504,25 +523,17 @@ func (s *JobService) runBlogImport(ctx context.Context, job *store.TekshotJob, r
 		return nil, "", err
 	}
 	snap := blogSnapshotFromRequest(request)
-	collector := NewBlogImportCollector(snap, parseBlogImportSource(markup))
-	prompt := buildBlogImportPrompt(request)
 
 	userID := "tekshot-" + job.ExternalUserID
 	runCtx := store.WithTenantID(ctx, store.MasterTenantID)
 	runCtx = store.WithUserID(runCtx, userID)
 	runCtx = store.WithAgentKey(runCtx, job.AgentKey)
 
-	var usage any
-	for attempt := 1; attempt <= blogImportAttempts && collector.Report() == nil && runCtx.Err() == nil; attempt++ {
-		message := prompt
-		if rejected := collector.LastError(); rejected != "" {
-			message += "\n## YOUR PREVIOUS SUBMISSION WAS REJECTED\n" + rejected + "\nSubmit the whole document again and fix exactly that.\n"
-		}
-		s.setProgress(ctx, job, fmt.Sprintf("Đang chuyển bài (lần %d/%d)", attempt, blogImportAttempts))
+	pass := func(passCtx context.Context, message string, tool tools.Tool) *providers.Usage {
 		runID := uuid.NewString()
 		// Forced tool, one iteration, no research tools: the article is the
 		// only input and a free turn has been lost to list_files before.
-		result, runErr := loop.Run(runCtx, agent.RunRequest{
+		result, runErr := loop.Run(passCtx, agent.RunRequest{
 			SessionKey:     job.SessionKey + ":import:" + runID,
 			Message:        message,
 			Channel:        "tekshot_job",
@@ -534,8 +545,8 @@ func (s *JobService) runBlogImport(ctx context.Context, job *store.TekshotJob, r
 			UserID:         userID,
 			SenderID:       userID,
 			ToolAllow:      []string{blogImportNoTools},
-			EphemeralTools: []tools.Tool{collector},
-			ToolChoice:     &providers.ToolChoice{Mode: "function", Name: blogImportToolName},
+			EphemeralTools: []tools.Tool{tool},
+			ToolChoice:     &providers.ToolChoice{Mode: "function", Name: tool.Name()},
 			MaxIterations:  1,
 			SkillFilter:    []string{},
 			LightContext:   true,
@@ -543,24 +554,23 @@ func (s *JobService) runBlogImport(ctx context.Context, job *store.TekshotJob, r
 			TraceName:      "tekshot blog import",
 			TraceTags:      []string{"tekshot", "blog", "import"},
 		})
-		if result != nil && result.Usage != nil {
-			usage = result.Usage
+		collector, _ := tool.(blogImportTool)
+		accepted, rejected := false, ""
+		if collector != nil {
+			accepted, rejected = collector.Report() != nil, collector.LastError()
 		}
-		slog.Info("tekshot.blog_import.attempt", "job", job.ID.String(), "attempt", attempt,
-			"accepted", collector.Report() != nil, "rejected", collector.LastError(), "error", runErr)
+		slog.Info("tekshot.blog_import.attempt", "job", job.ID.String(), "tool", tool.Name(),
+			"accepted", accepted, "rejected", rejected, "error", runErr)
+		if result == nil {
+			return nil
+		}
+		return result.Usage
 	}
 
-	report := collector.Report()
-	if report == nil {
-		reason := collector.LastError()
-		if reason == "" {
-			reason = "agent did not call " + blogImportToolName
-		}
-		return nil, "", fmt.Errorf("MODEL_OUTPUT_INVALID: %s", reason)
+	report, err := convertBlogImport(runCtx, request, snap, pass, func(message string) { s.setProgress(ctx, job, message) }, blogImportChunkBytes)
+	if err != nil {
+		return nil, "", err
 	}
 	report["presentation"] = blogImportPresentation(request["presentation"], snap)
-	if usage != nil {
-		report["usage"] = usage
-	}
 	return report, "Blog article imported", nil
 }
