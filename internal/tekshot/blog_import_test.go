@@ -250,7 +250,7 @@ func TestBlogImportCollectorAllowsTheOnlyParagraphTwice(t *testing.T) {
 
 func TestBuildBlogImportPromptResolvesTheNoHeadingRule(t *testing.T) {
 	prompt := buildBlogImportPrompt(map[string]any{"gutenberg_markup": "<p>x</p>"})
-	for _, want := range []string{"never list core/paragraph, core/heading or core/list", "every paragraph after it"} {
+	for _, want := range []string{"never list core/paragraph, core/heading or core/list", "every paragraph after it", "is not repeated in a section"} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt misses %q", want)
 		}

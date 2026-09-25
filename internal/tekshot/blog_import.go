@@ -490,7 +490,7 @@ func buildBlogImportHeadPrompt(request map[string]any, total int) string {
 	sb.WriteString(blogImportRuleEmphasis)
 	sb.WriteString("3. Text before the first heading goes to lead.paragraphs (at least one; when the article starts with a heading, the first paragraph after it becomes the lead). Every h2/h3 opens a section (level 2 or 3) whose heading is the original heading text. " + blogImportRuleMinorHeadings + "\n")
 	sb.WriteString(blogImportRuleMapping)
-	sb.WriteString("5. Section ids are s1, s2, … in order. When the original has no heading at all, the first paragraph is the lead and one section whose heading is TITLE holds every paragraph after it; only a one-paragraph article repeats that paragraph in the section. Every block appears exactly once.\n")
+	sb.WriteString("5. Section ids are s1, s2, … in order. When the original has no heading at all, the first paragraph is the lead and one section whose heading is TITLE holds every paragraph after it; only a one-paragraph article repeats that paragraph in the section. Every block appears exactly once: a block placed in lead, key_takeaways, quote, faq or cta is not repeated in a section.\n")
 	sb.WriteString(blogImportRuleLeftovers(language))
 	sb.WriteString("7. title = TITLE exactly (when TITLE is empty, use the first heading). summary = SUMMARY exactly (may be empty). key_takeaways = [] unless the original has an explicit takeaway list. sources = [] unless the original lists sources with https URLs. schema_type = Article. images.featured_file_id = FEATURED IMAGE file_id when it is under AVAILABLE IMAGES, otherwise 0.\n")
 	sb.WriteString("8. reply: one or two sentences in " + language + " for the editor — what was converted and what could not be.\n\n")
