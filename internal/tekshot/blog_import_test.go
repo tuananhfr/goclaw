@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/text/unicode/norm"
 
@@ -148,9 +149,69 @@ func TestBlogImportCollectorRejectsASilentlyDroppedImage(t *testing.T) {
 	if res := c.Execute(context.Background(), args); !res.IsError || !strings.Contains(res.ForLLM, "110") {
 		t.Fatalf("a dropped image must be named, got %q", res.ForLLM)
 	}
+	// Image 110 is still on the site, so v1 can hold it: listing it is not enough.
 	args["unconverted"] = []any{map[string]any{"block_name": "core/image", "excerpt": "/a.jpg", "reason": "Ảnh để sau."}}
+	if res := c.Execute(context.Background(), args); !res.IsError || !strings.Contains(res.ForLLM, "110") {
+		t.Fatalf("an image the site still has must be placed, got %q", res.ForLLM)
+	}
+}
+
+func TestBlogImportCollectorAcceptsALostImageListedButStillChecksTheOthers(t *testing.T) {
+	lost := `<!-- wp:image {"id":999} --><figure class="wp-block-image"><img src="/lost.jpg" alt=""/></figure><!-- /wp:image -->`
+	args := importArgs()
+	args["unconverted"] = []any{map[string]any{"block_name": "core/image", "excerpt": "/lost.jpg", "reason": "Ảnh không còn trên site."}}
+	c := importCollector(importMarkup + lost)
 	if res := c.Execute(context.Background(), args); res.IsError {
-		t.Fatalf("an image listed in unconverted is accounted for: %s", res.ForLLM)
+		t.Fatalf("an image the site lost may be listed: %s", res.ForLLM)
+	}
+	blocks := importBlocks(args)
+	importSection(args)["blocks"] = []any{blocks[0], blocks[2]}
+	if res := c.Execute(context.Background(), args); !res.IsError || !strings.Contains(res.ForLLM, "110") {
+		t.Fatalf("listing the lost image must not excuse dropping image 110, got %q", res.ForLLM)
+	}
+}
+
+func TestBlogImportCollectorLetsAListedGalleryCoverItsImages(t *testing.T) {
+	gallery := `<!-- wp:gallery --><figure class="wp-block-gallery"><!-- wp:image {"id":110} --><figure><img src="/a.jpg" alt="x"/><figcaption>Dây chuyền đóng gói</figcaption></figure><!-- /wp:image --></figure><!-- /wp:gallery -->`
+	start := strings.Index(importMarkup, `<!-- wp:image`)
+	end := strings.Index(importMarkup, `<!-- /wp:image -->`) + len(`<!-- /wp:image -->`)
+	markup := importMarkup[:start] + gallery + importMarkup[end:]
+	args := importArgs()
+	blocks := importBlocks(args)
+	importSection(args)["blocks"] = []any{blocks[0], blocks[2]}
+	args["unconverted"] = []any{map[string]any{"block_name": "core/gallery", "excerpt": "/a.jpg", "reason": "Chưa có khối thư viện ảnh."}}
+	if res := importCollector(markup).Execute(context.Background(), args); res.IsError {
+		t.Fatalf("a gallery listed as a whole accounts for the images inside it: %s", res.ForLLM)
+	}
+}
+
+// Nhận writes title, summary and featured alt to the node, so they come from the node.
+func TestBlogImportCollectorKeepsTheNodesTitleSummaryAndFeaturedAlt(t *testing.T) {
+	source := parseBlogImportSource(importMarkup)
+	source.Frame = &blogImportFrame{Title: "Camera AI trong nhà máy (bài gốc)", Summary: "", FeaturedID: 110, FeaturedAlt: "Bìa gốc"}
+	args := importArgs()
+	doc := args["document"].(map[string]any)
+	doc["summary"] = "Tóm tắt model tự viết."
+	doc["images"] = map[string]any{"featured_file_id": float64(110), "featured_alt": "Alt model tự viết"}
+	c := NewBlogImportCollector(validBlogSnapshot(), source)
+	if res := c.Execute(context.Background(), args); res.IsError {
+		t.Fatalf("frame fields are taken from the node, not refused: %s", res.ForLLM)
+	}
+	out := c.Report()["document"].(map[string]any)
+	if out["title"] != "Camera AI trong nhà máy (bài gốc)" || out["summary"] != "" {
+		t.Fatalf("title/summary must be the node's, got %q / %q", out["title"], out["summary"])
+	}
+	if out["images"].(map[string]any)["featured_alt"] != "Bìa gốc" {
+		t.Fatalf("featured alt must be the node's, got %v", out["images"])
+	}
+}
+
+func TestBlogImportCollectorRejectsARewrittenHeading(t *testing.T) {
+	args := importArgs()
+	importSection(args)["heading"] = "Tại sao nên dùng camera AI"
+	res := importCollector(importMarkup).Execute(context.Background(), args)
+	if !res.IsError || !strings.Contains(res.ForLLM, "Tại sao nên dùng camera AI") {
+		t.Fatalf("a rewritten heading must be refused, got %q", res.ForLLM)
 	}
 }
 
@@ -355,7 +416,8 @@ func TestBlogImportJobTypeIsWired(t *testing.T) {
 	if !isSupportedTekshotJobType(TekshotJobTypeBlogImport) {
 		t.Fatal("Create must accept blog_import")
 	}
-	if jobRunTimeout(TekshotJobTypeBlogImport) != defaultJobRunTimeout {
-		t.Fatal("blog_import runs on the default 12-minute budget")
+	// A 60 KB article is ~8 sequential passes; Drupal gives up on a job at 20 minutes.
+	if got := jobRunTimeout(TekshotJobTypeBlogImport); got != blogImportRunTimeout || got <= defaultJobRunTimeout || got >= 20*time.Minute {
+		t.Fatalf("blog_import needs its own budget between 12 and 20 minutes, got %s", got)
 	}
 }

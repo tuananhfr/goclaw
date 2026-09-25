@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -39,6 +40,8 @@ const (
 	// Each attempt re-submits the whole article, so retries are few and
 	// happen in Go with the rejection quoted, not as extra loop iterations.
 	blogImportAttempts = 3
+	// A long article runs one pass per part; Drupal fails a job at 20 minutes.
+	blogImportRunTimeout = 18 * time.Minute
 )
 
 var (
@@ -47,6 +50,7 @@ var (
 	// Gutenberg escapes < and > inside block attributes, so [^>] cannot run
 	// past the end of the comment into the next block.
 	blogImportImageComment = regexp.MustCompile(`<!--\s*wp:image\s+(\{[^>]*\})\s*/?-->`)
+	blogImportGallery      = regexp.MustCompile(`(?s)<!--\s*wp:gallery\b.*?<!--\s*/wp:gallery\s*-->`)
 	blogImportLink         = regexp.MustCompile(`\[([^\]\n]+)\]\(([^)\s]+)\)`)
 	blogImportFold         = strings.NewReplacer("“", `"`, "”", `"`, "„", `"`, "‘", "'", "’", "'", "–", "-", "—", "-", "…", "...", "*", "")
 )
@@ -54,22 +58,51 @@ var (
 type blogImportSource struct {
 	Comparable string
 	ImageIDs   []int
+	// Images inside a core/gallery: v1 has no gallery, so listing the gallery
+	// accounts for them.
+	GalleryImageIDs map[int]bool
+	// The node's own fields; nil for a later part of a long article.
+	Frame *blogImportFrame
+}
+
+// blogImportFrame: Nhận writes title, summary and the featured image to the
+// node, so they are taken from the node, never from the model.
+type blogImportFrame struct {
+	Title       string
+	Summary     string
+	FeaturedID  int
+	FeaturedAlt string
 }
 
 func parseBlogImportSource(markup string) blogImportSource {
-	source := blogImportSource{Comparable: blogImportComparable(markup)}
+	source := blogImportSource{Comparable: blogImportComparable(markup), GalleryImageIDs: map[int]bool{}}
 	seen := map[int]bool{}
+	for _, id := range blogImportImageIDs(markup) {
+		if !seen[id] {
+			seen[id] = true
+			source.ImageIDs = append(source.ImageIDs, id)
+		}
+	}
+	for _, gallery := range blogImportGallery.FindAllString(markup, -1) {
+		for _, id := range blogImportImageIDs(gallery) {
+			source.GalleryImageIDs[id] = true
+		}
+	}
+	return source
+}
+
+func blogImportImageIDs(markup string) []int {
+	var ids []int
 	for _, match := range blogImportImageComment.FindAllStringSubmatch(markup, -1) {
 		var attrs map[string]any
 		if json.Unmarshal([]byte(match[1]), &attrs) != nil {
 			continue
 		}
-		if id := int(numberFromMap(attrs, "id")); id > 0 && !seen[id] {
-			seen[id] = true
-			source.ImageIDs = append(source.ImageIDs, id)
+		if id := int(numberFromMap(attrs, "id")); id > 0 {
+			ids = append(ids, id)
 		}
 	}
-	return source
+	return ids
 }
 
 // blogImportComparable reduces HTML or inline markdown to what a reader sees,
@@ -179,6 +212,19 @@ func blogImportRewritten(document map[string]any, source blogImportSource) []str
 			rewritten = append(rewritten, blogImportRunes(strings.TrimSpace(text), 120))
 		}
 	}
+	// Headings count toward coverage, so they must be the original's too; the
+	// title is allowed as the one heading of an article that has none.
+	title := blogImportComparable(stringFromMap(document, "title"))
+	sections, _ := document["sections"].([]any)
+	for _, raw := range sections {
+		section, _ := raw.(map[string]any)
+		heading := stringFromMap(section, "heading")
+		comparable := blogImportComparable(heading)
+		if utf8.RuneCountInString(comparable) < 3 || comparable == title || strings.Contains(source.Comparable, comparable) {
+			continue
+		}
+		rewritten = append(rewritten, blogImportRunes(strings.TrimSpace(heading), 120))
+	}
 	return rewritten
 }
 
@@ -196,19 +242,21 @@ func blogImportUnsafeLinks(document map[string]any) []string {
 	return unsafe
 }
 
-func blogImportMissingImages(document map[string]any, source blogImportSource, unconverted []any) []int {
+// blogImportMissingImages checks every original image on its own: a listed
+// entry excuses only an image the site no longer has (v1 could hold any other)
+// or one inside a listed gallery. The featured image lives outside the body.
+func blogImportMissingImages(document map[string]any, source blogImportSource, unconverted []any, snap blogSnapshot) []int {
+	listedImages, listedGallery := 0, false
 	for _, raw := range unconverted {
 		name := strings.ToLower(stringFromMap(raw.(map[string]any), "block_name"))
-		for _, media := range []string{"image", "gallery", "media", "cover"} {
-			if strings.Contains(name, media) {
-				return nil
-			}
+		switch {
+		case strings.Contains(name, "gallery"):
+			listedGallery = true
+		case strings.Contains(name, "image"), strings.Contains(name, "media"), strings.Contains(name, "cover"):
+			listedImages++
 		}
 	}
 	used := map[int]bool{}
-	if images, ok := document["images"].(map[string]any); ok {
-		used[int(numberFromMap(images, "featured_file_id"))] = true
-	}
 	sections, _ := document["sections"].([]any)
 	for _, rawSection := range sections {
 		section, _ := rawSection.(map[string]any)
@@ -221,7 +269,12 @@ func blogImportMissingImages(document map[string]any, source blogImportSource, u
 	}
 	var missing []int
 	for _, id := range source.ImageIDs {
-		if !used[id] {
+		switch {
+		case used[id]:
+		case listedGallery && source.GalleryImageIDs[id]:
+		case !snap.ImageIDs[id] && listedImages > 0:
+			listedImages--
+		default:
 			missing = append(missing, id)
 		}
 	}
@@ -271,6 +324,18 @@ func blogImportQuoted(texts []string) string {
 		quoted = append(quoted, fmt.Sprintf("%q", text))
 	}
 	return strings.Join(quoted, "; ")
+}
+
+func blogImportApplyFrame(document map[string]any, frame blogImportFrame, snap blogSnapshot) {
+	if title := strings.TrimSpace(frame.Title); title != "" {
+		document["title"] = cutRunes(title, 255)
+	}
+	document["summary"] = cutRunes(strings.TrimSpace(frame.Summary), 1000)
+	featured := 0
+	if snap.ImageIDs[frame.FeaturedID] {
+		featured = frame.FeaturedID
+	}
+	document["images"] = map[string]any{"featured_file_id": float64(featured), "featured_alt": strings.TrimSpace(frame.FeaturedAlt)}
 }
 
 // blogImportFillAlts: many old articles have images without alt, and v1
@@ -349,6 +414,9 @@ func validateBlogImport(args map[string]any, snap blogSnapshot, source blogImpor
 	if !ok {
 		return nil, fmt.Errorf("document must be an object")
 	}
+	if source.Frame != nil {
+		blogImportApplyFrame(rawDoc, *source.Frame, snap)
+	}
 	blogImportFillAlts(rawDoc)
 	document, err := validateBlogDocument(rawDoc, snap)
 	if err != nil {
@@ -370,7 +438,7 @@ func validateBlogImport(args map[string]any, snap blogSnapshot, source blogImpor
 	if rewritten := blogImportRewritten(document, source); len(rewritten) > 0 {
 		return nil, fmt.Errorf("%d text(s) are not in the original article word for word — copy the original wording exactly, never rewrite: %s", len(rewritten), blogImportQuoted(rewritten))
 	}
-	if missing := blogImportMissingImages(document, source, unconverted); len(missing) > 0 {
+	if missing := blogImportMissingImages(document, source, unconverted, snap); len(missing) > 0 {
 		return nil, fmt.Errorf("original images %v are neither in the document nor listed in unconverted", missing)
 	}
 	// Runs even with unconverted entries: listing the tail of an article there

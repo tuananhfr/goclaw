@@ -226,3 +226,13 @@ func TestConvertBlogImportFailsWhenAPartNeverPasses(t *testing.T) {
 		t.Fatalf("a part that never passes fails the job naming it, got %v", err)
 	}
 }
+
+func TestRunBlogImportAttemptsSaysWhenTheRunTimedOut(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	tool := NewBlogImportCollector(validBlogSnapshot(), parseBlogImportSource(importMarkup))
+	err := runBlogImportAttempts(ctx, func(context.Context, string, tools.Tool) *providers.Usage { return nil }, tool, "p", "bài", func(string) {}, &providers.Usage{})
+	if err == nil || !strings.Contains(err.Error(), "ran out of time") {
+		t.Fatalf("a cancelled run must say so, not blame the model, got %v", err)
+	}
+}

@@ -227,6 +227,9 @@ func runBlogImportAttempts(ctx context.Context, pass blogImportPass, tool blogIm
 	if tool.Report() != nil {
 		return nil
 	}
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("the job ran out of time (%v) — try again, or edit this article as raw markup", err)
+	}
 	if reason := tool.LastError(); reason != "" {
 		return errors.New(reason)
 	}
@@ -256,7 +259,15 @@ func convertBlogImport(ctx context.Context, request map[string]any, snap blogSna
 	var usage providers.Usage
 	headRequest := cloneJSON(request)
 	headRequest["gutenberg_markup"] = chunks[0]
-	head := NewBlogImportCollector(snap, parseBlogImportSource(chunks[0]))
+	frame := &blogImportFrame{
+		Title:       stringFromMap(request, "title"),
+		Summary:     stringFromMap(request, "summary"),
+		FeaturedID:  int(numberFromMap(request, "featured_file_id")),
+		FeaturedAlt: stringFromMap(request, "featured_alt"),
+	}
+	headSource := parseBlogImportSource(chunks[0])
+	headSource.Frame = frame
+	head := NewBlogImportCollector(snap, headSource)
 	if err := runBlogImportAttempts(ctx, pass, head, buildBlogImportHeadPrompt(headRequest, total), label(1), progress, &usage); err != nil {
 		return nil, failed(1, err)
 	}
@@ -271,7 +282,9 @@ func convertBlogImport(ctx context.Context, request map[string]any, snap blogSna
 			}
 			parts = append(parts, part.Report())
 		}
-		checked, err := validateBlogImport(stitchBlogImport(report, parts), snap, parseBlogImportSource(markup))
+		whole := parseBlogImportSource(markup)
+		whole.Frame = frame
+		checked, err := validateBlogImport(stitchBlogImport(report, parts), snap, whole)
 		if err != nil {
 			return nil, fmt.Errorf("MODEL_OUTPUT_INVALID: stitched article: %s", err)
 		}

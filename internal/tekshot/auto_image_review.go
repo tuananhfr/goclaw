@@ -22,6 +22,9 @@ func jobRunTimeout(jobType string) time.Duration {
 	if jobType == TekshotJobTypeAutoImage || jobType == TekshotJobTypeDraftPosts {
 		return autoImageRunTimeout
 	}
+	if jobType == TekshotJobTypeBlogImport {
+		return blogImportRunTimeout
+	}
 	return defaultJobRunTimeout
 }
 
