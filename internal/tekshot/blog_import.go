@@ -7,6 +7,7 @@ import (
 	"html"
 	"log/slog"
 	"regexp"
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -30,8 +31,8 @@ const (
 	blogImportMaxMarkupBytes = 60000
 	blogImportMaxUnconverted = 100
 	blogImportExcerptRunes   = 200
-	// Below this share of the original's visible text, with nothing listed in
-	// unconverted, the model has dropped content rather than re-arranged it.
+	// Below this share of the original's visible text the model has dropped
+	// content rather than re-arranged it, whatever unconverted lists.
 	blogImportMinCoverage   = 0.8
 	blogImportDefaultReason = "Không có vai trò tương ứng trong bản cấu trúc."
 	blogImportNoTools       = "blog-import/no-tools"
@@ -272,11 +273,83 @@ func blogImportQuoted(texts []string) string {
 	return strings.Join(quoted, "; ")
 }
 
+// blogImportFillAlts: many old articles have images without alt, and v1
+// refuses an image block without one; the model left them empty rather than
+// inventing text, so code fills them from the caption or the title.
+func blogImportFillAlts(document map[string]any) {
+	title := strings.TrimSpace(stringFromMap(document, "title"))
+	sections, _ := document["sections"].([]any)
+	for _, rawSection := range sections {
+		section, _ := rawSection.(map[string]any)
+		blocks, _ := section["blocks"].([]any)
+		for _, rawBlock := range blocks {
+			block, ok := rawBlock.(map[string]any)
+			if !ok || stringFromMap(block, "type") != "image" || strings.TrimSpace(stringFromMap(block, "alt")) != "" {
+				continue
+			}
+			if caption := strings.TrimSpace(blogImportComparableText(stringFromMap(block, "caption"))); caption != "" {
+				block["alt"] = caption
+			} else {
+				block["alt"] = title
+			}
+		}
+	}
+}
+
+// blogImportComparableText strips inline markdown so a caption can serve as alt.
+func blogImportComparableText(s string) string {
+	return strings.ReplaceAll(blogImportLink.ReplaceAllString(s, "$1"), "*", "")
+}
+
+var blogImportTextBlocks = map[string]bool{"core/paragraph": true, "core/heading": true, "core/list": true, "core/list-item": true}
+
+func blogImportListedTextBlocks(unconverted []any) []string {
+	seen := map[string]bool{}
+	var listed []string
+	for _, raw := range unconverted {
+		name := strings.ToLower(strings.TrimSpace(stringFromMap(raw.(map[string]any), "block_name")))
+		if blogImportTextBlocks[name] && !seen[name] {
+			seen[name] = true
+			listed = append(listed, name)
+		}
+	}
+	return listed
+}
+
+// blogImportDuplicated: a text placed more often than the original has it.
+// A one-paragraph article is exempt — v1 needs both a lead and a section block.
+func blogImportDuplicated(document map[string]any, source blogImportSource) []string {
+	counts := map[string]int{}
+	firstSeen := map[string]string{}
+	for _, text := range blogImportCheckedTexts(document) {
+		comparable := blogImportComparable(text)
+		if utf8.RuneCountInString(comparable) < 3 {
+			continue
+		}
+		counts[comparable]++
+		if _, ok := firstSeen[comparable]; !ok {
+			firstSeen[comparable] = blogImportRunes(strings.TrimSpace(text), 120)
+		}
+	}
+	if len(counts) <= 1 {
+		return nil
+	}
+	var duplicated []string
+	for comparable, n := range counts {
+		if n > 1 && n > strings.Count(source.Comparable, comparable) {
+			duplicated = append(duplicated, firstSeen[comparable])
+		}
+	}
+	sort.Strings(duplicated)
+	return duplicated
+}
+
 func validateBlogImport(args map[string]any, snap blogSnapshot, source blogImportSource) (map[string]any, error) {
 	rawDoc, ok := args["document"].(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("document must be an object")
 	}
+	blogImportFillAlts(rawDoc)
 	document, err := validateBlogDocument(rawDoc, snap)
 	if err != nil {
 		return nil, err
@@ -284,6 +357,12 @@ func validateBlogImport(args map[string]any, snap blogSnapshot, source blogImpor
 	unconverted, err := normalizeBlogUnconverted(args["unconverted"])
 	if err != nil {
 		return nil, err
+	}
+	if listed := blogImportListedTextBlocks(unconverted); len(listed) > 0 {
+		return nil, fmt.Errorf("%s always fit the document — never list core/paragraph, core/heading or core/list in unconverted; place every one of them, however long the article", strings.Join(listed, ", "))
+	}
+	if duplicated := blogImportDuplicated(document, source); len(duplicated) > 0 {
+		return nil, fmt.Errorf("%d text(s) appear in the document more often than in the original — place each block exactly once: %s", len(duplicated), blogImportQuoted(duplicated))
 	}
 	if links := blogImportUnsafeLinks(document); len(links) > 0 {
 		return nil, fmt.Errorf("links must point to https:// or a /path; for %s keep only the link text", strings.Join(links, ", "))
@@ -294,11 +373,11 @@ func validateBlogImport(args map[string]any, snap blogSnapshot, source blogImpor
 	if missing := blogImportMissingImages(document, source, unconverted); len(missing) > 0 {
 		return nil, fmt.Errorf("original images %v are neither in the document nor listed in unconverted", missing)
 	}
-	if len(unconverted) == 0 {
-		kept, total := blogImportDocumentRunes(document), utf8.RuneCountInString(source.Comparable)
-		if total > 0 && float64(kept) < blogImportMinCoverage*float64(total) {
-			return nil, fmt.Errorf("the document keeps only %d%% of the original text and unconverted is empty — place every remaining block or list it in unconverted", kept*100/total)
-		}
+	// Runs even with unconverted entries: listing the tail of an article there
+	// is how a model once dropped a third of it.
+	kept, total := blogImportDocumentRunes(document), utf8.RuneCountInString(source.Comparable)
+	if total > 0 && float64(kept) < blogImportMinCoverage*float64(total) {
+		return nil, fmt.Errorf("the document keeps only %d%% of the original text — place every remaining block; unconverted is only for blocks the document cannot hold", kept*100/total)
 	}
 	reply := strings.TrimSpace(stringFromMap(args, "reply"))
 	if reply == "" {
@@ -392,8 +471,8 @@ func buildBlogImportPrompt(request map[string]any) string {
 	sb.WriteString("2. Keep inline emphasis as **bold**, *italic* and [text](href). Keep a link only when its href starts with https:// or /; otherwise keep just its text.\n")
 	sb.WriteString("3. Text before the first heading goes to lead.paragraphs (at least one; when the article starts with a heading, the first paragraph after it becomes the lead). Every h2/h3 opens a section (level 2 or 3) whose heading is the original heading text. An h4-h6 heading becomes a paragraph in **bold**. A heading followed directly by another heading becomes a **bold** paragraph at the start of the next section, because a section cannot be empty.\n")
 	sb.WriteString("4. core/paragraph → paragraph; core/list → list (ordered for <ol>); core/table → table; core/image whose id is listed under AVAILABLE IMAGES → image block with that file_id, its caption, and its alt (write a short factual alt only when the original has none); the first core/pullquote or core/quote → quote, later ones → callout; core/details → one faq item (summary = q, content = a); core/buttons → cta.button when its href is https:// or a /path; core/group → place its inner blocks by these same rules.\n")
-	sb.WriteString("5. Section ids are s1, s2, … in order. When the original has no heading at all, create one section whose heading is TITLE and keep every paragraph in it.\n")
-	sb.WriteString("6. Anything with no place in the document — embeds, video, gallery, columns, core/html, shortcodes, an image whose id is not under AVAILABLE IMAGES — goes to unconverted as {block_name (e.g. core/embed), excerpt (first words of its visible text or its URL, at most 200 characters), reason (one short sentence in " + language + ")}. Never drop content silently and never invent content to fill a role.\n")
+	sb.WriteString("5. Section ids are s1, s2, … in order. When the original has no heading at all, the first paragraph is the lead and one section whose heading is TITLE holds every paragraph after it; only a one-paragraph article repeats that paragraph in the section. Every block appears exactly once.\n")
+	sb.WriteString("6. Anything with no place in the document — embeds, video, gallery, columns, core/html, shortcodes, an image whose id is not under AVAILABLE IMAGES — goes to unconverted as {block_name (e.g. core/embed), excerpt (first words of its visible text or its URL, at most 200 characters), reason (one short sentence in " + language + ")}. A paragraph, heading or list always fits the document, so never list core/paragraph, core/heading or core/list in unconverted — place every one of them, however long the article. Never drop content silently and never invent content to fill a role.\n")
 	sb.WriteString("7. title = TITLE exactly (when TITLE is empty, use the first heading). summary = SUMMARY exactly (may be empty). key_takeaways = [] unless the original has an explicit takeaway list. sources = [] unless the original lists sources with https URLs. schema_type = Article. images.featured_file_id = FEATURED IMAGE file_id when it is under AVAILABLE IMAGES, otherwise 0.\n")
 	sb.WriteString("8. reply: one or two sentences in " + language + " for the editor — what was converted and what could not be.\n\n")
 	sb.WriteString("## TITLE\n" + strings.TrimSpace(stringFromMap(request, "title")) + "\n\n")

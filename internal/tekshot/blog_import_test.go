@@ -159,12 +159,101 @@ func TestBlogImportCollectorRejectsDroppedTextNobodyListed(t *testing.T) {
 	blocks := importBlocks(args)
 	importSection(args)["blocks"] = []any{blocks[1]}
 	c := importCollector(importMarkup)
-	if res := c.Execute(context.Background(), args); !res.IsError || !strings.Contains(res.ForLLM, "unconverted is empty") {
+	if res := c.Execute(context.Background(), args); !res.IsError || !strings.Contains(res.ForLLM, "keeps only") {
 		t.Fatalf("losing most of the text silently must be rejected, got %q", res.ForLLM)
 	}
-	args["unconverted"] = []any{map[string]any{"block_name": "core/list", "excerpt": "Đếm sản phẩm", "reason": "Để sau."}}
+}
+
+// Node 118/114 on tekshot.vn: the model stopped two thirds in and listed the
+// rest as "markup was cut off". A paragraph, heading or list always fits v1.
+func TestBlogImportCollectorRejectsTextBlocksListedAsUnconverted(t *testing.T) {
+	args := importArgs()
+	args["unconverted"] = []any{map[string]any{"block_name": "core/paragraph", "excerpt": "Mắt người mỏi", "reason": "Markup gốc bị cắt."}}
+	res := importCollector(importMarkup).Execute(context.Background(), args)
+	if !res.IsError || !strings.Contains(res.ForLLM, "core/paragraph") {
+		t.Fatalf("a paragraph listed as unconverted must be refused, got %q", res.ForLLM)
+	}
+}
+
+func TestBlogImportCollectorRejectsATailDroppedIntoUnconverted(t *testing.T) {
+	tail := strings.Repeat(`<!-- wp:embed {"url":"https://youtube.com/watch?v=1"} --><figure><div>https://youtube.com/watch?v=1</div></figure><!-- /wp:embed -->`, 1) +
+		strings.Repeat("<!-- wp:html --><div>Một đoạn dài nằm trong khối html mà bản cấu trúc không chứa được, lặp lại nhiều lần cho đủ dài.</div><!-- /wp:html -->", 6)
+	args := importArgs()
+	args["unconverted"] = []any{map[string]any{"block_name": "core/embed", "excerpt": "https://youtube.com/watch?v=1", "reason": "Chưa có khối video."}}
+	res := importCollector(importMarkup+tail).Execute(context.Background(), args)
+	if !res.IsError || !strings.Contains(res.ForLLM, "keeps only") {
+		t.Fatalf("coverage must hold even when unconverted is not empty, got %q", res.ForLLM)
+	}
+}
+
+func TestBlogImportCollectorAcceptsAnEmbedListedAsUnconverted(t *testing.T) {
+	markup := importMarkup + `<!-- wp:embed {"url":"https://youtube.com/watch?v=1"} --><figure><div>https://youtube.com/watch?v=1</div></figure><!-- /wp:embed -->`
+	args := importArgs()
+	args["unconverted"] = []any{map[string]any{"block_name": "core/embed", "excerpt": "https://youtube.com/watch?v=1", "reason": "Chưa có khối video."}}
+	if res := importCollector(markup).Execute(context.Background(), args); res.IsError {
+		t.Fatalf("a genuinely unconvertible block is accounted for: %s", res.ForLLM)
+	}
+}
+
+// Node 118: eight images had no alt, and v1 refuses an image block without one.
+func TestBlogImportCollectorFillsAMissingImageAlt(t *testing.T) {
+	args := importArgs()
+	importBlocks(args)[1].(map[string]any)["alt"] = ""
+	c := importCollector(importMarkup)
 	if res := c.Execute(context.Background(), args); res.IsError {
-		t.Fatalf("listed blocks are accounted for: %s", res.ForLLM)
+		t.Fatalf("a missing alt is filled, not refused: %s", res.ForLLM)
+	}
+	image := c.Report()["document"].(map[string]any)["sections"].([]any)[0].(map[string]any)["blocks"].([]any)[1].(map[string]any)
+	if image["alt"] != "Dây chuyền đóng gói" {
+		t.Fatalf("alt falls back to the caption, got %q", image["alt"])
+	}
+
+	args = importArgs()
+	block := importBlocks(args)[1].(map[string]any)
+	block["alt"], block["caption"] = "", ""
+	markup := strings.Replace(importMarkup, `<figcaption class="wp-element-caption">Dây chuyền đóng gói</figcaption>`, "", 1)
+	c = importCollector(markup)
+	if res := c.Execute(context.Background(), args); res.IsError {
+		t.Fatalf("no caption either: %s", res.ForLLM)
+	}
+	image = c.Report()["document"].(map[string]any)["sections"].([]any)[0].(map[string]any)["blocks"].([]any)[1].(map[string]any)
+	if image["alt"] != "Camera AI trong nhà máy" {
+		t.Fatalf("alt falls back to the title, got %q", image["alt"])
+	}
+}
+
+// Node 8758: the one paragraph landed in the lead and again in the section.
+func TestBlogImportCollectorRejectsDuplicatedText(t *testing.T) {
+	args := importArgs()
+	doc := args["document"].(map[string]any)
+	doc["lead"] = map[string]any{"paragraphs": []any{
+		"Camera AI giúp nhà máy **giảm lỗi** ngay từ ca đầu.",
+		"Mắt người mỏi sau tám giờ; camera thì không.",
+	}}
+	res := importCollector(importMarkup).Execute(context.Background(), args)
+	if !res.IsError || !strings.Contains(res.ForLLM, "more often than") || !strings.Contains(res.ForLLM, "Mắt người mỏi") {
+		t.Fatalf("a text placed twice must be refused, got %q", res.ForLLM)
+	}
+}
+
+func TestBlogImportCollectorAllowsTheOnlyParagraphTwice(t *testing.T) {
+	markup := "<!-- wp:paragraph --><p>Bài chỉ có đúng một đoạn văn này thôi.</p><!-- /wp:paragraph -->"
+	args := importArgs()
+	doc := args["document"].(map[string]any)
+	doc["lead"] = map[string]any{"paragraphs": []any{"Bài chỉ có đúng một đoạn văn này thôi."}}
+	importSection(args)["heading"] = "Camera AI trong nhà máy"
+	importSection(args)["blocks"] = []any{map[string]any{"type": "paragraph", "text": "Bài chỉ có đúng một đoạn văn này thôi."}}
+	if res := importCollector(markup).Execute(context.Background(), args); res.IsError {
+		t.Fatalf("v1 needs a lead and a section block, so a one-paragraph article repeats it: %s", res.ForLLM)
+	}
+}
+
+func TestBuildBlogImportPromptResolvesTheNoHeadingRule(t *testing.T) {
+	prompt := buildBlogImportPrompt(map[string]any{"gutenberg_markup": "<p>x</p>"})
+	for _, want := range []string{"never list core/paragraph, core/heading or core/list", "every paragraph after it"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt misses %q", want)
+		}
 	}
 }
 
