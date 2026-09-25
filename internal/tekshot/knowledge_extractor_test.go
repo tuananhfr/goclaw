@@ -54,6 +54,36 @@ func TestRunKnowledgeExtractorSurfacesStderrOnCrash(t *testing.T) {
 	}
 }
 
+func TestKnowledgeExtractorArgsAddsModeOnlyWhenSet(t *testing.T) {
+	base := knowledgeExtractorOptions{Input: "a", Mime: "m", OutDir: "o", MaxScanPages: 1, DPI: 2}
+	if got := knowledgeExtractorArgs(base); len(got) != 10 {
+		t.Fatalf("knowledge mode must keep the old contract, got %v", got)
+	}
+	base.Mode = "tables"
+	got := knowledgeExtractorArgs(base)
+	if got[len(got)-2] != "--mode" || got[len(got)-1] != "tables" {
+		t.Fatalf("tables mode must pass --mode tables, got %v", got)
+	}
+}
+
+func TestRunTableExtractorParsesTablesAndImages(t *testing.T) {
+	stdout := `{"ok":true,"kind":"xlsx","tables":[{"name":"Menu","columns":["Tên món","Giá"],"rows":[["Bánh rán","15000"]]}],"images":[{"ref":"Trang 2","image_path":"/tmp/p.png"}],"truncated":true,"truncated_reason":"cắt"}`
+	out, err := runTableExtractor(context.Background(), knowledgeExtractorOptions{OutDir: t.TempDir(), Mode: "tables", Command: stubExtractor(t, stdout, 0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Tables) != 1 || out.Tables[0].Rows[0][1] != "15000" || out.Images[0].ImagePath != "/tmp/p.png" || out.TruncatedReason != "cắt" {
+		t.Fatalf("unexpected %+v", out)
+	}
+}
+
+func TestRunTableExtractorTurnsOKFalseIntoMessage(t *testing.T) {
+	_, err := runTableExtractor(context.Background(), knowledgeExtractorOptions{OutDir: t.TempDir(), Mode: "tables", Command: stubExtractor(t, `{"ok":false,"error":"corrupt","message":"Không mở được Excel: X"}`, 0)})
+	if err == nil || err.Error() != "Không mở được Excel: X" {
+		t.Fatalf("got %v", err)
+	}
+}
+
 func TestKnowledgeExtractScriptIsEmbedded(t *testing.T) {
 	if !strings.Contains(knowledgeExtractScript, "--max-scan-pages") || !strings.Contains(knowledgeExtractScript, "pypdfium2") {
 		t.Fatal("embedded extractor script lost its CLI contract or its renderer")

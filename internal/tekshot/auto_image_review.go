@@ -19,7 +19,7 @@ const (
 
 // jobRunTimeout: ảnh cron và viết bài có vòng soát + sửa, không vừa 12 phút.
 func jobRunTimeout(jobType string) time.Duration {
-	if jobType == TekshotJobTypeAutoImage || jobType == TekshotJobTypeDraftPosts {
+	if jobType == TekshotJobTypeAutoImage || jobType == TekshotJobTypeDraftPosts || jobType == TekshotJobTypeReplyDataExtract {
 		return autoImageRunTimeout
 	}
 	if jobType == TekshotJobTypeBlogImport {

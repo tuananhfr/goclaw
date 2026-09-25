@@ -35,9 +35,13 @@ def main():
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--max-scan-pages", type=int, default=300)
     ap.add_argument("--dpi", type=int, default=150)
+    ap.add_argument("--mode", default="knowledge", choices=["knowledge", "tables"])
     a = ap.parse_args()
     try:
-        result = extract(a.input, a.mime, a.out_dir, a.max_scan_pages, a.dpi)
+        if a.mode == "tables":
+            result = extract_tables(a.input, a.mime, a.out_dir, a.max_scan_pages, a.dpi)
+        else:
+            result = extract(a.input, a.mime, a.out_dir, a.max_scan_pages, a.dpi)
     except ExtractError as e:
         result = {"ok": False, "error": e.code, "message": e.message}
     except Exception as e:  # noqa: BLE001 - contract: always JSON, never a traceback
@@ -232,28 +236,38 @@ def _text_unit(lines, heading, label, n):
 
 # ---------- xlsx ----------
 
-def extract_xlsx(path, stats):
+def _sheet_rows(ws):
+    rows = []
+    for r in ws.iter_rows(values_only=True):
+        row = [_cell(c) for c in (r or ())]
+        while row and row[-1] == "":
+            row.pop()
+        if not any(row):
+            continue
+        rows.append(row)
+        if len(rows) >= MAX_SHEET_ROWS:
+            return rows, ("Sheet %s dài quá %d dòng, chỉ lấy %d dòng đầu."
+                          % (ws.title, MAX_SHEET_ROWS, MAX_SHEET_ROWS))
+    return rows, ""
+
+
+def _open_xlsx(path):
     from openpyxl import load_workbook
     try:
-        wb = load_workbook(path, read_only=True, data_only=True)
+        return load_workbook(path, read_only=True, data_only=True)
     except Exception as e:
         raise ExtractError("corrupt", "Không mở được Excel: %s" % type(e).__name__)
+
+
+def extract_xlsx(path, stats):
+    wb = _open_xlsx(path)
     units, truncated, reasons = [], False, []
     for ws in wb.worksheets:
         stats["sheets"] += 1
-        rows = []
-        for r in ws.iter_rows(values_only=True):
-            row = [_cell(c) for c in (r or ())]
-            while row and row[-1] == "":
-                row.pop()
-            if not any(row):
-                continue
-            rows.append(row)
-            if len(rows) >= MAX_SHEET_ROWS:
-                truncated = True
-                reasons.append("Sheet %s dài quá %d dòng, chỉ lấy %d dòng đầu."
-                               % (ws.title, MAX_SHEET_ROWS, MAX_SHEET_ROWS))
-                break
+        rows, reason = _sheet_rows(ws)
+        if reason:
+            truncated = True
+            reasons.append(reason)
         md = table_to_markdown(rows)
         if not md:
             continue
@@ -297,6 +311,136 @@ def extract_pptx(path, stats):
             u["heading"] = title.text.strip()
         units.append(u)
     return units
+
+
+# ---------- tables mode (dữ liệu trả lời Messenger) ----------
+
+def _table(name, rows):
+    """Dòng có chữ đầu tiên là tiêu đề; bảng cần ít nhất một dòng dữ liệu."""
+    rows = [[_cell(c) for c in r] for r in rows if r and any(_cell(c) for c in r)]
+    if len(rows) < 2:
+        return None
+    width = max(len(r) for r in rows)
+    header = rows[0] + [""] * (width - len(rows[0]))
+    columns, seen = [], {}
+    for i, h in enumerate(header):
+        h = h.strip() or "Cột %d" % (i + 1)
+        seen[h] = seen.get(h, 0) + 1
+        columns.append(h if seen[h] == 1 else "%s (%d)" % (h, seen[h]))
+    body = [r + [""] * (width - len(r)) for r in rows[1:]]
+    return {"name": name, "columns": columns, "rows": body}
+
+
+def _html_tables(html):
+    from html.parser import HTMLParser
+
+    class P(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.tables, self.depth, self.row, self.cell = [], 0, None, None
+
+        def handle_starttag(self, tag, attrs):
+            if tag == "table":
+                self.depth += 1
+                if self.depth == 1:
+                    self.tables.append([])
+            elif self.depth == 1 and tag == "tr":
+                self.row = []
+            elif self.depth == 1 and tag in ("td", "th"):
+                self.cell = []
+
+        def handle_endtag(self, tag):
+            if tag == "table":
+                self.depth -= 1
+            elif self.depth == 1 and tag in ("td", "th") and self.cell is not None:
+                self.row.append(" ".join("".join(self.cell).split()))
+                self.cell = None
+            elif self.depth == 1 and tag == "tr" and self.row is not None:
+                self.tables[-1].append(self.row)
+                self.row = None
+
+        def handle_data(self, data):
+            if self.cell is not None:
+                self.cell.append(data)
+
+    p = P()
+    p.feed(html)
+    return p.tables
+
+
+def extract_tables(path, mime, out_dir, max_scan_pages, dpi):
+    kind = kind_for(mime, path)
+    stats = {"pages": 0, "scan_pages": 0, "sheets": 0, "slides": 0}
+    tables, images, reasons = [], [], []
+    if kind == "xlsx":
+        wb = _open_xlsx(path)
+        for ws in wb.worksheets:
+            stats["sheets"] += 1
+            rows, reason = _sheet_rows(ws)
+            if reason:
+                reasons.append(reason)
+            t = _table(ws.title, rows)
+            if t:
+                tables.append(t)
+        wb.close()
+    elif kind == "pdf":
+        import pdfplumber
+        try:
+            pdf = pdfplumber.open(path)
+        except Exception as e:
+            name = type(e).__name__
+            if "Password" in name or "Encrypt" in name:
+                raise ExtractError("encrypted_pdf", "PDF có mật khẩu — hãy gỡ mật khẩu rồi tải lại.")
+            raise ExtractError("corrupt", "Không mở được PDF: %s" % name)
+        scans = []
+        with pdf:
+            stats["pages"] = len(pdf.pages)
+            for i, page in enumerate(pdf.pages):
+                if len((page.extract_text() or "").strip()) < SCAN_TEXT_THRESHOLD:
+                    scans.append(i)
+                    continue
+                try:
+                    found = page.extract_tables() or []
+                except Exception:  # noqa: BLE001 - một trang hỏng không được làm hỏng cả file
+                    found = []
+                for n, raw in enumerate(found, start=1):
+                    t = _table("Trang %d · bảng %d" % (i + 1, n), raw)
+                    if t:
+                        tables.append(t)
+        stats["scan_pages"] = len(scans)
+        if len(scans) > max_scan_pages:
+            reasons.append("Chỉ đọc %d trang scan đầu để tách bảng." % max_scan_pages)
+            scans = scans[:max_scan_pages]
+        rendered = render_pages(path, scans, out_dir, dpi) if scans else {}
+        for i in scans:
+            if i in rendered:
+                images.append({"ref": "Trang %d" % (i + 1), "image_path": rendered[i]})
+    elif kind == "docx":
+        import mammoth
+        with open(path, "rb") as f:
+            html = mammoth.convert_to_html(f).value
+        for n, rows in enumerate(_html_tables(html), start=1):
+            t = _table("Bảng %d" % n, rows)
+            if t:
+                tables.append(t)
+    elif kind == "pptx":
+        from pptx import Presentation
+        try:
+            prs = Presentation(path)
+        except Exception as e:
+            raise ExtractError("corrupt", "Không mở được PowerPoint: %s" % type(e).__name__)
+        for n, slide in enumerate(prs.slides, start=1):
+            stats["slides"] += 1
+            for m, shape in enumerate(slide.shapes, start=1):
+                if getattr(shape, "has_table", False) and shape.has_table:
+                    t = _table("Slide %d · bảng %d" % (n, m),
+                               [[c.text for c in row.cells] for row in shape.table.rows])
+                    if t:
+                        tables.append(t)
+    else:
+        images.append({"ref": os.path.basename(path), "image_path": path})
+    return {"ok": True, "kind": kind, "tables": tables, "images": images, "stats": stats,
+            "truncated": bool(reasons), "truncated_reason": " ".join(reasons)}
 
 
 if __name__ == "__main__":

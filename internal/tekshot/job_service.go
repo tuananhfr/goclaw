@@ -364,6 +364,8 @@ func (s *JobService) process(ctx context.Context, job *store.TekshotJob) error {
 		result, progress, err = s.runCustomerMemory(ctx, job, request)
 	case TekshotJobTypeMessengerReplyMatch:
 		result, progress, err = s.runMessengerReplyMatch(ctx, job, request)
+	case TekshotJobTypeReplyDataExtract:
+		result, progress, err = s.runReplyDataExtract(ctx, job, request)
 	default:
 		err = fmt.Errorf("unsupported tekshot job type: %s", job.JobType)
 	}
@@ -658,7 +660,7 @@ func (s *JobService) notify() {
 
 func isSupportedTekshotJobType(jobType string) bool {
 	switch jobType {
-	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeAutoImage, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeChecklistChat, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle, TekshotJobTypeDescribeImage, TekshotJobTypeSeedComments, TekshotJobTypeKnowledgeExtract, TekshotJobTypeBlogGenerate, TekshotJobTypeBlogRewrite, TekshotJobTypeBlogAudit, TekshotJobTypeBlogImages, TekshotJobTypeBlogImport, TekshotJobTypePriceLookup, TekshotJobTypeImageReview, TekshotJobTypeCommentReplyMatch, TekshotJobTypeCustomerMemory, TekshotJobTypeMessengerReplyMatch:
+	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeAutoImage, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeChecklistChat, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle, TekshotJobTypeDescribeImage, TekshotJobTypeSeedComments, TekshotJobTypeKnowledgeExtract, TekshotJobTypeBlogGenerate, TekshotJobTypeBlogRewrite, TekshotJobTypeBlogAudit, TekshotJobTypeBlogImages, TekshotJobTypeBlogImport, TekshotJobTypePriceLookup, TekshotJobTypeImageReview, TekshotJobTypeCommentReplyMatch, TekshotJobTypeCustomerMemory, TekshotJobTypeMessengerReplyMatch, TekshotJobTypeReplyDataExtract:
 		return true
 	default:
 		return false

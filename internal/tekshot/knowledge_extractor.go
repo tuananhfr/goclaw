@@ -64,23 +64,27 @@ type knowledgeExtractorOptions struct {
 	// Command replaces "python3 <script>"; tests point it at a stub that
 	// prints a fixture. The CLI args below are appended either way.
 	Command []string
+	// Mode: "" = kho tri thức; "tables" = tách bảng dữ liệu trả lời.
+	Mode string
 }
 
 // knowledgeExtractorArgs is the CLI contract with knowledge_extract.py.
 func knowledgeExtractorArgs(opts knowledgeExtractorOptions) []string {
-	return []string{
+	args := []string{
 		"--input", opts.Input,
 		"--mime", opts.Mime,
 		"--out-dir", opts.OutDir,
 		"--max-scan-pages", strconv.Itoa(opts.MaxScanPages),
 		"--dpi", strconv.Itoa(opts.DPI),
 	}
+	if opts.Mode != "" {
+		args = append(args, "--mode", opts.Mode)
+	}
+	return args
 }
 
-// runKnowledgeExtractor runs the embedded Python extractor on one file. The
-// script never raises: every failure arrives as {"ok":false,...} whose
-// message is already a Vietnamese sentence for the panel.
-func runKnowledgeExtractor(ctx context.Context, opts knowledgeExtractorOptions) (*knowledgeExtraction, error) {
+// runExtractorScript chạy script nhúng và trả stdout đã trim; lỗi hiện kèm đuôi stderr.
+func runExtractorScript(ctx context.Context, opts knowledgeExtractorOptions) ([]byte, error) {
 	if opts.DPI <= 0 {
 		opts.DPI = knowledgeExtractorDPI
 	}
@@ -104,9 +108,8 @@ func runKnowledgeExtractor(ctx context.Context, opts knowledgeExtractorOptions) 
 	if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
 		return nil, errors.New("trích xuất quá 10 phút — file quá lớn hoặc quá phức tạp, hãy cắt nhỏ rồi tải lại")
 	}
-
-	var out knowledgeExtraction
-	if err := json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &out); err != nil {
+	out := bytes.TrimSpace(stdout.Bytes())
+	if !json.Valid(out) {
 		tail := strings.TrimSpace(stderr.String())
 		if len(tail) > knowledgeExtractorStderrCap {
 			tail = tail[len(tail)-knowledgeExtractorStderrCap:]
@@ -114,14 +117,67 @@ func runKnowledgeExtractor(ctx context.Context, opts knowledgeExtractorOptions) 
 		if runErr != nil {
 			return nil, fmt.Errorf("knowledge_extract: extractor failed: %v: %s", runErr, tail)
 		}
-		return nil, fmt.Errorf("knowledge_extract: extractor returned invalid JSON: %w: %s", err, tail)
+		return nil, fmt.Errorf("knowledge_extract: extractor returned invalid JSON: %s", tail)
+	}
+	return out, nil
+}
+
+func extractorFailure(message, code string) error {
+	msg := strings.TrimSpace(message)
+	if msg == "" {
+		msg = "Không trích xuất được file (" + code + ")."
+	}
+	return errors.New(msg)
+}
+
+// runKnowledgeExtractor runs the embedded Python extractor on one file. The
+// script never raises: every failure arrives as {"ok":false,...} whose
+// message is already a Vietnamese sentence for the panel.
+func runKnowledgeExtractor(ctx context.Context, opts knowledgeExtractorOptions) (*knowledgeExtraction, error) {
+	raw, err := runExtractorScript(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	var out knowledgeExtraction
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("knowledge_extract: extractor returned invalid JSON: %w", err)
 	}
 	if !out.OK {
-		msg := strings.TrimSpace(out.Message)
-		if msg == "" {
-			msg = "Không trích xuất được file (" + out.Error + ")."
-		}
-		return nil, errors.New(msg)
+		return nil, extractorFailure(out.Message, out.Error)
 	}
 	return &out, nil
+}
+
+// runTableExtractor chạy script nhúng ở chế độ tables, trả về các bảng dữ liệu trả lời.
+func runTableExtractor(ctx context.Context, opts knowledgeExtractorOptions) (*tableExtraction, error) {
+	opts.Mode = "tables"
+	raw, err := runExtractorScript(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	var out tableExtraction
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("reply_data_extract: extractor returned invalid JSON: %w", err)
+	}
+	if !out.OK {
+		return nil, extractorFailure(out.Message, out.Error)
+	}
+	return &out, nil
+}
+
+type extractedImage struct {
+	Ref       string `json:"ref"`
+	ImagePath string `json:"image_path"`
+}
+
+// tableExtraction is the stdout contract of knowledge_extract.py --mode tables.
+type tableExtraction struct {
+	OK              bool             `json:"ok"`
+	Kind            string           `json:"kind"`
+	Tables          []replyDataTable `json:"tables"`
+	Images          []extractedImage `json:"images"`
+	Truncated       bool             `json:"truncated"`
+	TruncatedReason string           `json:"truncated_reason"`
+	Error           string           `json:"error"`
+	Message         string           `json:"message"`
 }
