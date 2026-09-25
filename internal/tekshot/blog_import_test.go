@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"golang.org/x/text/unicode/norm"
+
+	"github.com/nextlevelbuilder/goclaw/internal/store"
 )
 
 // importMarkup is a hand-written article as Gutenberg stores it: comments,
@@ -215,5 +217,56 @@ func TestBlogImportPresentationKeepsOnlyASyncedTemplate(t *testing.T) {
 	}
 	if blogImportPresentation(nil, snap) != nil {
 		t.Fatal("no template stays no template")
+	}
+}
+
+func TestBuildBlogImportPromptCarriesTheOriginal(t *testing.T) {
+	request := map[string]any{
+		"gutenberg_markup": importMarkup,
+		"title":            "Camera AI trong nhà máy",
+		"summary":          "Tóm tắt cũ",
+		"featured_file_id": float64(110),
+		"featured_alt":     "Bìa",
+		"snapshot": map[string]any{
+			"website": map[string]any{"language": "vi"},
+			"images":  []any{map[string]any{"id": float64(110), "url": "/a.jpg"}},
+		},
+	}
+	prompt := buildBlogImportPrompt(request)
+	for _, want := range []string{
+		blogImportToolName,
+		"Never rewrite",
+		"unconverted",
+		"## TITLE\nCamera AI trong nhà máy",
+		"## SUMMARY\nTóm tắt cũ",
+		"## AVAILABLE IMAGES",
+		"## ORIGINAL MARKUP\n" + importMarkup,
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt misses %q", want)
+		}
+	}
+}
+
+func TestRunBlogImportRefusesMissingOrOversizedMarkup(t *testing.T) {
+	s := &JobService{}
+	if _, _, err := s.runBlogImport(context.Background(), &store.TekshotJob{}, map[string]any{}); err == nil || !strings.Contains(err.Error(), "gutenberg_markup is required") {
+		t.Fatalf("missing markup: %v", err)
+	}
+	big := map[string]any{"gutenberg_markup": strings.Repeat("a", blogImportMaxMarkupBytes+1)}
+	if _, _, err := s.runBlogImport(context.Background(), &store.TekshotJob{}, big); err == nil || !strings.Contains(err.Error(), "BLOG_IMPORT_TOO_LARGE") {
+		t.Fatalf("oversized markup: %v", err)
+	}
+}
+
+func TestBlogImportJobTypeIsWired(t *testing.T) {
+	if TekshotJobTypeBlogImport != "blog_import" {
+		t.Fatal("the job type string is the contract with Drupal's BlogJobRepository::JOB_TYPES")
+	}
+	if !isSupportedTekshotJobType(TekshotJobTypeBlogImport) {
+		t.Fatal("Create must accept blog_import")
+	}
+	if jobRunTimeout(TekshotJobTypeBlogImport) != defaultJobRunTimeout {
+		t.Fatal("blog_import runs on the default 12-minute budget")
 	}
 }

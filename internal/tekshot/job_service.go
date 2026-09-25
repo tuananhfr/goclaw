@@ -42,6 +42,7 @@ const (
 	TekshotJobTypeBlogRewrite      = "blog_rewrite"
 	TekshotJobTypeBlogAudit        = "blog_audit"
 	TekshotJobTypeBlogImages       = "blog_images"
+	TekshotJobTypeBlogImport       = "blog_import"
 	TekshotJobTypePriceLookup      = "price_lookup"
 
 	defaultJobPollInterval = 2 * time.Second
@@ -351,6 +352,8 @@ func (s *JobService) process(ctx context.Context, job *store.TekshotJob) error {
 		result, progress, err = s.runBlogAudit(ctx, job, request)
 	case TekshotJobTypeBlogImages:
 		result, progress, err = s.runBlogImages(ctx, job, request)
+	case TekshotJobTypeBlogImport:
+		result, progress, err = s.runBlogImport(ctx, job, request)
 	case TekshotJobTypePriceLookup:
 		result, progress, err = s.runPriceLookup(ctx, job, request)
 	case TekshotJobTypeImageReview:
@@ -655,7 +658,7 @@ func (s *JobService) notify() {
 
 func isSupportedTekshotJobType(jobType string) bool {
 	switch jobType {
-	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeAutoImage, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeChecklistChat, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle, TekshotJobTypeDescribeImage, TekshotJobTypeSeedComments, TekshotJobTypeKnowledgeExtract, TekshotJobTypeBlogGenerate, TekshotJobTypeBlogRewrite, TekshotJobTypeBlogAudit, TekshotJobTypeBlogImages, TekshotJobTypePriceLookup, TekshotJobTypeImageReview, TekshotJobTypeCommentReplyMatch, TekshotJobTypeCustomerMemory, TekshotJobTypeMessengerReplyMatch:
+	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeAutoImage, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeChecklistChat, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle, TekshotJobTypeDescribeImage, TekshotJobTypeSeedComments, TekshotJobTypeKnowledgeExtract, TekshotJobTypeBlogGenerate, TekshotJobTypeBlogRewrite, TekshotJobTypeBlogAudit, TekshotJobTypeBlogImages, TekshotJobTypeBlogImport, TekshotJobTypePriceLookup, TekshotJobTypeImageReview, TekshotJobTypeCommentReplyMatch, TekshotJobTypeCustomerMemory, TekshotJobTypeMessengerReplyMatch:
 		return true
 	default:
 		return false

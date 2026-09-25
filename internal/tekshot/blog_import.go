@@ -5,13 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"log/slog"
 	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
 	"golang.org/x/text/unicode/norm"
 
+	"github.com/nextlevelbuilder/goclaw/internal/agent"
+	"github.com/nextlevelbuilder/goclaw/internal/providers"
+	"github.com/nextlevelbuilder/goclaw/internal/store"
 	"github.com/nextlevelbuilder/goclaw/internal/tools"
 )
 
@@ -29,6 +34,10 @@ const (
 	// unconverted, the model has dropped content rather than re-arranged it.
 	blogImportMinCoverage   = 0.8
 	blogImportDefaultReason = "Không có vai trò tương ứng trong bản cấu trúc."
+	blogImportNoTools       = "blog-import/no-tools"
+	// Each attempt re-submits the whole article, so retries are few and
+	// happen in Go with the rejection quoted, not as extra loop iterations.
+	blogImportAttempts = 3
 )
 
 var (
@@ -368,3 +377,111 @@ func (t *BlogImportCollector) Execute(_ context.Context, args map[string]any) *t
 func (t *BlogImportCollector) Report() map[string]any { return cloneJSON(t.report) }
 
 func (t *BlogImportCollector) LastError() string { return t.lastErr }
+
+func buildBlogImportPrompt(request map[string]any) string {
+	language := blogSnapshotFromRequest(request).Language
+	var images any
+	if snapshot, ok := request["snapshot"].(map[string]any); ok {
+		images = snapshot["images"]
+	}
+	var sb strings.Builder
+	sb.WriteString("You convert ONE existing article of a website from Gutenberg HTML into the structured blog document v1. This is a lossless re-arrangement, not an edit.\n")
+	sb.WriteString("Deliver the result by calling " + blogImportToolName + " exactly once. Never answer with plain text.\n\n")
+	sb.WriteString("RULES — code checks every one of them and rejects the submission otherwise:\n")
+	sb.WriteString("1. Never rewrite, shorten, translate, correct or embellish the wording. Copy every sentence exactly as it stands in ORIGINAL MARKUP; your only job is to place it into the right role.\n")
+	sb.WriteString("2. Keep inline emphasis as **bold**, *italic* and [text](href). Keep a link only when its href starts with https:// or /; otherwise keep just its text.\n")
+	sb.WriteString("3. Text before the first heading goes to lead.paragraphs (at least one; when the article starts with a heading, the first paragraph after it becomes the lead). Every h2/h3 opens a section (level 2 or 3) whose heading is the original heading text. An h4-h6 heading becomes a paragraph in **bold**. A heading followed directly by another heading becomes a **bold** paragraph at the start of the next section, because a section cannot be empty.\n")
+	sb.WriteString("4. core/paragraph → paragraph; core/list → list (ordered for <ol>); core/table → table; core/image whose id is listed under AVAILABLE IMAGES → image block with that file_id, its caption, and its alt (write a short factual alt only when the original has none); the first core/pullquote or core/quote → quote, later ones → callout; core/details → one faq item (summary = q, content = a); core/buttons → cta.button when its href is https:// or a /path; core/group → place its inner blocks by these same rules.\n")
+	sb.WriteString("5. Section ids are s1, s2, … in order. When the original has no heading at all, create one section whose heading is TITLE and keep every paragraph in it.\n")
+	sb.WriteString("6. Anything with no place in the document — embeds, video, gallery, columns, core/html, shortcodes, an image whose id is not under AVAILABLE IMAGES — goes to unconverted as {block_name (e.g. core/embed), excerpt (first words of its visible text or its URL, at most 200 characters), reason (one short sentence in " + language + ")}. Never drop content silently and never invent content to fill a role.\n")
+	sb.WriteString("7. title = TITLE exactly (when TITLE is empty, use the first heading). summary = SUMMARY exactly (may be empty). key_takeaways = [] unless the original has an explicit takeaway list. sources = [] unless the original lists sources with https URLs. schema_type = Article. images.featured_file_id = FEATURED IMAGE file_id when it is under AVAILABLE IMAGES, otherwise 0.\n")
+	sb.WriteString("8. reply: one or two sentences in " + language + " for the editor — what was converted and what could not be.\n\n")
+	sb.WriteString("## TITLE\n" + strings.TrimSpace(stringFromMap(request, "title")) + "\n\n")
+	sb.WriteString("## SUMMARY\n" + strings.TrimSpace(stringFromMap(request, "summary")) + "\n\n")
+	writeChecklistChatValue(&sb, "FEATURED IMAGE", map[string]any{
+		"file_id": int(numberFromMap(request, "featured_file_id")),
+		"alt":     stringFromMap(request, "featured_alt"),
+	})
+	writeChecklistChatValue(&sb, "AVAILABLE IMAGES", images)
+	sb.WriteString("## ORIGINAL MARKUP\n")
+	sb.WriteString(stringFromMap(request, "gutenberg_markup"))
+	sb.WriteString("\n")
+	return sb.String()
+}
+
+func (s *JobService) runBlogImport(ctx context.Context, job *store.TekshotJob, request map[string]any) (any, string, error) {
+	markup := stringFromMap(request, "gutenberg_markup")
+	if strings.TrimSpace(markup) == "" {
+		return nil, "", fmt.Errorf("gutenberg_markup is required")
+	}
+	if len(markup) > blogImportMaxMarkupBytes {
+		return nil, "", fmt.Errorf("BLOG_IMPORT_TOO_LARGE: the article is %d bytes, the import limit is %d bytes", len(markup), blogImportMaxMarkupBytes)
+	}
+	if s.agents == nil {
+		return nil, "", fmt.Errorf("agent router is not configured")
+	}
+	loop, err := s.agents.Get(store.WithTenantID(ctx, store.MasterTenantID), job.AgentKey)
+	if err != nil {
+		return nil, "", err
+	}
+	snap := blogSnapshotFromRequest(request)
+	collector := NewBlogImportCollector(snap, parseBlogImportSource(markup))
+	prompt := buildBlogImportPrompt(request)
+
+	userID := "tekshot-" + job.ExternalUserID
+	runCtx := store.WithTenantID(ctx, store.MasterTenantID)
+	runCtx = store.WithUserID(runCtx, userID)
+	runCtx = store.WithAgentKey(runCtx, job.AgentKey)
+
+	var usage any
+	for attempt := 1; attempt <= blogImportAttempts && collector.Report() == nil && runCtx.Err() == nil; attempt++ {
+		message := prompt
+		if rejected := collector.LastError(); rejected != "" {
+			message += "\n## YOUR PREVIOUS SUBMISSION WAS REJECTED\n" + rejected + "\nSubmit the whole document again and fix exactly that.\n"
+		}
+		s.setProgress(ctx, job, fmt.Sprintf("Đang chuyển bài (lần %d/%d)", attempt, blogImportAttempts))
+		runID := uuid.NewString()
+		// Forced tool, one iteration, no research tools: the article is the
+		// only input and a free turn has been lost to list_files before.
+		result, runErr := loop.Run(runCtx, agent.RunRequest{
+			SessionKey:     job.SessionKey + ":import:" + runID,
+			Message:        message,
+			Channel:        "tekshot_job",
+			ChannelType:    "tekshot",
+			ChatID:         userID,
+			PeerKind:       "direct",
+			Addressed:      true,
+			RunID:          runID,
+			UserID:         userID,
+			SenderID:       userID,
+			ToolAllow:      []string{blogImportNoTools},
+			EphemeralTools: []tools.Tool{collector},
+			ToolChoice:     &providers.ToolChoice{Mode: "function", Name: blogImportToolName},
+			MaxIterations:  1,
+			SkillFilter:    []string{},
+			LightContext:   true,
+			HistoryLimit:   1,
+			TraceName:      "tekshot blog import",
+			TraceTags:      []string{"tekshot", "blog", "import"},
+		})
+		if result != nil && result.Usage != nil {
+			usage = result.Usage
+		}
+		slog.Info("tekshot.blog_import.attempt", "job", job.ID.String(), "attempt", attempt,
+			"accepted", collector.Report() != nil, "rejected", collector.LastError(), "error", runErr)
+	}
+
+	report := collector.Report()
+	if report == nil {
+		reason := collector.LastError()
+		if reason == "" {
+			reason = "agent did not call " + blogImportToolName
+		}
+		return nil, "", fmt.Errorf("MODEL_OUTPUT_INVALID: %s", reason)
+	}
+	report["presentation"] = blogImportPresentation(request["presentation"], snap)
+	if usage != nil {
+		report["usage"] = usage
+	}
+	return report, "Blog article imported", nil
+}
