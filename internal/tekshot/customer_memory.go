@@ -87,6 +87,7 @@ func buildCustomerMemoryPrompt(request map[string]any) string {
 	sb.WriteString("5. Mục \"Ghi chú của nhân viên\" để trống — hệ thống tự điền.\n")
 	sb.WriteString("6. Tối đa 6000 ký tự; dài quá thì gộp các thoả thuận đã xong cũ hơn 90 ngày thành một dòng tổng.\n")
 	sb.WriteString("7. Không chắc thì không ghi. Giữ nguyên mọi điều đúng trong hồ sơ hiện tại.\n\n")
+	sb.WriteString("Trong Lưu ý khi trả lời, ghi cách xưng hô khách yêu cầu, mức chi tiết họ thích nếu có bằng chứng. Đây là sở thích của khách này, không phải giọng chung của Page; không suy đoán tuổi/giới tính chỉ từ tên hoặc cách viết.\n")
 	sb.WriteString("Chỉ trả về đúng một object JSON: {\"doc\": \"<markdown hồ sơ>\", \"open_issue\": <true nếu có khiếu nại hoặc việc dở cần người xử lý>, \"issue_summary\": \"<1 dòng, rỗng nếu không có>\"}\n")
 	sb.WriteString("Không gọi công cụ. Không giải thích.\n")
 	return sb.String()

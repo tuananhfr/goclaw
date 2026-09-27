@@ -51,20 +51,20 @@ const (
 )
 
 type JobCreateRequest struct {
-	ExternalJobUUID string         `json:"external_job_uuid"`
-	ExternalUserID  string         `json:"external_user_id"`
-	WorkspaceID     string         `json:"workspace_id"`
-	WorkspaceUUID   string         `json:"workspace_uuid"`
-	JobType         string         `json:"job_type"`
-	AgentKey        string         `json:"agent_key"`
-	SessionKey      string         `json:"session_key"`
-	CallbackURL     string         `json:"callback_url"`
-	CallbackToken   string         `json:"callback_token"`
+	ExternalJobUUID string `json:"external_job_uuid"`
+	ExternalUserID  string `json:"external_user_id"`
+	WorkspaceID     string `json:"workspace_id"`
+	WorkspaceUUID   string `json:"workspace_uuid"`
+	JobType         string `json:"job_type"`
+	AgentKey        string `json:"agent_key"`
+	SessionKey      string `json:"session_key"`
+	CallbackURL     string `json:"callback_url"`
+	CallbackToken   string `json:"callback_token"`
 	// Priority: higher claims first, then oldest. Bulk producers send a
 	// negative value so interactive callers never queue behind their backlog.
-	Priority        int            `json:"priority"`
-	Request         map[string]any `json:"request"`
-	ToolArgs        map[string]any `json:"tool_args"`
+	Priority int            `json:"priority"`
+	Request  map[string]any `json:"request"`
+	ToolArgs map[string]any `json:"tool_args"`
 }
 
 type JobService struct {
@@ -362,6 +362,8 @@ func (s *JobService) process(ctx context.Context, job *store.TekshotJob) error {
 		result, progress, err = s.runCommentReplyMatch(ctx, job, request)
 	case TekshotJobTypeCustomerMemory:
 		result, progress, err = s.runCustomerMemory(ctx, job, request)
+	case TekshotJobTypeMessengerLearnStyle:
+		result, progress, err = s.runMessengerLearnStyle(ctx, job, request)
 	case TekshotJobTypeMessengerReplyMatch:
 		result, progress, err = s.runMessengerReplyMatch(ctx, job, request)
 	case TekshotJobTypeMessengerReplyCompose:
@@ -661,6 +663,9 @@ func (s *JobService) notify() {
 }
 
 func isSupportedTekshotJobType(jobType string) bool {
+	if jobType == TekshotJobTypeMessengerLearnStyle {
+		return true
+	}
 	switch jobType {
 	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeAutoImage, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeChecklistChat, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle, TekshotJobTypeDescribeImage, TekshotJobTypeSeedComments, TekshotJobTypeKnowledgeExtract, TekshotJobTypeBlogGenerate, TekshotJobTypeBlogRewrite, TekshotJobTypeBlogAudit, TekshotJobTypeBlogImages, TekshotJobTypeBlogImport, TekshotJobTypePriceLookup, TekshotJobTypeImageReview, TekshotJobTypeCommentReplyMatch, TekshotJobTypeCustomerMemory, TekshotJobTypeMessengerReplyMatch, TekshotJobTypeMessengerReplyCompose, TekshotJobTypeReplyDataExtract:
 		return true

@@ -239,11 +239,6 @@ func (pe *PolicyEngine) evaluate(
 		}
 	}
 
-	// Step 7: Group-level allow
-	if len(groupToolAllow) > 0 {
-		allowed = intersectWithSpec(reg, allowed, groupToolAllow)
-	}
-
 	// Apply global deny
 	if len(g.Deny) > 0 {
 		allowed = subtractSpec(reg, allowed, g.Deny)
@@ -260,6 +255,11 @@ func (pe *PolicyEngine) evaluate(
 	}
 	if agentToolPolicy != nil && len(agentToolPolicy.AlsoAllow) > 0 {
 		allowed = unionWithSpec(reg, allowed, allTools, agentToolPolicy.AlsoAllow)
+	}
+
+	// Request limits are a ceiling, including for additive agent/workspace tools.
+	if len(groupToolAllow) > 0 {
+		allowed = intersectWithSpec(reg, allowed, groupToolAllow)
 	}
 
 	return allowed
