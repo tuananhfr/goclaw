@@ -114,6 +114,9 @@ func (t *VaultReadTool) Execute(ctx context.Context, args map[string]any) *Resul
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("invalid doc_id: %v", err))
 	}
+	if !vaultDocumentAllowed(ctx, docID.String()) {
+		return ErrorResult("document not accessible in current scope")
+	}
 
 	tenantID := store.TenantIDFromContext(ctx)
 	if tenantID == uuid.Nil {
@@ -185,6 +188,7 @@ func (t *VaultReadTool) Execute(ctx context.Context, args map[string]any) *Resul
 		fmt.Fprintf(&sb, "\n\n…[truncated, content exceeds %d bytes]", maxBytes)
 	}
 	sb.WriteString(t.buildOutlinksFooter(ctx, tenantID.String(), doc.ID))
+	recordVaultRead(ctx, doc.ID, string(content))
 	return NewResult(sb.String())
 }
 
@@ -306,6 +310,9 @@ func (t *VaultReadTool) buildOutlinksFooter(ctx context.Context, tenantID, docID
 //   - team:     allow iff RunContext.TeamID == *doc.TeamID.
 //   - else:     deny (default-deny for unknown scope values).
 func (t *VaultReadTool) allowed(ctx context.Context, doc *store.VaultDocument) bool {
+	if !vaultDocumentAllowed(ctx, doc.ID) {
+		return false
+	}
 	switch doc.Scope {
 	case "shared":
 		return true

@@ -54,7 +54,7 @@ func composeRequest() map[string]any {
 }
 
 func composeSubmit(over map[string]any) map[string]any {
-	base := map[string]any{"action": "reply", "text": "Dạ bánh rán 15k ạ", "hold_text": "Dạ để em kiểm tra rồi báo anh/chị ạ", "script_index": float64(0), "row_ids": []any{"r12"}, "quotes": []any{}, "forbidden_hit": false, "reason": ""}
+	base := map[string]any{"action": "reply", "text": "Dạ bánh rán 15k ạ", "hold_text": "Dạ để em kiểm tra rồi báo anh/chị ạ", "script_index": float64(0), "row_ids": []any{"r12"}, "quotes": []any{}, "forbidden_hit": false, "grounding": "sourced", "reason": ""}
 	for k, v := range over {
 		base[k] = v
 	}
@@ -171,13 +171,11 @@ func TestMessengerComposeQuoteCopiedFromCustomerDowngradesToHold(t *testing.T) {
 	}
 }
 
+// Chỉ kiểm bộ lọc lời khách; việc trích dẫn phải có vault_read thật nằm ở enforceVaultEvidence.
 func TestMessengerComposeGenuineQuoteIsKept(t *testing.T) {
-	s := &JobService{}
-	fake := &fakeComposeAgent{
-		submit:   composeSubmit(map[string]any{"quotes": []any{"Quán mở cửa 7h sáng đến 9h tối tất cả các ngày trong tuần"}}),
-		verdicts: []string{`{"verdict":"PASS"}`, `{"verdict":"PASS"}`},
-	}
-	res := s.messengerComposeWith(context.Background(), fake, composeJob(), composeRequest())
+	req := composeRequest()
+	res := map[string]any{"action": "reply", "reason": "", "quotes": []string{"Quán mở cửa 7h sáng đến 9h tối tất cả các ngày trong tuần"}}
+	filterMessengerComposeQuotes(res, messengerReplyLinesFromRequest(req), stringFromMap(req, "memory"))
 	if res["action"] != "reply" {
 		t.Fatalf("a quote not present in the customer's own text must not downgrade the action: %#v", res)
 	}

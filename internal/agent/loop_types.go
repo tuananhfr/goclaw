@@ -621,6 +621,7 @@ type RunRequest struct {
 	ModelOverride     string             // per-request model override (heartbeat uses cheaper model)
 	ProviderOverride  providers.Provider // per-request provider override (heartbeat uses different provider)
 	LightContext      bool               // skip loading context files (only inject ExtraSystemPrompt)
+	IsolatedContext   bool               // explicit prompt only; no implicit memory, hooks, or session persistence
 
 	// Run classification
 	RunKind       string // "delegation", "announce" — empty for user-initiated runs

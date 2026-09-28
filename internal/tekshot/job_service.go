@@ -360,6 +360,10 @@ func (s *JobService) process(ctx context.Context, job *store.TekshotJob) error {
 		result, progress, err = s.runImageReview(ctx, job, request)
 	case TekshotJobTypeCommentReplyMatch:
 		result, progress, err = s.runCommentReplyMatch(ctx, job, request)
+	case TekshotJobTypeCommentReplyCompose:
+		result, progress, err = s.runCommentReplyCompose(ctx, job, request)
+	case TekshotJobTypeCommentThreadMemory:
+		result, progress, err = s.runCommentThreadMemory(ctx, job, request)
 	case TekshotJobTypeCustomerMemory:
 		result, progress, err = s.runCustomerMemory(ctx, job, request)
 	case TekshotJobTypeMessengerLearnStyle:
@@ -663,6 +667,9 @@ func (s *JobService) notify() {
 }
 
 func isSupportedTekshotJobType(jobType string) bool {
+	if jobType == TekshotJobTypeCommentReplyCompose || jobType == TekshotJobTypeCommentThreadMemory {
+		return true
+	}
 	if jobType == TekshotJobTypeMessengerLearnStyle {
 		return true
 	}

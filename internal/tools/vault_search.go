@@ -114,10 +114,22 @@ func (t *VaultSearchTool) Execute(ctx context.Context, args map[string]any) *Res
 	if mr, ok := args["maxResults"].(float64); ok && mr > 0 {
 		opts.MaxResults = int(mr)
 	}
+	limit := opts.MaxResults
+	if vaultScopeRestricted(ctx) {
+		// Filtering after the service's top-N cut hides allowed documents that rank below it.
+		opts.MaxResults = vaultScopedSearchPool
+	}
 
 	results, err := t.searchSvc.Search(ctx, opts)
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("vault search failed: %v", err))
+	}
+	results = restrictVaultResults(ctx, results)
+	if limit <= 0 {
+		limit = 10
+	}
+	if len(results) > limit {
+		results = results[:limit]
 	}
 
 	if len(results) == 0 {

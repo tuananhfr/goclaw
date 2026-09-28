@@ -184,13 +184,14 @@ func buildMessengerComposePrompt(request map[string]any, lines []messengerReplyL
 	for _, f := range anyStrings(request["forbidden"]) {
 		sb.WriteString("- " + neutralizeFences(f) + "\n")
 	}
+	sb.WriteString(replyGroundingRules)
 	sb.WriteString(`
 ## Cách trả lời
-1. Lượt khách chạm chủ đề của một kịch bản → script_index = số kịch bản đó.
+1. Lượt khách chạm chủ đề của một kịch bản → script_index = số kịch bản đó, grounding="sourced".
    - Kịch bản "giữ nguyên văn": KHÔNG cần viết text; ghi row_ids là các dòng dữ liệu dùng để điền chỗ trống.
    - Kịch bản "được viết lại": viết text giữ đúng ý và giọng câu mẫu, được gộp nhiều món, thêm lời chào.
-2. Chuyện thông thường (chào hỏi, hỏi lại cho rõ, thông tin chung): tự viết text; muốn nêu thông tin về Page thì dùng vault_search/vault_read và chép nguyên văn đoạn đã dùng vào quotes.
-3. MỌI giá, số tiền, phần trăm, thời gian, cam kết phải có trong dữ liệu đã duyệt, câu mẫu kịch bản hoặc hồ sơ Page; ghi row_ids cho mọi dòng dữ liệu đã dùng. Không có nguồn → action "hold".
+2. Chỉ chào hỏi, hỏi lại cho rõ, xin thêm thông tin: tự viết text, grounding="social".
+3. Khách hỏi thông tin: tìm bằng vault_search/vault_read, chỉ trả lời phần có trong nguồn; chép nguyên văn đoạn tài liệu đã dùng vào quotes và ghi row_ids cho mọi dòng dữ liệu đã dùng. Không tìm thấy trong nguồn → action "hold".
 4. Chạm vùng cấm, khiếu nại, khách muốn gặp người, hoặc không chắc → action "hold", forbidden_hit=true nếu là vùng cấm.
 5. Khách chỉ cảm ơn, "ok", sticker, hoặc lượt không cần trả lời → action "silence".
 6. hold_text LUÔN phải có: một câu giữ chân ngắn, lịch sự, hợp ngữ cảnh, KHÔNG chứa thông tin, số liệu hay lời hứa nào (ví dụ báo sẽ kiểm tra và phản hồi ngay).
@@ -230,9 +231,10 @@ func (t *MessengerReplyTool) Parameters() map[string]any {
 			"row_ids":       strs,
 			"quotes":        strs,
 			"forbidden_hit": map[string]any{"type": "boolean"},
+			"grounding":     map[string]any{"type": "string", "enum": []string{"social", "sourced", "profile", "post"}},
 			"reason":        map[string]any{"type": "string"},
 		},
-		"required": []string{"action", "text", "messages", "hold_text", "script_index", "row_ids", "quotes", "forbidden_hit", "reason"},
+		"required": []string{"action", "text", "messages", "hold_text", "script_index", "row_ids", "quotes", "forbidden_hit", "grounding", "reason"},
 	}
 }
 
@@ -258,7 +260,7 @@ func (t *MessengerReplyTool) Report() map[string]any {
 func messengerComposeSilence(reason string) map[string]any {
 	return map[string]any{
 		"action": "silence", "text": "", "hold_text": "", "script_index": 0, "row_ids": []string{}, "quotes": []string{},
-		"forbidden_hit": false, "reason": reason, "verify": map[string]any{"reply": "NONE", "hold": "NONE"},
+		"forbidden_hit": false, "grounding": "", "reason": reason, "verify": map[string]any{"reply": "NONE", "hold": "NONE"},
 	}
 }
 
@@ -281,6 +283,7 @@ func (s *JobService) runMessengerReplyCompose(ctx context.Context, job *store.Te
 
 // messengerComposeWith tách khỏi run để test dùng agent giả.
 func (s *JobService) messengerComposeWith(ctx context.Context, loop agent.Agent, job *store.TekshotJob, request map[string]any) map[string]any {
+	ctx, evidence := tools.WithVaultReadEvidence(ctx)
 	lines := messengerReplyLinesFromRequest(request)
 	scripts := messengerComposeScriptsFromRequest(request)
 	rows := messengerComposeRowsFromRequest(request)
@@ -291,6 +294,8 @@ func (s *JobService) messengerComposeWith(ctx context.Context, loop agent.Agent,
 	}
 	result := normalizeMessengerCompose(report, scripts, rows)
 	filterMessengerComposeQuotes(result, lines, stringFromMap(request, "memory"))
+	enforceVaultEvidence(result, evidence)
+	applyReplyGrounding(result, report, request, scripts)
 	result["verify"] = s.verifyMessengerCompose(ctx, loop, job, request, lines, result, scripts, rows)
 	return result
 }
@@ -317,7 +322,8 @@ func (s *JobService) composeMessengerReply(ctx context.Context, loop agent.Agent
 			slog.Warn("tekshot: messenger compose failed", "job", job.ID.String(), "error", err)
 		}
 	}()
-	if collector.Report() == nil {
+	_, isolatedPublicReply := loop.(publicCommentAgent)
+	if collector.Report() == nil && !isolatedPublicReply {
 		final := req
 		final.RunID = uuid.NewString()
 		// ToolChoice áp lại ở mọi vòng: hơn 1 vòng là nộp nhiều lần.
@@ -494,13 +500,15 @@ func messengerVerifyFacts(request map[string]any, result map[string]any, scripts
 			sb.WriteString("- " + neutralizeFences(reply) + "\n")
 		}
 	}
-	// Đoạn kho tri thức là do chính model tự trích khi soạn, chưa ai xác minh — không phải
-	// nguồn để verify chấp nhận giá/số tiền/thời gian/cam kết, chỉ dùng để tả thông tin chung.
-	sb.WriteString("Đoạn kho tri thức do AI tự trích — CHƯA xác minh: chỉ dùng cho thông tin mô tả, KHÔNG phải nguồn cho giá, số tiền, phần trăm, khuyến mãi, thời gian hay cam kết:\n")
+	// enforceVaultEvidence đã loại mọi trích dẫn không nằm trong nội dung vault_read trả về.
+	sb.WriteString("Đoạn tài liệu Page (đã đối chiếu với nội dung đọc được):\n")
 	for _, q := range result["quotes"].([]string) {
 		sb.WriteString("- " + neutralizeFences(headRunes(q, 1000)) + "\n")
 	}
 	sb.WriteString("Hồ sơ Page:\n" + neutralizeFences(headRunes(stringFromMap(request, "profile"), messengerComposeMaxProfileRunes)) + "\n")
+	if post, ok := request["post"].(map[string]any); ok {
+		sb.WriteString("Bài đăng:\n" + neutralizeFences(headRunes(stringFromMap(post, "title")+"\n"+stringFromMap(post, "content"), 3000)) + "\n")
+	}
 	sb.WriteString("Vùng cấm:\n")
 	for _, f := range anyStrings(request["forbidden"]) {
 		sb.WriteString("- " + neutralizeFences(f) + "\n")
@@ -547,7 +555,7 @@ func (s *JobService) messengerVerdict(ctx context.Context, loop agent.Agent, job
 	if holding {
 		sb.WriteString("Đây là câu GIỮ CHÂN: FAIL nếu nó chứa bất kỳ thông tin, con số, thời gian hay lời hứa nào; PASS nếu chỉ báo sẽ kiểm tra/phản hồi.\n")
 	} else {
-		sb.WriteString("FAIL nếu: có giá, số tiền, phần trăm, khuyến mãi, thời gian hay cam kết mà KHÔNG có trong dữ liệu đã dẫn, câu mẫu kịch bản hoặc hồ sơ Page (đoạn kho tri thức KHÔNG phải nguồn cho các thông tin này); làm điều thuộc vùng cấm; trả lời lạc đề so với lượt khách; nói chắc điều nguồn không nói. Còn lại PASS.\n")
+		sb.WriteString("FAIL nếu: tin có BẤT KỲ thông tin cụ thể nào (sản phẩm, dịch vụ, giá, số tiền, phần trăm, khuyến mãi, thời gian, địa chỉ, chính sách, cách dùng, nhận xét chất lượng, cam kết) KHÔNG có trong Nguồn được phép — kể cả kiến thức phổ thông hay điều nghe có vẻ hiển nhiên; làm điều thuộc vùng cấm; trả lời lạc đề so với lượt khách. PASS cho câu xã giao thuần (chào, cảm ơn, hỏi lại cho rõ, xin thêm thông tin) và câu mà mọi thông tin đều có trong Nguồn được phép.\n")
 	}
 	sb.WriteString("Chỉ trả về đúng object JSON: {\"verdict\": \"PASS\" hoặc \"FAIL\", \"reason\": \"...\"}")
 

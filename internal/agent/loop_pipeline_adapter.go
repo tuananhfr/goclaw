@@ -48,7 +48,7 @@ func (l *Loop) buildPipelineDeps(req *RunRequest, bridgeRS *runState) pipeline.P
 
 	cb := l.pipelineCallbacks(req, bridgeRS)
 
-	return pipeline.PipelineDeps{
+	deps := pipeline.PipelineDeps{
 		TokenCounter: tokencount.NewTiktokenCounter(),
 		EventBus:     l.domainBus,
 		Hooks:        l.hookDispatcher,
@@ -195,6 +195,10 @@ func (l *Loop) buildPipelineDeps(req *RunRequest, bridgeRS *runState) pipeline.P
 		BootstrapCleanup: cb.bootstrapCleanup,
 		MaybeSummarize:   cb.maybeSummarize,
 	}
+	if req.IsolatedContext {
+		deps.IsolateContext()
+	}
+	return deps
 }
 
 // convertRunInput converts agent.RunRequest to pipeline.RunInput.
