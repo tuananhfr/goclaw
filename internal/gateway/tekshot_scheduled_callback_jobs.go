@@ -60,7 +60,7 @@ func (s *Server) handleTekshotScheduledCallbackJobs(w http.ResponseWriter, r *ht
 	if !ok {
 		return
 	}
-	job, err := s.upsertTekshotScheduledCallbackJob(r.Context(), input)
+	job, err := s.upsertTekshotScheduledCallbackJob(tekshotCronContext(r), input)
 	if err != nil {
 		writeGatewayJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":      false,
@@ -105,7 +105,7 @@ func (s *Server) handleTekshotScheduledCallbackJob(w http.ResponseWriter, r *htt
 		if !ok {
 			return
 		}
-		job, err := s.updateTekshotScheduledCallbackJob(r.Context(), jobID, input)
+		job, err := s.updateTekshotScheduledCallbackJob(tekshotCronContext(r), jobID, input)
 		if err != nil {
 			status := http.StatusBadRequest
 			if errors.Is(err, store.ErrCronJobNotFound) {
@@ -122,7 +122,7 @@ func (s *Server) handleTekshotScheduledCallbackJob(w http.ResponseWriter, r *htt
 			"job": serializeTekshotScheduledCallbackJob(job, input),
 		})
 	case http.MethodDelete:
-		if err := s.tekshotCron.RemoveJob(r.Context(), jobID); err != nil && err != store.ErrCronJobNotFound {
+		if err := s.tekshotCron.RemoveJob(tekshotCronContext(r), jobID); err != nil && err != store.ErrCronJobNotFound {
 			writeGatewayJSON(w, http.StatusBadRequest, map[string]any{
 				"ok":      false,
 				"message": err.Error(),
@@ -197,7 +197,19 @@ func (s *Server) createTekshotScheduledCallbackJob(ctx context.Context, input te
 	}
 	args := tekshotScheduledCallbackArgs(input)
 	args["callback_token"] = input.CallbackToken
-	return s.tekshotCron.AddToolCallJob(ctx, tekshotScheduledCallbackName(input), input.RunAtMS, tekshottools.ScheduledCallbackToolName, args, "", "tekshot")
+	job, err := s.tekshotCron.AddToolCallJob(ctx, tekshotScheduledCallbackName(input), input.RunAtMS, tekshottools.ScheduledCallbackToolName, args, "", "tekshot")
+	if err == nil && job == nil {
+		// The PG store inserts, then re-reads under tenant scope; a nil job means that read failed.
+		return nil, fmt.Errorf("scheduled callback job was saved but could not be read back")
+	}
+	return job, err
+}
+
+// tekshotCronContext scopes Tekshot cron calls to the master tenant, where
+// AddToolCallJob inserts them: the gateway bearer carries no tenant, and the
+// cron store refuses unscoped reads, which left created jobs unreadable.
+func tekshotCronContext(r *http.Request) context.Context {
+	return store.WithTenantID(r.Context(), store.MasterTenantID)
 }
 
 func (s *Server) updateTekshotScheduledCallbackJob(ctx context.Context, jobID string, input tekshotScheduledCallbackRequest) (*store.CronJob, error) {
