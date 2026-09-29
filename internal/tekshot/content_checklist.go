@@ -67,7 +67,7 @@ func (s *JobService) runContentChecklist(ctx context.Context, job *store.Tekshot
 	runCtx = store.WithUserID(runCtx, userID)
 	runCtx = store.WithAgentKey(runCtx, job.AgentKey)
 
-	collector := NewContentChecklistCollectorTool()
+	collector := NewContentChecklistCollectorTool(checklistPlanFrameFromRequest(request))
 	runReq := agent.RunRequest{
 		SessionKey:     job.SessionKey,
 		Message:        buildContentChecklistPrompt(request),
@@ -114,11 +114,12 @@ func (s *JobService) runContentChecklist(ctx context.Context, job *store.Tekshot
 // ContentChecklistCollectorTool captures the one structured checklist.
 type ContentChecklistCollectorTool struct {
 	report map[string]any
+	frame  checklistPlanFrame
 }
 
-// NewContentChecklistCollectorTool builds the ephemeral collector.
-func NewContentChecklistCollectorTool() *ContentChecklistCollectorTool {
-	return &ContentChecklistCollectorTool{}
+// NewContentChecklistCollectorTool builds the ephemeral collector for one page's frame.
+func NewContentChecklistCollectorTool(frame checklistPlanFrame) *ContentChecklistCollectorTool {
+	return &ContentChecklistCollectorTool{frame: frame}
 }
 
 // Name implements tools.Tool.
@@ -131,6 +132,21 @@ func (t *ContentChecklistCollectorTool) Description() string {
 
 // Parameters implements tools.Tool.
 func (t *ContentChecklistCollectorTool) Parameters() map[string]any {
+	itemProperties := map[string]any{
+		"date":         map[string]any{"type": "string", "description": "Publish date as YYYY-MM-DD, inside the requested planning window."},
+		"time_slot":    map[string]any{"type": "string", "description": "Suggested posting time, e.g. '11:00' or '19:00-20:00'. Base it on the store's peak hours when provided."},
+		"content_line": map[string]any{"type": "string", "description": "Content pillar / tuyến nội dung, e.g. 'Món chủ lực', 'Khách hàng thật', 'Ưu đãi'. Keep the set of pillars small and repeat them across the plan."},
+		"topic":        map[string]any{"type": "string", "description": "The post subject in one short line. This becomes the writer's title."},
+		"hook":         map[string]any{"type": "string", "description": "The opening line that stops the scroll. Concrete and specific, never a generic slogan."},
+		"body":         map[string]any{"type": "string", "description": "Exactly two labelled parts: 'Nội dung:' gives 2-4 sentences of copy direction and CTA; 'Ảnh:' gives the brief for one static image. Never propose video, reel, livestream, clip or filming."},
+		"usp":          map[string]any{"type": "string", "description": "Selling point and keywords to keep in the copy, comma separated."},
+	}
+	required := []string{"date", "time_slot", "content_line", "topic", "hook", "body", "usp"}
+	for key, property := range checklistPlanProperties(t.frame) {
+		itemProperties[key] = property
+	}
+	required = append(required, checklistPlanFieldNames()...)
+
 	return map[string]any{
 		"type":                 "object",
 		"additionalProperties": false,
@@ -141,16 +157,8 @@ func (t *ContentChecklistCollectorTool) Parameters() map[string]any {
 				"items": map[string]any{
 					"type":                 "object",
 					"additionalProperties": false,
-					"properties": map[string]any{
-						"date":         map[string]any{"type": "string", "description": "Publish date as YYYY-MM-DD, inside the requested planning window."},
-						"time_slot":    map[string]any{"type": "string", "description": "Suggested posting time, e.g. '11:00' or '19:00-20:00'. Base it on the store's peak hours when provided."},
-						"content_line": map[string]any{"type": "string", "description": "Content pillar / tuyến nội dung, e.g. 'Món chủ lực', 'Khách hàng thật', 'Ưu đãi'. Keep the set of pillars small and repeat them across the plan."},
-						"topic":        map[string]any{"type": "string", "description": "The post subject in one short line. This becomes the writer's title."},
-						"hook":         map[string]any{"type": "string", "description": "The opening line that stops the scroll. Concrete and specific, never a generic slogan."},
-						"body":         map[string]any{"type": "string", "description": "Exactly two labelled parts: 'Nội dung:' gives 2-4 sentences of copy direction and CTA; 'Ảnh:' gives the brief for one static image. Never propose video, reel, livestream, clip or filming."},
-						"usp":          map[string]any{"type": "string", "description": "Selling point and keywords to keep in the copy, comma separated."},
-					},
-					"required": []string{"date", "time_slot", "content_line", "topic", "hook", "body", "usp"},
+					"properties":           itemProperties,
+					"required":             required,
 				},
 			},
 			"summary": map[string]any{
@@ -164,7 +172,7 @@ func (t *ContentChecklistCollectorTool) Parameters() map[string]any {
 
 // Execute implements tools.Tool.
 func (t *ContentChecklistCollectorTool) Execute(_ context.Context, args map[string]any) *tools.Result {
-	report, err := validateContentChecklist(args)
+	report, err := validateContentChecklist(args, t.frame)
 	if err != nil {
 		return tools.ErrorResult("MODEL_OUTPUT_INVALID: " + err.Error())
 	}
@@ -188,7 +196,7 @@ func (t *ContentChecklistCollectorTool) Report() map[string]any {
 	return clone
 }
 
-func validateContentChecklist(args map[string]any) (map[string]any, error) {
+func validateContentChecklist(args map[string]any, frame checklistPlanFrame) (map[string]any, error) {
 	items, ok := args["items"].([]any)
 	if !ok || len(items) == 0 {
 		return nil, fmt.Errorf("items must contain at least one row")
@@ -218,6 +226,9 @@ func validateContentChecklist(args map[string]any) (map[string]any, error) {
 		}
 		if term := checklistForbiddenFormatTerm(item); term != "" {
 			return nil, fmt.Errorf("items[%d] must be a written post with a static image, not %q", i, term)
+		}
+		if err := validateChecklistPlanFields(item, frame, i); err != nil {
+			return nil, err
 		}
 	}
 
@@ -286,6 +297,7 @@ func buildContentChecklistPrompt(request map[string]any) string {
 	sb.WriteString("- hook: the opening line that stops the scroll. Specific and concrete.\n")
 	sb.WriteString("- body: exactly two labelled parts: 'Nội dung:' (2-4 sentences of copy direction and CTA) and 'Ảnh:' (one static-image brief: photo, graphic, illustration or text design).\n")
 	sb.WriteString("- usp: selling points and keywords to keep in the copy, comma separated.\n\n")
+	writeChecklistPlanRules(&sb, checklistPlanFrameFromRequest(request))
 
 	sb.WriteString("## Hard rules\n")
 	sb.WriteString(fmt.Sprintf("- Write EVERY field in language '%s'. Marketing staff read this, not developers.\n", language))

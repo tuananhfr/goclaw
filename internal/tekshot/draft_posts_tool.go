@@ -543,6 +543,14 @@ func buildPrompt(args map[string]any, timezone string) string {
 		if facts := strings.TrimSpace(stringArg(args, "researched_facts")); facts != "" {
 			sb.WriteString("\n" + facts + "\n")
 		}
+		if sourceItemsCarryPlanColumns(sourceItems) {
+			sb.WriteString("\nPLAN COLUMNS in supporting_source (the approved plan for this post — follow them):\n")
+			sb.WriteString("- 'Tệp khách': write for that one customer group — their situation, their words.\n")
+			sb.WriteString("- 'Giai đoạn': Nhận biết = introduce and converse, never sell; Cân nhắc = help the reader compare and invite them to learn more; Hành động = invite them to act now.\n")
+			sb.WriteString("- 'CTA chính': end the caption with exactly that one call to action and no other. When 'Từ khoá CTA' is present, ask readers to comment that exact keyword, spelled as given.\n")
+			sb.WriteString("- 'Cảm xúc': the feeling the reader should leave with; set the tone for it without naming the emotion.\n")
+			sb.WriteString("- 'Mã bài', 'Rủi ro', 'Nguồn tối thiểu' and 'Trạng thái' are workflow data: never print them in the caption.\n")
+		}
 		sb.WriteString("\nSTRICT source item rules:\n")
 		sb.WriteString("- Return exactly one post for every source_index listed above.\n")
 		sb.WriteString("- Every submitted post must include the matching numeric source_index.\n")
@@ -606,6 +614,17 @@ func sourceSupportingText(item SourceItem) string {
 		text = strings.TrimSpace(strings.TrimPrefix(text, prefix))
 	}
 	return text
+}
+
+// sourceItemsCarryPlanColumns: checklist Insight đẩy sang mới có "CTA chính";
+// sheet tự nhập không có thì prompt giữ nguyên như cũ.
+func sourceItemsCarryPlanColumns(items []SourceItem) bool {
+	for _, item := range items {
+		if strings.Contains(item.SourceText, "\nCTA chính: ") {
+			return true
+		}
+	}
+	return false
 }
 
 func indentPromptBlock(value, prefix string) string {

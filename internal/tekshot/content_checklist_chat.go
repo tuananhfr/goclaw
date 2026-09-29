@@ -53,7 +53,7 @@ func (s *JobService) runContentChecklistChat(ctx context.Context, job *store.Tek
 	runCtx = store.WithUserID(runCtx, userID)
 	runCtx = store.WithAgentKey(runCtx, job.AgentKey)
 
-	collector := NewContentChecklistProposalCollector()
+	collector := NewContentChecklistProposalCollector(checklistPlanFrameFromRequest(request))
 	runReq := agent.RunRequest{
 		SessionKey:     job.SessionKey,
 		Message:        buildContentChecklistChatPrompt(request),
@@ -101,10 +101,11 @@ func (s *JobService) runContentChecklistChat(ctx context.Context, job *store.Tek
 
 type ContentChecklistProposalCollector struct {
 	report map[string]any
+	frame  checklistPlanFrame
 }
 
-func NewContentChecklistProposalCollector() *ContentChecklistProposalCollector {
-	return &ContentChecklistProposalCollector{}
+func NewContentChecklistProposalCollector(frame checklistPlanFrame) *ContentChecklistProposalCollector {
+	return &ContentChecklistProposalCollector{frame: frame}
 }
 
 func (t *ContentChecklistProposalCollector) Name() string { return checklistChatFinalToolName }
@@ -114,6 +115,28 @@ func (t *ContentChecklistProposalCollector) Description() string {
 }
 
 func (t *ContentChecklistProposalCollector) Parameters() map[string]any {
+	itemProperties := map[string]any{
+		"action":         map[string]any{"type": "string", "enum": []string{"create", "update", "keep", "delete"}},
+		"source_item_id": map[string]any{"type": "integer"},
+		"date":           map[string]any{"type": "string"},
+		"time_slot":      map[string]any{"type": "string"},
+		"content_line":   map[string]any{"type": "string"},
+		"topic":          map[string]any{"type": "string"},
+		"hook":           map[string]any{"type": "string"},
+		"body":           map[string]any{"type": "string", "description": "Exactly two labelled parts: 'Nội dung:' gives copy direction and CTA; 'Ảnh:' gives one static-image brief. Video, reel, livestream, clip and filming are forbidden."},
+		"usp":            map[string]any{"type": "string"},
+		"reason":         map[string]any{"type": "string"},
+	}
+	required := []string{"action", "source_item_id", "date", "time_slot", "content_line", "topic", "hook", "body", "usp", "reason"}
+	for key, property := range checklistPlanProperties(t.frame) {
+		// keep/delete không ghi các cột này, nên enum phải nhận chuỗi rỗng.
+		if _, hasEnum := property.(map[string]any)["enum"]; hasEnum {
+			property = map[string]any{"type": "string", "description": property.(map[string]any)["description"]}
+		}
+		itemProperties[key] = property
+	}
+	required = append(required, checklistPlanFieldNames()...)
+
 	return map[string]any{
 		"type":                 "object",
 		"additionalProperties": false,
@@ -128,19 +151,8 @@ func (t *ContentChecklistProposalCollector) Parameters() map[string]any {
 				"items": map[string]any{
 					"type":                 "object",
 					"additionalProperties": false,
-					"properties": map[string]any{
-						"action":         map[string]any{"type": "string", "enum": []string{"create", "update", "keep", "delete"}},
-						"source_item_id": map[string]any{"type": "integer"},
-						"date":           map[string]any{"type": "string"},
-						"time_slot":      map[string]any{"type": "string"},
-						"content_line":   map[string]any{"type": "string"},
-						"topic":          map[string]any{"type": "string"},
-						"hook":           map[string]any{"type": "string"},
-						"body":           map[string]any{"type": "string", "description": "Exactly two labelled parts: 'Nội dung:' gives copy direction and CTA; 'Ảnh:' gives one static-image brief. Video, reel, livestream, clip and filming are forbidden."},
-						"usp":            map[string]any{"type": "string"},
-						"reason":         map[string]any{"type": "string"},
-					},
-					"required": []string{"action", "source_item_id", "date", "time_slot", "content_line", "topic", "hook", "body", "usp", "reason"},
+					"properties":           itemProperties,
+					"required":             required,
 				},
 			},
 			"sources": map[string]any{
@@ -165,7 +177,7 @@ func (t *ContentChecklistProposalCollector) Parameters() map[string]any {
 }
 
 func (t *ContentChecklistProposalCollector) Execute(_ context.Context, args map[string]any) *tools.Result {
-	report, err := validateContentChecklistProposal(args)
+	report, err := validateContentChecklistProposal(args, t.frame)
 	if err != nil {
 		return tools.ErrorResult("MODEL_OUTPUT_INVALID: " + err.Error())
 	}
@@ -188,7 +200,7 @@ func (t *ContentChecklistProposalCollector) Report() map[string]any {
 	return clone
 }
 
-func validateContentChecklistProposal(args map[string]any) (map[string]any, error) {
+func validateContentChecklistProposal(args map[string]any, frame checklistPlanFrame) (map[string]any, error) {
 	kind := strings.TrimSpace(stringFromMap(args, "type"))
 	if kind != "proposal" && kind != "clarification" && kind != "answer" {
 		return nil, fmt.Errorf("type must be proposal, clarification or answer")
@@ -234,6 +246,12 @@ func validateContentChecklistProposal(args map[string]any) (map[string]any, erro
 		}
 		if term := checklistForbiddenFormatTerm(item); term != "" {
 			return nil, fmt.Errorf("items[%d] must be a written post with a static image, not %q", i, term)
+		}
+		if action == "keep" {
+			continue
+		}
+		if err := validateChecklistPlanFields(item, frame, i); err != nil {
+			return nil, err
 		}
 	}
 
@@ -286,7 +304,9 @@ func buildContentChecklistChatPrompt(request map[string]any) string {
 	sb.WriteString("USER REQUEST:\n")
 	sb.WriteString(strings.TrimSpace(stringFromMap(request, "message")))
 	sb.WriteString("\n\n")
+	writeChecklistPlanRules(&sb, checklistPlanFrameFromRequest(request))
 	sb.WriteString("Every non-delete item must fill date, content_line, topic, hook, body and usp. time_slot may be blank. Do NOT include timeline: Insight derives the weekday from date.\n")
+	sb.WriteString("Every create and update item must also fill the planning columns above; keep and delete items may leave them empty.\n")
 	sb.WriteString("Sources must identify Vault/page/web/Insight evidence actually used. Never invent URLs.\n")
 	return sb.String()
 }

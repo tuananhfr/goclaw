@@ -8,14 +8,30 @@ import (
 
 func validChecklistItem() map[string]any {
 	return map[string]any{
-		"date":         "2026-08-03",
-		"time_slot":    "19:00-20:00",
-		"content_line": "Món chủ lực",
-		"topic":        "Pizza 4 vị phô mai cho bữa tối cuối tuần",
-		"hook":         "4 loại phô mai kéo sợi trong một miếng bánh",
-		"body":         "Nội dung: Nhấn phần phô mai kéo sợi và chốt bằng lời mời đặt bàn tối thứ Bảy. Ảnh: Cận cảnh một miếng pizza phô mai kéo sợi trên nền bàn gỗ.",
-		"usp":          "phô mai kéo sợi, nướng lửa, giao nhanh",
+		"date":            "2026-08-03",
+		"time_slot":       "19:00-20:00",
+		"content_line":    "Món chủ lực",
+		"topic":           "Pizza 4 vị phô mai cho bữa tối cuối tuần",
+		"hook":            "4 loại phô mai kéo sợi trong một miếng bánh",
+		"body":            "Nội dung: Nhấn phần phô mai kéo sợi và chốt bằng lời mời đặt bàn tối thứ Bảy. Ảnh: Cận cảnh một miếng pizza phô mai kéo sợi trên nền bàn gỗ.",
+		"usp":             "phô mai kéo sợi, nướng lửa, giao nhanh",
+		"tep_khach":       "Gia đình trẻ",
+		"giai_doan":       "HANH_DONG",
+		"cta_chinh":       "DAT_HANG",
+		"tu_khoa_cta":     "",
+		"cam_xuc":         "VUI",
+		"dinh_dang":       "F2",
+		"muc_dich":        "THUONG_MAI",
+		"loai_anh":        "UPLOAD",
+		"style_anh":       "",
+		"rui_ro":          "MEDIUM",
+		"nguon_toi_thieu": "",
 	}
+}
+
+// testPlanFrame là khung của một page chưa khai Kim chỉ nam lẫn hồ sơ khách.
+func testPlanFrame() checklistPlanFrame {
+	return checklistPlanFrameFromRequest(map[string]any{})
 }
 
 func validChecklistReport() map[string]any {
@@ -26,7 +42,7 @@ func validChecklistReport() map[string]any {
 }
 
 func TestValidateContentChecklistAcceptsValidReport(t *testing.T) {
-	if _, err := validateContentChecklist(validChecklistReport()); err != nil {
+	if _, err := validateContentChecklist(validChecklistReport(), testPlanFrame()); err != nil {
 		t.Fatalf("expected valid checklist to pass, got: %v", err)
 	}
 }
@@ -34,7 +50,7 @@ func TestValidateContentChecklistAcceptsValidReport(t *testing.T) {
 func TestValidateContentChecklistRejectsEmptyItems(t *testing.T) {
 	report := validChecklistReport()
 	report["items"] = []any{}
-	if _, err := validateContentChecklist(report); err == nil {
+	if _, err := validateContentChecklist(report, testPlanFrame()); err == nil {
 		t.Fatal("expected empty items to be rejected")
 	}
 }
@@ -42,7 +58,7 @@ func TestValidateContentChecklistRejectsEmptyItems(t *testing.T) {
 func TestValidateContentChecklistRequiresSummary(t *testing.T) {
 	report := validChecklistReport()
 	report["summary"] = "   "
-	if _, err := validateContentChecklist(report); err == nil {
+	if _, err := validateContentChecklist(report, testPlanFrame()); err == nil {
 		t.Fatal("expected blank summary to be rejected")
 	}
 }
@@ -53,7 +69,7 @@ func TestValidateContentChecklistRequiresPlanningColumns(t *testing.T) {
 		item := validChecklistItem()
 		item[field] = "  "
 		report["items"] = []any{item}
-		_, err := validateContentChecklist(report)
+		_, err := validateContentChecklist(report, testPlanFrame())
 		if err == nil {
 			t.Fatalf("expected blank %s to be rejected", field)
 		}
@@ -70,7 +86,7 @@ func TestValidateContentChecklistAllowsBlankOptionalColumns(t *testing.T) {
 	item := validChecklistItem()
 	item["time_slot"] = ""
 	report["items"] = []any{item}
-	if _, err := validateContentChecklist(report); err != nil {
+	if _, err := validateContentChecklist(report, testPlanFrame()); err != nil {
 		t.Fatalf("expected blank optional columns to pass, got: %v", err)
 	}
 }
@@ -81,7 +97,7 @@ func TestValidateContentChecklistRejectsBadDate(t *testing.T) {
 		item := validChecklistItem()
 		item["date"] = bad
 		report["items"] = []any{item}
-		if _, err := validateContentChecklist(report); err == nil {
+		if _, err := validateContentChecklist(report, testPlanFrame()); err == nil {
 			t.Fatalf("expected date %q to be rejected", bad)
 		}
 	}
@@ -94,7 +110,7 @@ func TestValidateContentChecklistRejectsTooManyRows(t *testing.T) {
 		rows = append(rows, validChecklistItem())
 	}
 	report["items"] = rows
-	if _, err := validateContentChecklist(report); err == nil {
+	if _, err := validateContentChecklist(report, testPlanFrame()); err == nil {
 		t.Fatal("expected row count above the cap to be rejected")
 	}
 }

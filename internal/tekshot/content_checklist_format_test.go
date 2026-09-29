@@ -15,7 +15,7 @@ func TestValidateContentChecklistRejectsVideoFormats(t *testing.T) {
 		item := validChecklistItem()
 		item["body"] = directive
 		report["items"] = []any{item}
-		if _, err := validateContentChecklist(report); err == nil {
+		if _, err := validateContentChecklist(report, testPlanFrame()); err == nil {
 			t.Fatalf("expected unsupported format to be rejected: %q", directive)
 		}
 	}
@@ -55,14 +55,14 @@ func TestBuildContentChecklistChatPromptKeepsReachMetricsOutOfRows(t *testing.T)
 }
 
 func TestChecklistCollectorsDoNotAcceptTimelineFromTheModel(t *testing.T) {
-	legacyItems := NewContentChecklistCollectorTool().Parameters()["properties"].(map[string]any)["items"].(map[string]any)
+	legacyItems := NewContentChecklistCollectorTool(testPlanFrame()).Parameters()["properties"].(map[string]any)["items"].(map[string]any)
 	legacyItem := legacyItems["items"].(map[string]any)
 	legacyFields := legacyItem["properties"].(map[string]any)
 	if _, found := legacyFields["timeline"]; found {
 		t.Fatal("legacy checklist collector must not accept an AI-supplied timeline")
 	}
 
-	chatItems := NewContentChecklistProposalCollector().Parameters()["properties"].(map[string]any)["items"].(map[string]any)
+	chatItems := NewContentChecklistProposalCollector(testPlanFrame()).Parameters()["properties"].(map[string]any)["items"].(map[string]any)
 	chatItem := chatItems["items"].(map[string]any)
 	chatFields := chatItem["properties"].(map[string]any)
 	if _, found := chatFields["timeline"]; found {
@@ -85,7 +85,7 @@ func TestValidateContentChecklistProposalRejectsVideoFormats(t *testing.T) {
 		"research_status": map[string]any{},
 	}
 
-	if _, err := validateContentChecklistProposal(report); err == nil {
+	if _, err := validateContentChecklistProposal(report, testPlanFrame()); err == nil {
 		t.Fatal("expected checklist chat proposal with video to be rejected")
 	}
 }
