@@ -15,28 +15,55 @@ const (
 	goalLeads     = "leads"
 	goalBrand     = "brand"
 	goalCommunity = "community"
+	goalDealer    = "dealer"
+	goalFranchise = "franchise"
+	goalTraffic   = "traffic"
 )
 
-// businessProfile is the declared identity of ONE research subject: a store
-// or one of its pages. Drupal owns the vocabulary; everything here is
-// optional, because a subject nobody has declared yet must still run.
-type businessProfile struct {
+// contactOrder fixes the contact line's order; Go randomises map iteration.
+var contactOrder = []struct{ key, label string }{
+	{"hotline", "Hotline"},
+	{"website", "Website"},
+	{"zalo", "Zalo"},
+	{"shopee", "Shopee"},
+	{"email", "Email"},
+}
+
+type profileAudience struct {
 	name        string
-	goal        string
-	kind        string
-	description string
-	notes       string
-	offerings   []string
-	channels    []string
-	geoMode     string
-	geoArea     string
-	geoLat      float64
-	geoLng      float64
-	geoRadiusKm float64
-	priceMin    float64
-	priceMax    float64
-	pos         map[string]any
-	present     bool
+	needs       string
+	hesitations string
+}
+
+// businessProfile is the declared identity of ONE subject: a Facebook page,
+// owned by Studio. Drupal owns the vocabulary; everything here is optional,
+// because a subject nobody has declared yet must still run.
+type businessProfile struct {
+	name         string
+	goal         string
+	kind         string
+	description  string
+	positioning  string
+	pageRole     string
+	notes        string
+	audiences    []profileAudience
+	offerings    []string
+	channels     []string
+	proof        []string
+	redirects    []string
+	contact      map[string]string
+	storeName    string
+	storeAddress string
+	storeHours   string
+	geoMode      string
+	geoArea      string
+	geoLat       float64
+	geoLng       float64
+	geoRadiusKm  float64
+	priceMin     float64
+	priceMax     float64
+	pos          map[string]any
+	present      bool
 }
 
 // readBusinessProfile pulls the block Drupal sends alongside every market job.
@@ -52,13 +79,48 @@ func readBusinessProfile(request map[string]any) businessProfile {
 		goal:        strings.TrimSpace(stringFromMap(raw, "goal")),
 		kind:        strings.TrimSpace(stringFromMap(raw, "kind")),
 		description: strings.TrimSpace(stringFromMap(raw, "description")),
+		positioning: strings.TrimSpace(stringFromMap(raw, "positioning")),
+		pageRole:    strings.TrimSpace(stringFromMap(raw, "page_role")),
 		notes:       strings.TrimSpace(stringFromMap(raw, "notes")),
 		offerings:   stringsFromAny(raw["offerings"]),
 		channels:    stringsFromAny(raw["channels"]),
+		proof:       stringsFromAny(raw["proof"]),
+		redirects:   stringsFromAny(raw["redirects"]),
+		contact:     map[string]string{},
 		present:     true,
 	}
 	if profile.goal == "" {
 		profile.goal = goalSell
+	}
+	if list, ok := raw["audiences"].([]any); ok {
+		for _, item := range list {
+			row, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			audience := profileAudience{
+				name:        strings.TrimSpace(stringFromMap(row, "name")),
+				needs:       strings.TrimSpace(stringFromMap(row, "needs")),
+				hesitations: strings.TrimSpace(stringFromMap(row, "hesitations")),
+			}
+			if audience.name != "" {
+				profile.audiences = append(profile.audiences, audience)
+			}
+		}
+	}
+	if contact, ok := raw["contact"].(map[string]any); ok {
+		for _, entry := range contactOrder {
+			if value := strings.TrimSpace(stringFromMap(contact, entry.key)); value != "" {
+				profile.contact[entry.key] = value
+			}
+		}
+	}
+	// Present only when the page speaks for its store; an unlinked page is
+	// another brand and Drupal sends nothing of the store.
+	if store, ok := raw["store"].(map[string]any); ok {
+		profile.storeName = strings.TrimSpace(stringFromMap(store, "name"))
+		profile.storeAddress = strings.TrimSpace(stringFromMap(store, "address"))
+		profile.storeHours = strings.TrimSpace(stringFromMap(store, "hours"))
 	}
 
 	if geo, ok := raw["geography"].(map[string]any); ok {
@@ -98,10 +160,17 @@ func (p businessProfile) writeProfile(sb *strings.Builder) bool {
 	}
 
 	sb.WriteString("- Business: " + p.description + "\n")
+	if p.positioning != "" {
+		sb.WriteString("- Positioning: " + p.positioning + "\n")
+	}
+	if p.pageRole != "" {
+		sb.WriteString("- Role of this page: " + p.pageRole + "\n")
+	}
 	if p.kind != "" {
 		sb.WriteString("- Business type: " + p.kind + "\n")
 	}
 	sb.WriteString("- This subject exists to: " + goalSentence(p.goal) + "\n")
+	p.writeAudiences(sb)
 
 	if len(p.offerings) > 0 {
 		sb.WriteString("- " + offeringsLabel(p.goal) + ": " + strings.Join(p.offerings, "; ") + "\n")
@@ -112,6 +181,25 @@ func (p businessProfile) writeProfile(sb *strings.Builder) bool {
 	if len(p.channels) > 0 {
 		sb.WriteString("- Channels: " + strings.Join(p.channels, ", ") + "\n")
 	}
+	if len(p.proof) > 0 {
+		sb.WriteString("- Proof available: " + strings.Join(p.proof, "; ") + "\n")
+	}
+	if len(p.redirects) > 0 {
+		sb.WriteString("- May send people on to: " + strings.Join(p.redirects, "; ") + "\n")
+	}
+	if contact := p.contactSentence(); contact != "" {
+		sb.WriteString("- Contact: " + contact + "\n")
+	}
+	if p.storeName != "" {
+		parts := []string{p.storeName}
+		if p.storeAddress != "" {
+			parts = append(parts, p.storeAddress)
+		}
+		if p.storeHours != "" {
+			parts = append(parts, "open "+p.storeHours)
+		}
+		sb.WriteString("- The shop this page speaks for: " + strings.Join(parts, " — ") + "\n")
+	}
 	sb.WriteString("- Operating area: " + p.geoSentence() + "\n")
 	if p.notes != "" {
 		sb.WriteString("- Team notes: " + p.notes + "\n")
@@ -119,6 +207,33 @@ func (p businessProfile) writeProfile(sb *strings.Builder) bool {
 	p.writePosSnapshot(sb)
 
 	return true
+}
+
+func (p businessProfile) writeAudiences(sb *strings.Builder) {
+	if len(p.audiences) == 0 {
+		return
+	}
+	sb.WriteString("- Main customers:\n")
+	for _, audience := range p.audiences {
+		line := "  - " + audience.name
+		if audience.needs != "" {
+			line += " — needs/worries: " + audience.needs
+		}
+		if audience.hesitations != "" {
+			line += " — still hesitant about: " + audience.hesitations
+		}
+		sb.WriteString(line + "\n")
+	}
+}
+
+func (p businessProfile) contactSentence() string {
+	var parts []string
+	for _, entry := range contactOrder {
+		if value := p.contact[entry.key]; value != "" {
+			parts = append(parts, entry.label+" "+value)
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 // writePosSnapshot adds live POS figures when the subject is allowed to carry
@@ -174,6 +289,13 @@ func (p businessProfile) geoSentence() string {
 		if radius <= 0 {
 			radius = 3
 		}
+		// A shop page borrowing its store's address often has no coordinates.
+		if p.geoLat == 0 && p.geoLng == 0 {
+			if p.geoArea != "" {
+				return fmt.Sprintf("serves customers within about %.1f km of %s", radius, p.geoArea)
+			}
+			return fmt.Sprintf("serves customers within about %.1f km of its shop", radius)
+		}
 		line := fmt.Sprintf("serves customers within about %.1f km of %.5f,%.5f", radius, p.geoLat, p.geoLng)
 		if p.geoArea != "" {
 			line += " (" + p.geoArea + ")"
@@ -197,8 +319,11 @@ func (p businessProfile) priceSentence() string {
 		return ""
 	}
 	label := "Typical order value"
-	if p.goal == goalRecruit {
+	switch p.goal {
+	case goalRecruit:
 		label = "Salary range offered"
+	case goalFranchise:
+		label = "Investment range"
 	}
 	switch {
 	case p.priceMin > 0 && p.priceMax > 0:
@@ -221,6 +346,12 @@ func goalSentence(goal string) string {
 		return "tell the brand's story — it competes for attention, not for orders"
 	case goalCommunity:
 		return "serve a professional community — it competes for attention within that niche"
+	case goalDealer:
+		return "recruit dealers and distributors — it competes for BUSINESS PARTNERS choosing which brand to stock"
+	case goalFranchise:
+		return "sell franchises — it competes for INVESTORS choosing which franchise to open"
+	case goalTraffic:
+		return "send readers to its website — it competes for clicks and attention, not for orders on the page"
 	default:
 		return "sell products or services"
 	}
@@ -234,7 +365,11 @@ func offeringsLabel(goal string) string {
 		return "Roles being hired"
 	case goalLeads:
 		return "What people sign up for"
-	case goalBrand, goalCommunity:
+	case goalDealer:
+		return "Products offered to dealers"
+	case goalFranchise:
+		return "Franchise packages offered"
+	case goalBrand, goalCommunity, goalTraffic:
 		return "Content topics"
 	default:
 		return "Main products/services"

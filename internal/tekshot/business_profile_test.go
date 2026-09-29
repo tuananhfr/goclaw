@@ -189,3 +189,84 @@ func TestAdsPromptCarriesTheSubject(t *testing.T) {
 		t.Fatalf("ads prompt missing the declared description:\n%s", prompt)
 	}
 }
+
+func fullProfileRequest() map[string]any {
+	request := localProfileRequest()
+	profile := request["business_profile"].(map[string]any)
+	profile["positioning"] = "Pizza nướng lửa giá gia đình"
+	profile["page_role"] = "Page của chính quán, nhận đặt bàn"
+	profile["audiences"] = []any{
+		map[string]any{"name": "Gia đình trẻ", "needs": "bữa tối nhanh", "hesitations": "giá"},
+		map[string]any{"name": "", "needs": "dropped without a name"},
+	}
+	profile["proof"] = []any{"Ảnh bếp thật"}
+	profile["redirects"] = []any{"Trang nhượng quyền — khi khách hỏi mở quán"}
+	profile["contact"] = map[string]any{"website": "vidu.example.com", "hotline": "0900000000"}
+	profile["store"] = map[string]any{"name": "Quán Mẫu Chi nhánh 1", "address": "1 Phố Mẫu", "hours": "Thứ 2–Chủ nhật 08:00–23:00"}
+	return request
+}
+
+func TestWriteProfileRendersDeclaredIdentityFields(t *testing.T) {
+	var sb strings.Builder
+	readBusinessProfile(fullProfileRequest()).writeProfile(&sb)
+	text := sb.String()
+
+	for _, want := range []string{
+		"- Positioning: Pizza nướng lửa giá gia đình",
+		"- Role of this page: Page của chính quán, nhận đặt bàn",
+		"- Main customers:\n  - Gia đình trẻ — needs/worries: bữa tối nhanh — still hesitant about: giá\n",
+		"- Proof available: Ảnh bếp thật",
+		"- May send people on to: Trang nhượng quyền — khi khách hỏi mở quán",
+		// Fixed order, whatever order the map arrived in.
+		"- Contact: Hotline 0900000000, Website vidu.example.com",
+		"- The shop this page speaks for: Quán Mẫu Chi nhánh 1 — 1 Phố Mẫu — open Thứ 2–Chủ nhật 08:00–23:00",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "dropped without a name") {
+		t.Fatal("an audience without a name must be skipped")
+	}
+}
+
+func TestUnlinkedProfileMentionsNoShop(t *testing.T) {
+	var sb strings.Builder
+	readBusinessProfile(localProfileRequest()).writeProfile(&sb)
+	if strings.Contains(sb.String(), "The shop this page speaks for") {
+		t.Fatal("no store block was sent, so no shop line may appear")
+	}
+}
+
+func TestNewGoalsHaveTheirOwnWording(t *testing.T) {
+	cases := map[string][]string{
+		goalDealer:    {"BUSINESS PARTNERS", "Products offered to dealers"},
+		goalFranchise: {"INVESTORS", "Franchise packages offered", "Investment range"},
+		goalTraffic:   {"send readers to its website", "Content topics"},
+	}
+	for goal, wants := range cases {
+		request := localProfileRequest()
+		request["business_profile"].(map[string]any)["goal"] = goal
+		var sb strings.Builder
+		readBusinessProfile(request).writeProfile(&sb)
+		for _, want := range wants {
+			if !strings.Contains(sb.String(), want) {
+				t.Fatalf("goal %s: missing %q:\n%s", goal, want, sb.String())
+			}
+		}
+	}
+
+	dealer := localProfileRequest()
+	dealer["business_profile"].(map[string]any)["goal"] = goalDealer
+	if !strings.Contains(buildCompetitorDiscoveryPrompt(dealer), "SAME dealers and distributors") {
+		t.Fatal("dealer discovery must look for brands chasing the same dealers")
+	}
+}
+
+func TestLocalGeographyWithoutCoordinatesUsesTheAddress(t *testing.T) {
+	request := localProfileRequest()
+	request["business_profile"].(map[string]any)["geography"] = map[string]any{"mode": "local", "radius_km": float64(3), "area": "1 Phố Mẫu, Hà Nội"}
+	if got := readBusinessProfile(request).geoSentence(); got != "serves customers within about 3.0 km of 1 Phố Mẫu, Hà Nội" {
+		t.Fatalf("unexpected geography: %q", got)
+	}
+}

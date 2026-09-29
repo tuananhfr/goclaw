@@ -182,8 +182,12 @@ func TestBuildCompetitorDiscoveryPromptExcludesOwnBusiness(t *testing.T) {
 			"Pizza Hip'S Đại Áng",
 		},
 	})
-	if !strings.Contains(prompt, "This IS the business") {
+	if !strings.Contains(prompt, "Same operator — never propose any of these") {
 		t.Fatal("expected the own-identity block")
+	}
+	// Sister brands share the list, so it must not read as the subject's identity.
+	if !strings.Contains(prompt, "they do not describe what this subject sells") {
+		t.Fatal("expected the list to be scoped to exclusion, not identity")
 	}
 	if !strings.Contains(prompt, "Pizza Hip's Chư Sê") || !strings.Contains(prompt, "Pizza Hip'S Đại Áng") {
 		t.Fatal("expected the store and its sibling branches to be listed")
@@ -193,7 +197,7 @@ func TestBuildCompetitorDiscoveryPromptExcludesOwnBusiness(t *testing.T) {
 	}
 
 	bare := buildCompetitorDiscoveryPrompt(map[string]any{"industry": "Pizza"})
-	if strings.Contains(bare, "This IS the business") {
+	if strings.Contains(bare, "Same operator") {
 		t.Fatal("expected no own-identity block when none was supplied")
 	}
 }

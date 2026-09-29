@@ -268,7 +268,11 @@ func discoveryTarget(goal string) string {
 		return "Employers competing for the SAME candidates: hiring similar roles, at a similar level, close enough that an applicant would pick one over the other."
 	case goalLeads:
 		return "Businesses competing for the SAME sign-ups: running comparable offers to partners, franchisees or enquirers in this niche."
-	case goalBrand, goalCommunity:
+	case goalDealer:
+		return "Brands competing for the SAME dealers and distributors: comparable product lines offered to the same shops, with terms a dealer would weigh against these."
+	case goalFranchise:
+		return "Franchisors competing for the SAME investors: comparable franchise offers in this niche, at a similar investment level."
+	case goalBrand, goalCommunity, goalTraffic:
 		return "Pages and outlets competing for the SAME audience attention in this niche: publishers, communities and brands the audience already follows."
 	default:
 		return "Businesses that compete for the SAME customers: comparable products or services, close enough that a customer would choose one over the other."
@@ -280,7 +284,7 @@ func discoveryTarget(goal string) string {
 // approval queue with noise.
 func discoveryLabels(goal string) string {
 	switch goal {
-	case goalBrand, goalCommunity:
+	case goalBrand, goalCommunity, goalTraffic:
 		return "Label 'reference' by default here — this subject competes for attention, not for orders. Reserve 'direct' for outlets genuinely chasing the exact same audience with the same offer."
 	case goalRecruit:
 		return "Label 'direct' when they hire the same roles from the same pool; 'reference' when their employer content is worth learning from but they do not compete for these candidates."
@@ -345,18 +349,19 @@ func buildCompetitorDiscoveryPrompt(request map[string]any) string {
 	}
 	sb.WriteString("\n")
 
-	// Who the store IS. Without this the agent searches "pizza + district",
-	// finds the shop's own page, and proposes the store as its own rival.
-	// Sibling branches of the same operator land here too — another shop of
-	// the same brand is not competition.
+	// Names that belong to this operator. Without this the agent searches
+	// "pizza + district", finds the shop's own page, and proposes the store as
+	// its own rival. Sibling brands of the same operator land here too — they
+	// are not competition, but they are not this subject either: who the
+	// subject is comes from the store context above, never from this list.
 	if own, ok := request["own_identity"].([]any); ok && len(own) > 0 {
-		sb.WriteString("## This IS the business — never propose any of these\n")
+		sb.WriteString("## Same operator — never propose any of these\n")
 		for _, raw := range own {
 			if name := strings.TrimSpace(fmt.Sprintf("%v", raw)); name != "" {
 				sb.WriteString("- " + name + "\n")
 			}
 		}
-		sb.WriteString("These are the store itself, its other branches, and its own pages. Proposing one of them as a competitor is always wrong.\n\n")
+		sb.WriteString("These are this business or its sister shops, brands and pages under the same operator. They are not competitors, and they do not describe what this subject sells — the store context above does. Proposing one of them as a competitor is always wrong.\n\n")
 	}
 
 	// Already-known names are sent so the queue does not fill with rows the

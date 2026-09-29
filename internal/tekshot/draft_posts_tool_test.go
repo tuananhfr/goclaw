@@ -277,3 +277,39 @@ func TestTekshotDraftResearchToolAllowExcludesSideEffectTools(t *testing.T) {
 		}
 	}
 }
+
+func TestDraftPromptCarriesTheBusinessProfile(t *testing.T) {
+	args := fullProfileRequest()
+	args["source_items"] = []any{map[string]any{"source_index": float64(1), "title": "Pizza tối thứ 6", "brief": "Ưu đãi gia đình"}}
+
+	prompt := buildPrompt(args, "Asia/Ho_Chi_Minh")
+	for _, want := range []string{
+		"BUSINESS PROFILE (declared by the page owner",
+		"- Main customers:",
+		"supported by the source records, the researched facts or the business profile",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("draft prompt missing %q:\n%s", want, prompt)
+		}
+	}
+
+	bare := buildPrompt(map[string]any{"source_items": args["source_items"]}, "Asia/Ho_Chi_Minh")
+	if strings.Contains(bare, "BUSINESS PROFILE") {
+		t.Fatal("an undeclared page must write exactly as before")
+	}
+}
+
+func TestDraftPersonaPrefersTheRealPageName(t *testing.T) {
+	persona := draftWriterPersona(map[string]any{
+		"page_name": "Ông Trùm sàn hộp",
+		"workspace": map[string]any{"label": "Kĩ sư sàn phẳng workspace"},
+	})
+	if !strings.Contains(persona, "\"Ông Trùm sàn hộp\"") || strings.Contains(persona, "workspace") {
+		t.Fatalf("persona must use the page name, got %q", persona)
+	}
+
+	legacy := draftWriterPersona(map[string]any{"workspace": map[string]any{"label": "LPC workspace"}})
+	if !strings.Contains(legacy, "\"LPC workspace\"") {
+		t.Fatalf("without page_name the workspace label still applies, got %q", legacy)
+	}
+}

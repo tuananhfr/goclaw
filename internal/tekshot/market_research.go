@@ -352,7 +352,11 @@ func researchTrendsFocus(goal string) string {
 		return "what is currently moving in the Vietnamese labour market for these roles: pay levels, hiring seasons, benefits candidates ask for, employer-branding content that works."
 	case goalLeads:
 		return "what is currently working to collect leads in this niche in Vietnam: offers, lead magnets, campaign formats, and what partners/franchisees are asking about."
-	case goalBrand, goalCommunity:
+	case goalDealer:
+		return "what is currently moving in distribution for this niche in Vietnam: margins, terms and support competing brands offer dealers, and what shop owners ask before stocking a new brand."
+	case goalFranchise:
+		return "what is currently moving in the Vietnamese franchise market for this niche: investment levels, terms, formats that are growing, and what prospective franchisees ask before signing."
+	case goalBrand, goalCommunity, goalTraffic:
 		return "what content is currently gaining traction in this niche in Vietnam: formats, angles, recurring topics and the discussions the audience is having."
 	default:
 		return "what is currently trending for this subject's declared business in Vietnam: products, content formats, campaign styles."
