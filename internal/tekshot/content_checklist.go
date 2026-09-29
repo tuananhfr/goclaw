@@ -67,7 +67,7 @@ func (s *JobService) runContentChecklist(ctx context.Context, job *store.Tekshot
 	runCtx = store.WithUserID(runCtx, userID)
 	runCtx = store.WithAgentKey(runCtx, job.AgentKey)
 
-	collector := NewContentChecklistCollectorTool(checklistPlanFrameFromRequest(request), checklistHistoryFromRequest(request))
+	collector := NewContentChecklistCollectorTool(checklistPlanFrameFromRequest(request), checklistHistoryFromRequest(request), checklistSiblingsFromRequest(request))
 	runReq := agent.RunRequest{
 		SessionKey:     job.SessionKey,
 		Message:        buildContentChecklistPrompt(request),
@@ -113,16 +113,17 @@ func (s *JobService) runContentChecklist(ctx context.Context, job *store.Tekshot
 
 // ContentChecklistCollectorTool captures the one structured checklist.
 type ContentChecklistCollectorTool struct {
-	report  map[string]any
-	frame   checklistPlanFrame
-	history []checklistHistoryEntry
+	report   map[string]any
+	frame    checklistPlanFrame
+	history  []checklistHistoryEntry
+	siblings []checklistSiblingPage
 	// rejects đếm số lần đã trả bản kế hoạch về vì lặp.
 	rejects int
 }
 
 // NewContentChecklistCollectorTool builds the ephemeral collector for one page's frame.
-func NewContentChecklistCollectorTool(frame checklistPlanFrame, history []checklistHistoryEntry) *ContentChecklistCollectorTool {
-	return &ContentChecklistCollectorTool{frame: frame, history: history}
+func NewContentChecklistCollectorTool(frame checklistPlanFrame, history []checklistHistoryEntry, siblings []checklistSiblingPage) *ContentChecklistCollectorTool {
+	return &ContentChecklistCollectorTool{frame: frame, history: history, siblings: siblings}
 }
 
 // Name implements tools.Tool.
@@ -180,7 +181,7 @@ func (t *ContentChecklistCollectorTool) Execute(_ context.Context, args map[stri
 		return tools.ErrorResult("MODEL_OUTPUT_INVALID: " + err.Error())
 	}
 	items, _ := report["items"].([]any)
-	if err := enforceChecklistRepetition(items, t.history, &t.rejects); err != nil {
+	if err := enforceChecklistRepetition(items, t.history, t.siblings, &t.rejects); err != nil {
 		return tools.ErrorResult(err.Error())
 	}
 	t.report = report
@@ -306,6 +307,7 @@ func buildContentChecklistPrompt(request map[string]any) string {
 	sb.WriteString("- usp: selling points and keywords to keep in the copy, comma separated.\n\n")
 	writeChecklistPlanRules(&sb, checklistPlanFrameFromRequest(request))
 	writeChecklistHistory(&sb, checklistHistoryFromRequest(request))
+	writeChecklistSiblings(&sb, checklistSiblingsFromRequest(request))
 
 	sb.WriteString("## Hard rules\n")
 	sb.WriteString(fmt.Sprintf("- Write EVERY field in language '%s'. Marketing staff read this, not developers.\n", language))

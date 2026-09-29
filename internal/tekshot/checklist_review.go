@@ -75,7 +75,7 @@ func (s *JobService) runContentChecklistReview(ctx context.Context, job *store.T
 		reply = result.Content
 	}
 
-	review, err := buildChecklistReviewResult(reply, rows, checklistHistoryFromRequest(request))
+	review, err := buildChecklistReviewResult(reply, rows, checklistHistoryFromRequest(request), checklistSiblingsFromRequest(request))
 	if err != nil {
 		return nil, "", err
 	}
@@ -118,6 +118,7 @@ func buildChecklistReviewPrompt(request map[string]any, rows []map[string]any) s
 	writeChecklistBlock(&sb, "## Reach facts (from the store's own Facebook pages)", request, "social_facts", true)
 	writeChecklistBlock(&sb, "## Market research findings", request, "research", true)
 	writeChecklistHistory(&sb, checklistHistoryFromRequest(request))
+	writeChecklistSiblings(&sb, checklistSiblingsFromRequest(request))
 
 	writeChecklistScoreRules(&sb)
 
@@ -146,7 +147,7 @@ func buildChecklistReviewPrompt(request map[string]any, rows []map[string]any) s
 // buildChecklistReviewResult dựng kết quả trả về: điểm do model chấm nhưng tổng
 // và cảnh báo lặp do code tính. Một dòng chấm hỏng bị bỏ điểm chứ không được đoán;
 // không dòng nào chấm được thì cả job thất bại (fail closed).
-func buildChecklistReviewResult(reply string, rows []map[string]any, history []checklistHistoryEntry) (map[string]any, error) {
+func buildChecklistReviewResult(reply string, rows []map[string]any, history []checklistHistoryEntry, siblings []checklistSiblingPage) (map[string]any, error) {
 	object, err := extractJSONObject(reply)
 	if err != nil {
 		return nil, fmt.Errorf("MODEL_OUTPUT_INVALID: %w", err)
@@ -202,13 +203,19 @@ func buildChecklistReviewResult(reply string, rows []map[string]any, history []c
 			Topic:     strings.TrimSpace(stringFromMap(row, "topic")),
 			HookType:  result["kieu_hook"].(string),
 			StoryType: result["cot_truyen"].(string),
+			TimeSlot:  strings.TrimSpace(stringFromMap(row, "time_slot")),
+			Audience:  strings.TrimSpace(stringFromMap(row, "tep_khach")),
+			Keyword:   strings.ToUpper(strings.TrimSpace(stringFromMap(row, "tu_khoa_cta"))),
 		})
 	}
 	if scoredCount == 0 {
 		return nil, fmt.Errorf("MODEL_OUTPUT_INVALID: no row could be scored")
 	}
 
-	findings := checklistRepetitionFindings(plan, history)
+	findings := mergeChecklistFindings(
+		checklistRepetitionFindings(plan, history),
+		checklistSiblingFindings(plan, siblings),
+	)
 	out := make([]any, 0, len(results))
 	for i, result := range results {
 		warnings := make([]any, len(findings[i]))

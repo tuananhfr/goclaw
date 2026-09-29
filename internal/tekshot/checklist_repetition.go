@@ -105,6 +105,9 @@ type checklistPlanEntry struct {
 	Topic     string
 	HookType  string
 	StoryType string
+	TimeSlot  string
+	Audience  string
+	Keyword   string
 }
 
 // topicBigrams gộp Unicode về một dạng: cùng chữ "tối" mà một bên viết dựng sẵn,
@@ -250,7 +253,7 @@ func checklistRepetitionFindings(plan []checklistPlanEntry, history []checklistH
 // enforceChecklistRepetition bắt model viết lại các dòng lặp — tối đa
 // checklistMaxRepeatRewrites lần; sau đó nhận dòng và gắn canh_bao_lap để người
 // quyết. Dòng keep/delete của chat không được kiểm: chúng không đổi nội dung.
-func enforceChecklistRepetition(items []any, history []checklistHistoryEntry, rejects *int) error {
+func enforceChecklistRepetition(items []any, history []checklistHistoryEntry, siblings []checklistSiblingPage, rejects *int) error {
 	var plan []checklistPlanEntry
 	var itemAt []map[string]any
 	dropped := map[int]bool{}
@@ -274,6 +277,9 @@ func enforceChecklistRepetition(items []any, history []checklistHistoryEntry, re
 			Topic:     strings.TrimSpace(stringFromMap(item, "topic")),
 			HookType:  strings.ToUpper(strings.TrimSpace(stringFromMap(item, "kieu_hook"))),
 			StoryType: strings.ToUpper(strings.TrimSpace(stringFromMap(item, "cot_truyen"))),
+			TimeSlot:  strings.TrimSpace(stringFromMap(item, "time_slot")),
+			Audience:  strings.TrimSpace(stringFromMap(item, "tep_khach")),
+			Keyword:   strings.ToUpper(strings.TrimSpace(stringFromMap(item, "tu_khoa_cta"))),
 		})
 		itemAt = append(itemAt, item)
 	}
@@ -288,7 +294,10 @@ func enforceChecklistRepetition(items []any, history []checklistHistoryEntry, re
 		history = kept
 	}
 
-	findings := checklistRepetitionFindings(plan, history)
+	findings := mergeChecklistFindings(
+		checklistRepetitionFindings(plan, history),
+		checklistSiblingFindings(plan, siblings),
+	)
 	var lines []string
 	for i, rowFindings := range findings {
 		if len(rowFindings) > 0 {
@@ -298,7 +307,7 @@ func enforceChecklistRepetition(items []any, history []checklistHistoryEntry, re
 
 	if len(lines) > 0 && *rejects < checklistMaxRepeatRewrites {
 		*rejects++
-		return fmt.Errorf("REPETITION: %s. Rewrite ONLY those rows with a different hook type, story type or topic angle, then resubmit the whole plan (rewrite %d of %d)",
+		return fmt.Errorf("REPETITION: %s. Rewrite ONLY those rows (a different hook type, story type, topic angle, time slot or CTA keyword), then resubmit the whole plan (rewrite %d of %d)",
 			strings.Join(lines, " | "), *rejects, checklistMaxRepeatRewrites)
 	}
 

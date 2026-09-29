@@ -51,6 +51,7 @@ type businessProfile struct {
 	channels     []string
 	proof        []string
 	redirects    []string
+	ownedTopics  []string
 	contact      map[string]string
 	storeName    string
 	storeAddress string
@@ -86,6 +87,7 @@ func readBusinessProfile(request map[string]any) businessProfile {
 		channels:    stringsFromAny(raw["channels"]),
 		proof:       stringsFromAny(raw["proof"]),
 		redirects:   stringsFromAny(raw["redirects"]),
+		ownedTopics: stringsFromAny(raw["owned_topics"]),
 		contact:     map[string]string{},
 		present:     true,
 	}
@@ -180,6 +182,9 @@ func (p businessProfile) writeProfile(sb *strings.Builder) bool {
 	}
 	if len(p.channels) > 0 {
 		sb.WriteString("- Channels: " + strings.Join(p.channels, ", ") + "\n")
+	}
+	if len(p.ownedTopics) > 0 {
+		sb.WriteString("- Topic clusters this page owns (prefer them): " + strings.Join(p.ownedTopics, "; ") + "\n")
 	}
 	if len(p.proof) > 0 {
 		sb.WriteString("- Proof available: " + strings.Join(p.proof, "; ") + "\n")

@@ -93,14 +93,14 @@ func TestEnforceRepetitionSendsBackTwiceThenKeepsWithAWarning(t *testing.T) {
 	rejects := 0
 
 	for attempt := 1; attempt <= checklistMaxRepeatRewrites; attempt++ {
-		err := enforceChecklistRepetition(newItems(), history, &rejects)
+		err := enforceChecklistRepetition(newItems(), history, nil, &rejects)
 		if err == nil || !strings.Contains(err.Error(), "REPETITION") {
 			t.Fatalf("attempt %d: expected the plan to be sent back, got %v", attempt, err)
 		}
 	}
 
 	items := newItems()
-	if err := enforceChecklistRepetition(items, history, &rejects); err != nil {
+	if err := enforceChecklistRepetition(items, history, nil, &rejects); err != nil {
 		t.Fatalf("after %d rewrites the row must be accepted, got %v", checklistMaxRepeatRewrites, err)
 	}
 	warnings, _ := items[0].(map[string]any)["canh_bao_lap"].([]any)
@@ -112,7 +112,7 @@ func TestEnforceRepetitionSendsBackTwiceThenKeepsWithAWarning(t *testing.T) {
 func TestEnforceRepetitionLeavesCleanRowsAlone(t *testing.T) {
 	items := []any{map[string]any{"date": "2026-10-01", "topic": "Bài mới", "kieu_hook": "CON_SO"}}
 	rejects := 0
-	if err := enforceChecklistRepetition(items, nil, &rejects); err != nil || rejects != 0 {
+	if err := enforceChecklistRepetition(items, nil, nil, &rejects); err != nil || rejects != 0 {
 		t.Fatalf("a clean plan must pass untouched, got %v (rejects %d)", err, rejects)
 	}
 	if _, has := items[0].(map[string]any)["canh_bao_lap"]; has {
@@ -128,7 +128,7 @@ func TestEnforceRepetitionIgnoresKeepAndDeleteRows(t *testing.T) {
 		map[string]any{"action": "create", "source_item_id": float64(0), "date": "2026-10-02", "topic": "Bài mới", "kieu_hook": "CAU_HOI"},
 	}
 	rejects := 0
-	if err := enforceChecklistRepetition(items, history, &rejects); err != nil {
+	if err := enforceChecklistRepetition(items, history, nil, &rejects); err != nil {
 		t.Fatalf("a deleted row must not count as history and keep rows are not checked: %v", err)
 	}
 }

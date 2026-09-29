@@ -27,7 +27,7 @@ func TestChecklistReviewKeepsTheUsersHookTypeAndFillsTheEmptyStoryType(t *testin
 		"id": float64(4), "kieu_hook": "CAU_HOI", "cot_truyen": "huong_dan",
 		"nhan_xet": "Chủ đề rõ ràng.", "diem_chu_de": validScoreMap(),
 	})
-	result, err := buildChecklistReviewResult(reply, rows, nil)
+	result, err := buildChecklistReviewResult(reply, rows, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestChecklistReviewFlagsRepetitionInCodeAgainstHistory(t *testing.T) {
 	rows := []map[string]any{reviewRow(4, "Khung 7 số quản lý chuỗi nhỏ nên xem mỗi tuần")}
 
 	reply := reviewReply(t, map[string]any{"id": float64(4), "diem_chu_de": validScoreMap()})
-	result, err := buildChecklistReviewResult(reply, rows, history)
+	result, err := buildChecklistReviewResult(reply, rows, history, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestChecklistReviewDropsAnInvalidScoreButKeepsTheRest(t *testing.T) {
 		map[string]any{"id": float64(4), "diem_chu_de": broken},
 		map[string]any{"id": float64(5), "diem_chu_de": validScoreMap()},
 	)
-	result, err := buildChecklistReviewResult(reply, rows, nil)
+	result, err := buildChecklistReviewResult(reply, rows, nil, nil)
 	if err != nil {
 		t.Fatalf("one good row is enough: %v", err)
 	}
@@ -84,10 +84,10 @@ func TestChecklistReviewDropsAnInvalidScoreButKeepsTheRest(t *testing.T) {
 func TestChecklistReviewFailsClosedWhenNothingCanBeScored(t *testing.T) {
 	rows := []map[string]any{reviewRow(4, "Chủ đề một")}
 
-	if _, err := buildChecklistReviewResult("không phải JSON", rows, nil); err == nil {
+	if _, err := buildChecklistReviewResult("không phải JSON", rows, nil, nil); err == nil {
 		t.Fatal("an unreadable reply must fail the job")
 	}
-	if _, err := buildChecklistReviewResult(reviewReply(t, map[string]any{"id": float64(99), "diem_chu_de": validScoreMap()}), rows, nil); err == nil {
+	if _, err := buildChecklistReviewResult(reviewReply(t, map[string]any{"id": float64(99), "diem_chu_de": validScoreMap()}), rows, nil, nil); err == nil {
 		t.Fatal("a reply that scores no requested row must fail the job")
 	}
 }
