@@ -114,11 +114,14 @@ func checklistPlanProperties(frame checklistPlanFrame) map[string]any {
 		"style_anh":       map[string]any{"type": "string", "description": "PHOTOREAL | POSTER | INFOGRAPHIC | QUOTE | CONCEPT when loai_anh is REF or AI. Empty for UPLOAD."},
 		"rui_ro":          enumString(checklistRisks, "Planning risk: LOW = knowledge, guide, operating notice; MEDIUM = own product with price or promotion; HIGH = customer names, result figures, investment numbers, heritage or safety topics."),
 		"nguon_toi_thieu": map[string]any{"type": "string", "description": "CAP_1 when the post makes a product, technical, capability or investment claim that needs an official source; CAP_2 or CAP_3 for lighter claims; empty when the post states no fact that needs a source."},
+		"kieu_hook":       enumString(checklistHookTypes, "How the hook opens: CAU_HOI question, CON_SO number, CAU_CHUYEN story, NGHICH_LY paradox, MEO_NHANH quick tip, TUYEN_BO statement, SO_SANH comparison."),
+		"cot_truyen":      enumString(checklistStoryTypes, "The storyline of the post: TRUOC_SAU before-after, HAU_TRUONG behind the scenes, CHUYEN_KHACH customer story, HUONG_DAN how-to, SO_SANH comparison, SAI_LAM common mistake, DIP_SU_KIEN occasion or event, GIOI_THIEU introduction."),
+		"diem_chu_de":     checklistScoreProperty(true),
 	}
 }
 
 func checklistPlanFieldNames() []string {
-	return []string{"tep_khach", "giai_doan", "cta_chinh", "tu_khoa_cta", "cam_xuc", "dinh_dang", "muc_dich", "loai_anh", "style_anh", "rui_ro", "nguon_toi_thieu"}
+	return []string{"tep_khach", "giai_doan", "cta_chinh", "tu_khoa_cta", "cam_xuc", "dinh_dang", "muc_dich", "loai_anh", "style_anh", "rui_ro", "nguon_toi_thieu", "kieu_hook", "cot_truyen", "diem_chu_de"}
 }
 
 // validateChecklistPlanFields chuẩn hoá tại chỗ rồi kiểm luật; lỗi trả về để
@@ -194,6 +197,17 @@ func validateChecklistPlanFields(item map[string]any, frame checklistPlanFrame, 
 	if level := upper("nguon_toi_thieu"); level != "" && !containsString(checklistSourceLevels, level) {
 		return fmt.Errorf("items[%d].nguon_toi_thieu must be CAP_1, CAP_2, CAP_3 or empty", index)
 	}
+	if _, err := requireIn("kieu_hook", checklistHookTypes); err != nil {
+		return err
+	}
+	if _, err := requireIn("cot_truyen", checklistStoryTypes); err != nil {
+		return err
+	}
+	score, err := normalizeChecklistScore(item["diem_chu_de"], fmt.Sprintf("items[%d]", index))
+	if err != nil {
+		return err
+	}
+	item["diem_chu_de"] = score
 
 	audience := strings.TrimSpace(stringFromMap(item, "tep_khach"))
 	if len(frame.Audiences) > 0 {
@@ -237,5 +251,9 @@ func writeChecklistPlanRules(sb *strings.Builder, frame checklistPlanFrame) {
 	sb.WriteString("- loai_anh: UPLOAD when the image must be a real photo (real dishes, products, people, places, finished work); REF when a real library photo guides a generated image; AI only for concepts, graphics and illustrations. style_anh applies to REF and AI only.\n")
 	sb.WriteString("- rui_ro: LOW for knowledge, guides and operating notices; MEDIUM for own products with a price or promotion; HIGH for customer names, result figures, investment numbers, heritage or safety topics.\n")
 	sb.WriteString("- nguon_toi_thieu: CAP_1 when the post claims a product, technical, capability or investment fact; leave empty when the post states nothing that needs a source.\n")
+	sb.WriteString("- kieu_hook: how the hook opens — CAU_HOI (question), CON_SO (number), CAU_CHUYEN (story), NGHICH_LY (paradox), MEO_NHANH (quick tip), TUYEN_BO (statement), SO_SANH (comparison). Never the same kieu_hook on two consecutive rows.\n")
+	sb.WriteString(fmt.Sprintf("- cot_truyen: the storyline — TRUOC_SAU (before-after), HAU_TRUONG (behind the scenes), CHUYEN_KHACH (customer story), HUONG_DAN (how-to), SO_SANH (comparison), SAI_LAM (common mistake), DIP_SU_KIEN (occasion or event), GIOI_THIEU (introduction). Never the same cot_truyen within %d days.\n", checklistStoryNoRepeatDays))
+	sb.WriteString(fmt.Sprintf("- Never propose a topic that overlaps an earlier one by %d%% of its word pairs or more — see the recent topics below. Rows that repeat are sent back to you to rewrite; after %d rewrites they are kept with a warning for the team.\n", int(checklistTopicOverlapMax*100), checklistMaxRepeatRewrites))
 	sb.WriteString("- The body's 'Nội dung:' part must end with the one CTA named in cta_chinh, worded for that stage.\n\n")
+	writeChecklistScoreRules(sb)
 }

@@ -332,6 +332,8 @@ func (s *JobService) process(ctx context.Context, job *store.TekshotJob) error {
 		result, progress, err = s.runContentChecklist(ctx, job, request)
 	case TekshotJobTypeChecklistChat:
 		result, progress, err = s.runContentChecklistChat(ctx, job, request)
+	case TekshotJobTypeChecklistReview:
+		result, progress, err = s.runContentChecklistReview(ctx, job, request)
 	case TekshotJobTypeCompetitorDisc:
 		result, progress, err = s.runCompetitorDiscovery(ctx, job, request)
 	case TekshotJobTypeCompetitorAds:
@@ -674,7 +676,7 @@ func isSupportedTekshotJobType(jobType string) bool {
 		return true
 	}
 	switch jobType {
-	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeAutoImage, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeChecklistChat, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle, TekshotJobTypeDescribeImage, TekshotJobTypeSeedComments, TekshotJobTypeKnowledgeExtract, TekshotJobTypeBlogGenerate, TekshotJobTypeBlogRewrite, TekshotJobTypeBlogAudit, TekshotJobTypeBlogImages, TekshotJobTypeBlogImport, TekshotJobTypePriceLookup, TekshotJobTypeImageReview, TekshotJobTypeCommentReplyMatch, TekshotJobTypeCustomerMemory, TekshotJobTypeMessengerReplyMatch, TekshotJobTypeMessengerReplyCompose, TekshotJobTypeReplyDataExtract:
+	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeAutoImage, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeChecklistChat, TekshotJobTypeChecklistReview, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle, TekshotJobTypeDescribeImage, TekshotJobTypeSeedComments, TekshotJobTypeKnowledgeExtract, TekshotJobTypeBlogGenerate, TekshotJobTypeBlogRewrite, TekshotJobTypeBlogAudit, TekshotJobTypeBlogImages, TekshotJobTypeBlogImport, TekshotJobTypePriceLookup, TekshotJobTypeImageReview, TekshotJobTypeCommentReplyMatch, TekshotJobTypeCustomerMemory, TekshotJobTypeMessengerReplyMatch, TekshotJobTypeMessengerReplyCompose, TekshotJobTypeReplyDataExtract:
 		return true
 	default:
 		return false

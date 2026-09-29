@@ -26,7 +26,18 @@ func validChecklistItem() map[string]any {
 		"style_anh":       "",
 		"rui_ro":          "MEDIUM",
 		"nguon_toi_thieu": "",
+		"kieu_hook":       "CON_SO",
+		"cot_truyen":      "GIOI_THIEU",
+		"diem_chu_de":     validScoreMap(),
 	}
+}
+
+func validScoreMap() map[string]any {
+	scores := map[string]any{}
+	for _, criterion := range checklistScoreCriteria {
+		scores[criterion.Key] = map[string]any{"diem": float64(2), "ly_do": "Có dữ kiện trong nghiên cứu thị trường."}
+	}
+	return scores
 }
 
 // testPlanFrame là khung của một page chưa khai Kim chỉ nam lẫn hồ sơ khách.

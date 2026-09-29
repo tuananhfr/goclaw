@@ -53,7 +53,7 @@ func (s *JobService) runContentChecklistChat(ctx context.Context, job *store.Tek
 	runCtx = store.WithUserID(runCtx, userID)
 	runCtx = store.WithAgentKey(runCtx, job.AgentKey)
 
-	collector := NewContentChecklistProposalCollector(checklistPlanFrameFromRequest(request))
+	collector := NewContentChecklistProposalCollector(checklistPlanFrameFromRequest(request), checklistHistoryFromRequest(request))
 	runReq := agent.RunRequest{
 		SessionKey:     job.SessionKey,
 		Message:        buildContentChecklistChatPrompt(request),
@@ -100,12 +100,14 @@ func (s *JobService) runContentChecklistChat(ctx context.Context, job *store.Tek
 }
 
 type ContentChecklistProposalCollector struct {
-	report map[string]any
-	frame  checklistPlanFrame
+	report  map[string]any
+	frame   checklistPlanFrame
+	history []checklistHistoryEntry
+	rejects int
 }
 
-func NewContentChecklistProposalCollector(frame checklistPlanFrame) *ContentChecklistProposalCollector {
-	return &ContentChecklistProposalCollector{frame: frame}
+func NewContentChecklistProposalCollector(frame checklistPlanFrame, history []checklistHistoryEntry) *ContentChecklistProposalCollector {
+	return &ContentChecklistProposalCollector{frame: frame, history: history}
 }
 
 func (t *ContentChecklistProposalCollector) Name() string { return checklistChatFinalToolName }
@@ -130,7 +132,9 @@ func (t *ContentChecklistProposalCollector) Parameters() map[string]any {
 	required := []string{"action", "source_item_id", "date", "time_slot", "content_line", "topic", "hook", "body", "usp", "reason"}
 	for key, property := range checklistPlanProperties(t.frame) {
 		// keep/delete không ghi các cột này, nên enum phải nhận chuỗi rỗng.
-		if _, hasEnum := property.(map[string]any)["enum"]; hasEnum {
+		if key == "diem_chu_de" {
+			property = checklistScoreProperty(false)
+		} else if _, hasEnum := property.(map[string]any)["enum"]; hasEnum {
 			property = map[string]any{"type": "string", "description": property.(map[string]any)["description"]}
 		}
 		itemProperties[key] = property
@@ -180,6 +184,10 @@ func (t *ContentChecklistProposalCollector) Execute(_ context.Context, args map[
 	report, err := validateContentChecklistProposal(args, t.frame)
 	if err != nil {
 		return tools.ErrorResult("MODEL_OUTPUT_INVALID: " + err.Error())
+	}
+	items, _ := report["items"].([]any)
+	if err := enforceChecklistRepetition(items, t.history, &t.rejects); err != nil {
+		return tools.ErrorResult(err.Error())
 	}
 	t.report = report
 	return tools.SilentResult("Checklist chat result captured.")
@@ -305,6 +313,7 @@ func buildContentChecklistChatPrompt(request map[string]any) string {
 	sb.WriteString(strings.TrimSpace(stringFromMap(request, "message")))
 	sb.WriteString("\n\n")
 	writeChecklistPlanRules(&sb, checklistPlanFrameFromRequest(request))
+	writeChecklistHistory(&sb, checklistHistoryFromRequest(request))
 	sb.WriteString("Every non-delete item must fill date, content_line, topic, hook, body and usp. time_slot may be blank. Do NOT include timeline: Insight derives the weekday from date.\n")
 	sb.WriteString("Every create and update item must also fill the planning columns above; keep and delete items may leave them empty.\n")
 	sb.WriteString("Sources must identify Vault/page/web/Insight evidence actually used. Never invent URLs.\n")

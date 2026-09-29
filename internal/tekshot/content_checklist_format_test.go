@@ -55,14 +55,14 @@ func TestBuildContentChecklistChatPromptKeepsReachMetricsOutOfRows(t *testing.T)
 }
 
 func TestChecklistCollectorsDoNotAcceptTimelineFromTheModel(t *testing.T) {
-	legacyItems := NewContentChecklistCollectorTool(testPlanFrame()).Parameters()["properties"].(map[string]any)["items"].(map[string]any)
+	legacyItems := NewContentChecklistCollectorTool(testPlanFrame(), nil).Parameters()["properties"].(map[string]any)["items"].(map[string]any)
 	legacyItem := legacyItems["items"].(map[string]any)
 	legacyFields := legacyItem["properties"].(map[string]any)
 	if _, found := legacyFields["timeline"]; found {
 		t.Fatal("legacy checklist collector must not accept an AI-supplied timeline")
 	}
 
-	chatItems := NewContentChecklistProposalCollector(testPlanFrame()).Parameters()["properties"].(map[string]any)["items"].(map[string]any)
+	chatItems := NewContentChecklistProposalCollector(testPlanFrame(), nil).Parameters()["properties"].(map[string]any)["items"].(map[string]any)
 	chatItem := chatItems["items"].(map[string]any)
 	chatFields := chatItem["properties"].(map[string]any)
 	if _, found := chatFields["timeline"]; found {

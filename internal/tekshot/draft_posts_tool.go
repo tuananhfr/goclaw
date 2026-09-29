@@ -549,6 +549,8 @@ func buildPrompt(args map[string]any, timezone string) string {
 			sb.WriteString("- 'Giai đoạn': Nhận biết = introduce and converse, never sell; Cân nhắc = help the reader compare and invite them to learn more; Hành động = invite them to act now.\n")
 			sb.WriteString("- 'CTA chính': end the caption with exactly that one call to action and no other. When 'Từ khoá CTA' is present, ask readers to comment that exact keyword, spelled as given.\n")
 			sb.WriteString("- 'Cảm xúc': the feeling the reader should leave with; set the tone for it without naming the emotion.\n")
+			sb.WriteString("- 'Kiểu hook': open the caption the way that hook type says (Câu hỏi = a question, Con số = a number, Câu chuyện = a short story, Nghịch lý = a paradox, Mẹo nhanh = a quick tip, Tuyên bố = a statement, So sánh = a comparison).\n")
+			sb.WriteString("- 'Cốt truyện': build the post as that storyline (for example Trước – sau = before and after, Chuyện khách hàng = a customer story, Sai lầm thường gặp = a common mistake). Never invent a customer or a result for it — use only what the source gives.\n")
 			sb.WriteString("- 'Mã bài', 'Rủi ro', 'Nguồn tối thiểu' and 'Trạng thái' are workflow data: never print them in the caption.\n")
 		}
 		sb.WriteString("\nSTRICT source item rules:\n")

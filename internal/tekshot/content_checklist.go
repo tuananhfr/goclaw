@@ -67,7 +67,7 @@ func (s *JobService) runContentChecklist(ctx context.Context, job *store.Tekshot
 	runCtx = store.WithUserID(runCtx, userID)
 	runCtx = store.WithAgentKey(runCtx, job.AgentKey)
 
-	collector := NewContentChecklistCollectorTool(checklistPlanFrameFromRequest(request))
+	collector := NewContentChecklistCollectorTool(checklistPlanFrameFromRequest(request), checklistHistoryFromRequest(request))
 	runReq := agent.RunRequest{
 		SessionKey:     job.SessionKey,
 		Message:        buildContentChecklistPrompt(request),
@@ -113,13 +113,16 @@ func (s *JobService) runContentChecklist(ctx context.Context, job *store.Tekshot
 
 // ContentChecklistCollectorTool captures the one structured checklist.
 type ContentChecklistCollectorTool struct {
-	report map[string]any
-	frame  checklistPlanFrame
+	report  map[string]any
+	frame   checklistPlanFrame
+	history []checklistHistoryEntry
+	// rejects đếm số lần đã trả bản kế hoạch về vì lặp.
+	rejects int
 }
 
 // NewContentChecklistCollectorTool builds the ephemeral collector for one page's frame.
-func NewContentChecklistCollectorTool(frame checklistPlanFrame) *ContentChecklistCollectorTool {
-	return &ContentChecklistCollectorTool{frame: frame}
+func NewContentChecklistCollectorTool(frame checklistPlanFrame, history []checklistHistoryEntry) *ContentChecklistCollectorTool {
+	return &ContentChecklistCollectorTool{frame: frame, history: history}
 }
 
 // Name implements tools.Tool.
@@ -175,6 +178,10 @@ func (t *ContentChecklistCollectorTool) Execute(_ context.Context, args map[stri
 	report, err := validateContentChecklist(args, t.frame)
 	if err != nil {
 		return tools.ErrorResult("MODEL_OUTPUT_INVALID: " + err.Error())
+	}
+	items, _ := report["items"].([]any)
+	if err := enforceChecklistRepetition(items, t.history, &t.rejects); err != nil {
+		return tools.ErrorResult(err.Error())
 	}
 	t.report = report
 	return tools.SilentResult("Structured content checklist captured.")
@@ -298,6 +305,7 @@ func buildContentChecklistPrompt(request map[string]any) string {
 	sb.WriteString("- body: exactly two labelled parts: 'Nội dung:' (2-4 sentences of copy direction and CTA) and 'Ảnh:' (one static-image brief: photo, graphic, illustration or text design).\n")
 	sb.WriteString("- usp: selling points and keywords to keep in the copy, comma separated.\n\n")
 	writeChecklistPlanRules(&sb, checklistPlanFrameFromRequest(request))
+	writeChecklistHistory(&sb, checklistHistoryFromRequest(request))
 
 	sb.WriteString("## Hard rules\n")
 	sb.WriteString(fmt.Sprintf("- Write EVERY field in language '%s'. Marketing staff read this, not developers.\n", language))
