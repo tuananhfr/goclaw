@@ -327,16 +327,25 @@ func (t *CreateImageTool) callProvider(ctx context.Context, cp credentialProvide
 			prompt := GetParamString(params, "prompt", "")
 			aspectRatio := GetParamString(params, "aspect_ratio", "1:1")
 			imageModel := GetParamString(params, "image_model", "")
+			referenceImages := getReferenceImages(params)
+			// "edit" needs an input image; without one the call stays a generation.
+			action := ImageActionFromCtx(ctx)
+			if len(referenceImages) == 0 {
+				action = ""
+			}
+			slog.Info("create_image: native request", "provider", providerName, "image_model", imageModel,
+				"action", providers.NormalizeImageAction(action), "references", len(referenceImages), "aspect_ratio", aspectRatio)
 			result, err := np.GenerateImage(ctx, providers.NativeImageRequest{
 				Model:           model,
 				ImageModel:      imageModel,
 				Prompt:          prompt,
-				ReferenceImages: getReferenceImages(params),
+				ReferenceImages: referenceImages,
 				AspectRatio:     aspectRatio,
 				OutputFormat:    "png",
 				// From the chain entry's params (builtin_tools settings), so a
 				// deployment opts in per tool config — empty keeps the default.
 				Quality: GetParamString(params, "quality", ""),
+				Action:  action,
 			})
 			if err != nil {
 				return nil, nil, fmt.Errorf("native image generation: %w", err)

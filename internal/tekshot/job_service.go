@@ -447,6 +447,10 @@ func (s *JobService) runChat(ctx context.Context, job *store.TekshotJob, request
 
 	mediaFiles := mediaFromJobRequest(request)
 	isEdit := numberFromMap(request, "edit_media_id") > 0
+	if isEdit && job.JobType == TekshotJobTypeImageChat {
+		// Không có cờ này, Codex gửi action "generate" và vẽ lại cả ảnh thay vì sửa ảnh gốc.
+		runCtx = tools.WithImageAction(runCtx, providers.ImageActionEdit)
+	}
 	// Reference library only applies to GENERATING a new image; post_chat shares
 	// this runner and must not grow image attachments, and an EDIT keeps the
 	// edited image as its only base — the library never joins an edit.

@@ -322,6 +322,23 @@ func ParentProviderFromCtx(ctx context.Context) string {
 	return ""
 }
 
+// --- Image tool action ---
+
+const ctxImageAction toolContextKey = "tool_image_action"
+
+// WithImageAction sets the Responses image tool action (providers.ImageAction*)
+// for every create_image call of the run — set by callers that know the run is
+// an edit, since the agent's own tool arguments cannot be trusted to say so.
+func WithImageAction(ctx context.Context, action string) context.Context {
+	return context.WithValue(ctx, ctxImageAction, action)
+}
+
+// ImageActionFromCtx returns the image tool action, or "" when unset.
+func ImageActionFromCtx(ctx context.Context) string {
+	v, _ := ctx.Value(ctxImageAction).(string)
+	return v
+}
+
 // --- Per-agent subagent config override ---
 
 const ctxSubagentCfg toolContextKey = "tool_subagent_config"

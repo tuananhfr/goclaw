@@ -440,3 +440,52 @@ func TestCreateImageTool_ThreadsImageModel(t *testing.T) {
 		})
 	}
 }
+
+// TestCreateImageTool_ThreadsImageActionFromContext verifies the run-level edit
+// flag reaches the native provider, and is dropped when there is no input image.
+func TestCreateImageTool_ThreadsImageActionFromContext(t *testing.T) {
+	pngMagic := []byte{
+		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+		0x00, 0x00, 0x00, 0x00,
+		0x49, 0x45, 0x4e, 0x44,
+		0xae, 0x42, 0x60, 0x82,
+	}
+	tests := []struct {
+		name       string
+		ctxAction  string
+		withImage  bool
+		wantAction string
+	}{
+		{"edit with base image", providers.ImageActionEdit, true, providers.ImageActionEdit},
+		{"edit without any image stays generation", providers.ImageActionEdit, false, ""},
+		{"unset", "", true, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeProvider := &nativeImageProvider{name: "openai-codex", model: "gpt-image-2", returnData: pngMagic}
+			reg := providers.NewRegistry(nil)
+			reg.Register(fakeProvider)
+
+			chainJSON := []byte(`{"providers":[{"provider":"openai-codex","model":"gpt-image-2","enabled":true,"timeout":30,"max_retries":1}]}`)
+			ctx := WithBuiltinToolSettings(context.Background(), BuiltinToolSettings{"create_image": chainJSON})
+			ctx = WithToolWorkspace(ctx, t.TempDir())
+			if tc.withImage {
+				ctx = WithMediaImages(ctx, []providers.ImageContent{{MimeType: "image/png", Data: "cmVm"}})
+			}
+			if tc.ctxAction != "" {
+				ctx = WithImageAction(ctx, tc.ctxAction)
+			}
+
+			result := NewCreateImageTool(reg).Execute(ctx, map[string]any{"prompt": "change the background"})
+			if result.IsError {
+				t.Fatalf("Execute returned error: %q", result.ForLLM)
+			}
+			if fakeProvider.calledWith == nil {
+				t.Fatal("GenerateImage was not called on the native provider")
+			}
+			if got := fakeProvider.calledWith.Action; got != tc.wantAction {
+				t.Errorf("NativeImageRequest.Action = %q, want %q", got, tc.wantAction)
+			}
+		})
+	}
+}

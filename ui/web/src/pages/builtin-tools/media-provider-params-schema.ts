@@ -20,6 +20,8 @@ export const MEDIA_PARAMS_SCHEMA: Record<string, Record<string, ParamField[]>> =
         default: "gpt-image-2",
         options: [
           { value: "gpt-image-2", label: "Default · gpt-image-2 (recommended)" },
+          { value: "gpt-image-2.5-flare", label: "Images 2.5 · gpt-image-2.5-flare (fast)" },
+          { value: "gpt-image-2.5-sunburst", label: "Images 2.5 · gpt-image-2.5-sunburst (precise edit)" },
           { value: "gpt-image-1.5", label: "Legacy · gpt-image-1.5" },
         ],
       },

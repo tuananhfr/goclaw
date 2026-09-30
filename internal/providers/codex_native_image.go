@@ -75,7 +75,7 @@ func (p *CodexProvider) buildNativeImageRequestBody(model string, req NativeImag
 	}
 	imageTool := map[string]any{
 		"type":          "image_generation",
-		"action":        "generate",
+		"action":        NormalizeImageAction(req.Action),
 		"model":         req.ImageModel,
 		"output_format": req.OutputFormat,
 		"size":          SizeFromAspect(req.AspectRatio),

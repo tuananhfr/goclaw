@@ -127,8 +127,8 @@ func (p *CodexProvider) buildRequestBody(req ChatRequest, stream bool) map[strin
 				// Defaults chosen for Phase 1b; per-agent overrides are Phase 4.
 				tools = append(tools, map[string]any{
 					"type":           "image_generation",
-					"action":         "generate",
-					"model":          "gpt-image-2",
+					"action":         ImageActionGenerate,
+					"model":          DefaultImageModel,
 					"output_format":  "png",
 					"partial_images": 1,
 				})

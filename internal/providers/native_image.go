@@ -15,16 +15,18 @@ type NativeImageProvider interface {
 
 // DefaultImageModel is the image model used by the Responses API image_generation
 // tool when the caller does not specify one. gpt-image-2 is the current (2026-Q2)
-// quality baseline; gpt-image-1.5 is available as a legacy fallback.
+// quality baseline; gpt-image-1.5 is available as a legacy fallback. The
+// Images 2.5 models are opt-in per deployment through builtin_tools settings.
 const DefaultImageModel = "gpt-image-2"
 
 // allowedImageModels enumerates the image models the native ChatGPT Responses API
 // image_generation tool will accept. Constraining to this whitelist prevents
-// silent upstream rejections from arbitrary model names (e.g. "dall-e-3") and
-// keeps the PR's motivation — gpt-image-2 quality — as the default everywhere.
+// silent upstream rejections from arbitrary model names (e.g. "dall-e-3").
 var allowedImageModels = map[string]bool{
-	"gpt-image-2":   true, // default — latest quality
-	"gpt-image-1.5": true, // legacy fallback
+	"gpt-image-2.5-flare":    true, // Images 2.5 (2026-09): fast general generation
+	"gpt-image-2.5-sunburst": true, // Images 2.5 (2026-09): precise multi-turn editing
+	"gpt-image-2":            true, // default
+	"gpt-image-1.5":          true, // legacy fallback
 }
 
 // ValidateImageModel returns the model to use, or an error if the caller
@@ -34,9 +36,28 @@ func ValidateImageModel(model string) (string, error) {
 		return DefaultImageModel, nil
 	}
 	if !allowedImageModels[model] {
-		return "", fmt.Errorf("unsupported image model %q; allowed: gpt-image-2 (default), gpt-image-1.5 (legacy)", model)
+		return "", fmt.Errorf("unsupported image model %q; allowed: gpt-image-2.5-flare, gpt-image-2.5-sunburst, gpt-image-2 (default), gpt-image-1.5 (legacy)", model)
 	}
 	return model, nil
+}
+
+// Image tool actions of the Responses API. "generate" always draws a new image
+// even when input images are attached; "edit" modifies the input image.
+const (
+	ImageActionGenerate = "generate"
+	ImageActionEdit     = "edit"
+	ImageActionAuto     = "auto"
+)
+
+// NormalizeImageAction maps an unknown or empty action to ImageActionGenerate,
+// the value every caller sent before actions were configurable.
+func NormalizeImageAction(action string) string {
+	switch action {
+	case ImageActionEdit, ImageActionAuto:
+		return action
+	default:
+		return ImageActionGenerate
+	}
 }
 
 // NativeImageRequest describes a single image generation request.
@@ -71,6 +92,9 @@ type NativeImageRequest struct {
 	// Quality is the image_generation tool quality ("low"|"medium"|"high").
 	// Empty omits the field and keeps the provider default.
 	Quality string
+
+	// Action is the image tool action (see ImageAction*). Empty means generate.
+	Action string
 }
 
 // NativeImageResult holds the result of a native image generation call.

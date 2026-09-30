@@ -383,3 +383,46 @@ func TestSizeFromAspect(t *testing.T) {
 		}
 	}
 }
+
+// TestCodexGenerateImage_Action verifies the image tool action: empty or unknown
+// values keep "generate" (the historic wire value), while edit/auto pass through.
+func TestCodexGenerateImage_Action(t *testing.T) {
+	cases := []struct {
+		action string
+		want   string
+	}{
+		{"", ImageActionGenerate},
+		{"bogus", ImageActionGenerate},
+		{ImageActionEdit, ImageActionEdit},
+		{ImageActionAuto, ImageActionAuto},
+	}
+	for _, tc := range cases {
+		var captured []byte
+		server := mockImageServer(t, &captured)
+		p := NewCodexProvider("codex-test", &staticTokenSource{token: "tok"}, server.URL, "gpt-image-2")
+		p.retryConfig.Attempts = 1
+		_, err := p.GenerateImage(context.Background(), NativeImageRequest{Prompt: "edit it", Action: tc.action})
+		server.Close()
+		if err != nil {
+			t.Fatalf("action %q: GenerateImage error: %v", tc.action, err)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(captured, &body); err != nil {
+			t.Fatalf("action %q: unmarshal: %v", tc.action, err)
+		}
+		tool := body["tools"].([]any)[0].(map[string]any)
+		if got, _ := tool["action"].(string); got != tc.want {
+			t.Errorf("action %q: tools[0].action = %q, want %q", tc.action, got, tc.want)
+		}
+	}
+}
+
+// TestValidateImageModel_Images25 pins the Images 2.5 models into the whitelist.
+func TestValidateImageModel_Images25(t *testing.T) {
+	for _, model := range []string{"gpt-image-2.5-flare", "gpt-image-2.5-sunburst"} {
+		got, err := ValidateImageModel(model)
+		if err != nil || got != model {
+			t.Errorf("ValidateImageModel(%q) = %q, %v; want accepted", model, got, err)
+		}
+	}
+}
