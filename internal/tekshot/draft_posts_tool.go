@@ -181,7 +181,7 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 	}
 
 	profile := pageProfileFromRequest(args)
-	collector := NewDraftBatchCollectorTool(sourceItemsArg(args["source_items"])).withProfile(profile)
+	collector := NewDraftBatchCollectorTool(sourceItemsArg(args["source_items"])).withProfile(profile.forWriting())
 	userID := store.UserIDFromContext(ctx)
 	writerArgs := maps.Clone(args)
 	writerArgs["researched_facts"] = renderFactSheet(researchDraftFacts(ctx, ag, args, userID, sessionKey))
@@ -229,7 +229,7 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 	// Prompt D: lop kiem tra THU HAI, tach khoi luot viet. Chi chay khi trang
 	// da bat luat va bai khong phai thuan thong tin — bai THONG_TIN khong mang
 	// nghia vu quang cao nen khong co gi de soat.
-	applyComplianceOverlay(ctx, ag, sessionKey, store.UserIDFromContext(ctx), profile, batch)
+	applyComplianceOverlay(ctx, ag, sessionKey, store.UserIDFromContext(ctx), profile.forCompliance(), batch)
 
 	encoded, err := json.Marshal(batch)
 	if err != nil {
@@ -257,7 +257,7 @@ func (t *DraftPostsTool) Execute(ctx context.Context, args map[string]any) *tool
 func draftRunRequest(args map[string]any, timezone, userID, sessionKey string, collector *DraftBatchCollectorTool) agent.RunRequest {
 	return agent.RunRequest{
 		SessionKey:     sessionKey,
-		Message:        draftWriterPersona(args) + "\n\n" + buildPrompt(args, timezone) + buildGovernancePrompt(pageProfileFromRequest(args)),
+		Message:        draftWriterPersona(args) + "\n\n" + buildPrompt(args, timezone) + buildGovernancePrompt(pageProfileFromRequest(args).forWriting()),
 		Media:          mediaFilesArg(args["source_media"]),
 		Channel:        "tekshot_job",
 		ChannelType:    "tekshot",

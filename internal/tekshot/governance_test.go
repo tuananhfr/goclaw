@@ -224,3 +224,46 @@ func TestUngovernedSchemaUnchanged(t *testing.T) {
 		t.Fatal("page chưa bật luật thì schema phải y hệt bản cũ")
 	}
 }
+
+func profileWithSwitchesOff(codes ...any) map[string]any {
+	raw := governedProfile()
+	raw["page_profile"].(map[string]any)["tat_luat"] = codes
+	return raw
+}
+
+func TestPageProfileWithoutSwitchesKeepsEveryPass(t *testing.T) {
+	profile := pageProfileFromRequest(governedProfile())
+	if profile.forWriting() != profile || profile.forCompliance() != profile {
+		t.Fatal("không có tat_luat thì lượt viết và lượt soát vẫn giữ nguyên hồ sơ")
+	}
+	var missing *pageProfile
+	if missing.forWriting() != nil || missing.forCompliance() != nil || missing.ruleOff(switchWriting) {
+		t.Fatal("page chưa có hồ sơ thì mọi lượt vẫn nil, không panic")
+	}
+}
+
+func TestWritingSwitchOffDropsOnlyTheWritingPass(t *testing.T) {
+	profile := pageProfileFromRequest(profileWithSwitchesOff(switchWriting, "ma_la"))
+	if profile == nil {
+		t.Fatal("tắt một luật không được làm mất cả hồ sơ")
+	}
+	if profile.forWriting() != nil {
+		t.Fatal("tắt viet_bai thì lượt viết phải chạy như page chưa có hồ sơ")
+	}
+	if buildGovernancePrompt(profile.forWriting()) != "" {
+		t.Fatal("tắt viet_bai thì prompt viết không được mang luật")
+	}
+	if profile.forCompliance() != profile {
+		t.Fatal("tắt viet_bai không được kéo theo tắt lượt soát")
+	}
+}
+
+func TestComplianceSwitchOffDropsOnlyTheCompliancePass(t *testing.T) {
+	profile := pageProfileFromRequest(profileWithSwitchesOff(switchCompliance))
+	if profile.forCompliance() != nil {
+		t.Fatal("tắt soat_tuan_thu thì lượt soát phải bỏ")
+	}
+	if profile.forWriting() != profile {
+		t.Fatal("tắt soat_tuan_thu không được bỏ luật viết")
+	}
+}

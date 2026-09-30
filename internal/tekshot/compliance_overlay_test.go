@@ -207,3 +207,25 @@ func TestAutomatedImagePromptCarriesRulesOnlyWhenGoverned(t *testing.T) {
 		t.Fatalf("trang chưa bật luật thì prompt phải nguyên vẹn, nhận %q", got)
 	}
 }
+
+func TestApplyComplianceOverlayNoopWhenSwitchedOff(t *testing.T) {
+	raw := profileWithSwitchesOff(switchCompliance)
+	raw["page_profile"].(map[string]any)["muc_dich_cho_phep"] = []any{"THONG_TIN", "THUONG_MAI"}
+	batch := map[string]any{"posts": []map[string]any{{"title": "x", "content": "y"}}}
+	// loop nil: nếu overlay lỡ chạy thì test panic thay vì qua.
+	applyComplianceOverlay(t.Context(), nil, "s", "u", pageProfileFromRequest(raw).forCompliance(), batch)
+	if _, ok := batch["posts"].([]map[string]any)[0]["compliance"]; ok {
+		t.Fatal("admin tắt soát tuân thủ thì bài không được gắn kết luận")
+	}
+}
+
+func TestImageGuidanceEmptyWhenCronImageSwitchedOff(t *testing.T) {
+	raw := profileWithSwitchesOff(switchCronImage)
+	raw["loai_anh"] = "PRODUCT"
+	if imageGuidanceFor(raw) != "" {
+		t.Fatal("admin tắt luật ảnh cron thì lượt sinh ảnh tự động không mang luật")
+	}
+	if imageGuidanceFor(profileWithSwitchesOff(switchWriting)) == "" {
+		t.Fatal("tắt luật khác không được bỏ luật ảnh")
+	}
+}

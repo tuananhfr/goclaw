@@ -83,7 +83,7 @@ func mediaBranchRulesFrom(rules map[string]string, branch string) string {
 // nguyên tắc bật-theo-page của cả đợt này. Chỉ automatedImagePrompt gọi nó.
 func imageGuidanceFor(request map[string]any) string {
 	profile := pageProfileFromRequest(request)
-	if profile == nil {
+	if profile == nil || profile.ruleOff(switchCronImage) {
 		return ""
 	}
 	return "\n" + profile.Rules.ImageRules + "\n" +

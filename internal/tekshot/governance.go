@@ -29,6 +29,35 @@ type pageProfile struct {
 	LegalEntity   string
 	// Rules là bộ luật hệ thống hiệu lực: bản admin sửa trên Studio, khối nào không sửa thì mặc định.
 	Rules governanceRules
+	// Off là các luật admin tắt riêng cho page (Drupal gửi ở tat_luat).
+	Off map[string]bool
+}
+
+// Mã công tắc phải khớp GovernanceSwitches.php bên Drupal; mã lạ bị bỏ qua.
+const (
+	switchWriting    = "viet_bai"
+	switchCompliance = "soat_tuan_thu"
+	switchCronImage  = "anh_cron"
+)
+
+func (p *pageProfile) ruleOff(code string) bool {
+	return p != nil && p.Off[code]
+}
+
+// forWriting trả nil khi admin tắt luật viết bài: lượt viết chạy như page chưa có hồ sơ.
+func (p *pageProfile) forWriting() *pageProfile {
+	if p.ruleOff(switchWriting) {
+		return nil
+	}
+	return p
+}
+
+// forCompliance trả nil khi admin tắt lượt soát tuân thủ.
+func (p *pageProfile) forCompliance() *pageProfile {
+	if p.ruleOff(switchCompliance) {
+		return nil
+	}
+	return p
 }
 
 func pageProfileFromRequest(request map[string]any) *pageProfile {
@@ -46,6 +75,10 @@ func pageProfileFromRequest(request map[string]any) *pageProfile {
 		BlockCTAPhone: boolFromMap(raw, "cam_cta_thu_sdt"),
 		LegalEntity:   stringFromMap(raw, "phap_nhan"),
 		Rules:         resolveGovernanceRules(raw["system_rules"]),
+		Off:           map[string]bool{},
+	}
+	for _, code := range stringSliceFromAny(raw["tat_luat"]) {
+		profile.Off[code] = true
 	}
 	if len(profile.Codes) == 0 {
 		return nil
