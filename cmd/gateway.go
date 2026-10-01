@@ -296,6 +296,12 @@ func runGateway() {
 	var tekshotJobs *tekshottools.JobService
 	if pgStores.TekshotJobs != nil {
 		tekshotJobs = tekshottools.NewJobService(pgStores.TekshotJobs, agentRouter, toolsReg)
+		tekshotJobs.SetStudioImageDeps(tekshottools.StudioImageDeps{
+			Providers:    providerRegistry,
+			BuiltinTools: pgStores.BuiltinTools,
+			Skills:       pgStores.Skills,
+			Workspace:    workspace,
+		})
 		server.SetTekshotJobService(tekshotJobs)
 	} else {
 		slog.Warn("tekshot.jobs.disabled: store is not configured")

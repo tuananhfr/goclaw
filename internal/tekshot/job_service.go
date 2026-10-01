@@ -44,6 +44,7 @@ const (
 	TekshotJobTypeBlogImages       = "blog_images"
 	TekshotJobTypeBlogImport       = "blog_import"
 	TekshotJobTypePriceLookup      = "price_lookup"
+	TekshotJobTypeStudioImage      = "studio_image"
 
 	defaultJobPollInterval = 2 * time.Second
 	defaultJobLockTTL      = 10 * time.Minute
@@ -79,6 +80,8 @@ type JobService struct {
 	// job id, so an external cancel request can interrupt a running job.
 	mu      sync.Mutex
 	cancels map[uuid.UUID]context.CancelFunc
+	// studio is nil until cmd wires it; studio_image then fails loudly.
+	studio *StudioImageDeps
 }
 
 func NewJobService(jobStore store.TekshotJobStore, agents *agent.Router, toolsReg *tools.Registry) *JobService {
@@ -324,6 +327,8 @@ func (s *JobService) process(ctx context.Context, job *store.TekshotJob) error {
 		result, progress, err = s.runDraftPosts(ctx, job, request)
 	case TekshotJobTypePostChat, TekshotJobTypeImageChat:
 		result, progress, err = s.runChat(ctx, job, request)
+	case TekshotJobTypeStudioImage:
+		result, progress, err = s.runStudioImage(ctx, job, request)
 	case TekshotJobTypeAutoImage:
 		result, progress, err = s.runAutoImage(ctx, job, request)
 	case TekshotJobTypeMarketResearch:
@@ -680,7 +685,7 @@ func isSupportedTekshotJobType(jobType string) bool {
 		return true
 	}
 	switch jobType {
-	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeAutoImage, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeChecklistChat, TekshotJobTypeChecklistReview, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle, TekshotJobTypeDescribeImage, TekshotJobTypeSeedComments, TekshotJobTypeKnowledgeExtract, TekshotJobTypeBlogGenerate, TekshotJobTypeBlogRewrite, TekshotJobTypeBlogAudit, TekshotJobTypeBlogImages, TekshotJobTypeBlogImport, TekshotJobTypePriceLookup, TekshotJobTypeImageReview, TekshotJobTypeCommentReplyMatch, TekshotJobTypeCustomerMemory, TekshotJobTypeMessengerReplyMatch, TekshotJobTypeMessengerReplyCompose, TekshotJobTypeReplyDataExtract:
+	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeStudioImage, TekshotJobTypeAutoImage, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeChecklistChat, TekshotJobTypeChecklistReview, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle, TekshotJobTypeDescribeImage, TekshotJobTypeSeedComments, TekshotJobTypeKnowledgeExtract, TekshotJobTypeBlogGenerate, TekshotJobTypeBlogRewrite, TekshotJobTypeBlogAudit, TekshotJobTypeBlogImages, TekshotJobTypeBlogImport, TekshotJobTypePriceLookup, TekshotJobTypeImageReview, TekshotJobTypeCommentReplyMatch, TekshotJobTypeCustomerMemory, TekshotJobTypeMessengerReplyMatch, TekshotJobTypeMessengerReplyCompose, TekshotJobTypeReplyDataExtract:
 		return true
 	default:
 		return false
