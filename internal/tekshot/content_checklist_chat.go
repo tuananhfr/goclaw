@@ -316,6 +316,7 @@ func buildContentChecklistChatPrompt(request map[string]any) string {
 	writeChecklistPlanRules(&sb, checklistPlanFrameFromRequest(request))
 	writeChecklistHistory(&sb, checklistHistoryFromRequest(request))
 	writeChecklistSiblings(&sb, checklistSiblingsFromRequest(request))
+	writeChecklistGuide(&sb, checklistGuideFromRequest(request))
 	sb.WriteString("Every non-delete item must fill date, content_line, topic, hook, body and usp. time_slot may be blank. Do NOT include timeline: Insight derives the weekday from date.\n")
 	sb.WriteString("Every create and update item must also fill the planning columns above; keep and delete items may leave them empty.\n")
 	sb.WriteString("Sources must identify Vault/page/web/Insight evidence actually used. Never invent URLs.\n")

@@ -308,6 +308,7 @@ func buildContentChecklistPrompt(request map[string]any) string {
 	writeChecklistPlanRules(&sb, checklistPlanFrameFromRequest(request))
 	writeChecklistHistory(&sb, checklistHistoryFromRequest(request))
 	writeChecklistSiblings(&sb, checklistSiblingsFromRequest(request))
+	writeChecklistGuide(&sb, checklistGuideFromRequest(request))
 
 	sb.WriteString("## Hard rules\n")
 	sb.WriteString(fmt.Sprintf("- Write EVERY field in language '%s'. Marketing staff read this, not developers.\n", language))
