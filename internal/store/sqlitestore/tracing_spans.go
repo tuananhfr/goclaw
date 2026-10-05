@@ -194,15 +194,14 @@ func (s *SQLiteTracingStore) BatchUpdateTraceAggregates(ctx context.Context, tra
 			total_input_tokens  = COALESCE((SELECT SUM(input_tokens)  FROM spans WHERE trace_id = ? AND span_type = 'llm_call' AND input_tokens  IS NOT NULL), 0),
 			total_output_tokens = COALESCE((SELECT SUM(output_tokens) FROM spans WHERE trace_id = ? AND span_type = 'llm_call' AND output_tokens IS NOT NULL), 0),
 			total_cost       = COALESCE((SELECT SUM(total_cost) FROM spans WHERE trace_id = ? AND total_cost IS NOT NULL), 0),
-			metadata         = (
+			metadata         = json_patch(COALESCE(traces.metadata, '{}'), (
 				SELECT json_object(
 					'total_cache_read_tokens',     COALESCE(SUM(json_extract(metadata, '$.cache_read_tokens')), 0),
 					'total_cache_creation_tokens', COALESCE(SUM(json_extract(metadata, '$.cache_creation_tokens')), 0)
 				)
 				FROM spans WHERE trace_id = ? AND span_type = 'llm_call' AND metadata IS NOT NULL
-			)
+			))
 		WHERE id = ?`,
 		traceID, traceID, traceID, traceID, traceID, traceID, traceID, traceID)
 	return err
 }
-

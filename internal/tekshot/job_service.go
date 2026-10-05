@@ -308,7 +308,11 @@ func (s *JobService) processNext(parent context.Context, workerID int) error {
 	return nil
 }
 
-func (s *JobService) process(ctx context.Context, job *store.TekshotJob) error {
+func (s *JobService) process(ctx context.Context, job *store.TekshotJob) (runErr error) {
+	ctx, imageTrace := s.startStudioImageTrace(ctx, job)
+	if imageTrace != nil {
+		defer func() { imageTrace.finish(ctx, runErr) }()
+	}
 	request := map[string]any{}
 	if len(job.RequestJSON) > 0 {
 		if err := json.Unmarshal(job.RequestJSON, &request); err != nil {
@@ -398,6 +402,9 @@ func (s *JobService) process(ctx context.Context, job *store.TekshotJob) error {
 	}
 	if err := s.store.MarkCompleted(context.Background(), job.ID, encoded, progress); err != nil {
 		return err
+	}
+	if imageTrace != nil {
+		imageTrace.output = result
 	}
 	s.sendCallback(context.Background(), job, store.TekshotJobCompleted, progress, "", encoded)
 	return nil

@@ -17,16 +17,19 @@ import (
 	"github.com/nextlevelbuilder/goclaw/internal/providers"
 	"github.com/nextlevelbuilder/goclaw/internal/store"
 	"github.com/nextlevelbuilder/goclaw/internal/tools"
+	"github.com/nextlevelbuilder/goclaw/internal/tracing"
 )
 
 const studioReferenceMaxBytes = 10 << 20
 
 // StudioImageDeps is what studio_image needs outside the agent loop.
 type StudioImageDeps struct {
-	Providers    *providers.Registry
-	BuiltinTools store.BuiltinToolStore
-	Skills       store.SkillStore
-	Workspace    string // GoClaw workspace root; /v1/files serves it to Drupal
+	Providers      *providers.Registry
+	BuiltinTools   store.BuiltinToolStore
+	Skills         store.SkillStore
+	Workspace      string // GoClaw workspace root; /v1/files serves it to Drupal
+	TraceCollector *tracing.Collector
+	Agents         store.AgentCRUDStore
 }
 
 // SetStudioImageDeps wires studio_image. A setter keeps NewJobService's
@@ -36,31 +39,42 @@ func (s *JobService) SetStudioImageDeps(deps StudioImageDeps) {
 }
 
 func (s *JobService) runStudioImage(ctx context.Context, job *store.TekshotJob, request map[string]any) (any, string, error) {
+	_, finishPrepare := startStudioImageSpan(ctx, store.SpanData{Name: "Prepare image request", SpanType: store.SpanTypeEvent},
+		map[string]any{"prompt": stringFromMap(request, "prompt"), "instructions": stringFromMap(request, "instructions")})
 	if s.studio == nil || s.studio.Providers == nil || s.studio.BuiltinTools == nil || s.studio.Workspace == "" {
-		return nil, "", fmt.Errorf("studio_image is not wired (provider registry, builtin tool store or workspace missing)")
+		err := fmt.Errorf("studio_image is not wired (provider registry, builtin tool store or workspace missing)")
+		finishPrepare(nil, err, nil)
+		return nil, "", err
 	}
 	req, err := parseStudioImageRequest(request)
 	if err != nil {
+		finishPrepare(nil, err, nil)
 		return nil, "", err
 	}
 	ctx = store.WithTenantID(ctx, store.MasterTenantID)
 	settings, err := s.studio.BuiltinTools.GetSettings(ctx, "create_image")
 	if err != nil {
+		finishPrepare(nil, err, nil)
 		return nil, "", fmt.Errorf("studio_image: load create_image settings: %w", err)
 	}
 	ctx = tools.WithBuiltinToolSettings(ctx, tools.BuiltinToolSettings{"create_image": settings})
 
 	images, err := loadStudioImages(req.Media, []string{os.TempDir(), s.studio.Workspace})
 	if err != nil {
+		finishPrepare(nil, err, nil)
 		return nil, "", err
 	}
 	prompt := appendSkillsBlock(req.Prompt, s.loadTaggedSkills(ctx, job, req.TaggedSkills))
+	finishPrepare(map[string]any{"image_count": len(images), "tagged_skills": req.TaggedSkills, "size": req.Size}, nil, nil)
 
 	var chosen referenceLibraryItem
 	if len(req.Library) > 0 {
 		chosen = s.chooseStudioReference(ctx, job, req.Prompt, req.Library)
 		if chosen.ID > 0 {
+			_, finishDownload := startStudioImageSpan(ctx, store.SpanData{Name: "Download reference image", SpanType: store.SpanTypeEvent},
+				map[string]any{"reference_image_id": chosen.ID})
 			img, dlErr := s.downloadStudioReference(ctx, chosen.URL)
+			finishDownload(map[string]any{"mime_type": img.MimeType, "encoded_bytes": len(img.Data)}, dlErr, nil)
 			if dlErr != nil {
 				slog.Warn("tekshot: studio reference download failed, drawing without it",
 					"job", job.ID.String(), "reference_image_id", chosen.ID, "error", dlErr)
@@ -80,7 +94,9 @@ func (s *JobService) runStudioImage(ctx context.Context, job *store.TekshotJob, 
 	// would redraw a refusal (~50s). Keep the Codex error; stop on a final one.
 	var drawErr error
 	drawFinal := false
-	err = tools.RunCreateImageChain(ctx, s.studio.Providers, func(ctx context.Context, target tools.ImageChainTarget) error {
+	drawCtx, finishDraw := startStudioImageSpan(ctx, store.SpanData{Name: "Generate image", SpanType: store.SpanTypeEvent},
+		map[string]any{"instructions": req.Instructions, "prompt": prompt, "size": req.Size, "image_count": len(images), "reference_image_id": chosen.ID})
+	err = tools.RunCreateImageChain(drawCtx, s.studio.Providers, func(ctx context.Context, target tools.ImageChainTarget) error {
 		if drawFinal {
 			return drawErr
 		}
@@ -88,7 +104,10 @@ func (s *JobService) runStudioImage(ctx context.Context, job *store.TekshotJob, 
 		if !ok {
 			return fmt.Errorf("provider %s cannot run studio_image (needs Codex / ChatGPT OAuth)", target.Provider.Name())
 		}
-		res, callErr := sp.StudioImage(ctx, providers.StudioImageRequest{
+		observation := providers.NewChatGPTOAuthRoutingObservation()
+		callCtx := providers.WithChatGPTOAuthRoutingObservation(ctx, observation)
+		callCtx, finishAttempt := startStudioImageSpan(callCtx, store.SpanData{Name: "Try image provider", SpanType: store.SpanTypeEvent, Provider: target.Provider.Name(), Model: target.Model}, nil)
+		res, callErr := sp.StudioImage(callCtx, providers.StudioImageRequest{
 			Model:        target.Model,
 			ImageModel:   target.ImageModel,
 			Quality:      target.Quality,
@@ -97,6 +116,7 @@ func (s *JobService) runStudioImage(ctx context.Context, job *store.TekshotJob, 
 			Text:         prompt,
 			Images:       images,
 		})
+		finishAttempt(studioImageResultSummary(res), callErr, nil)
 		if callErr != nil {
 			drawErr = callErr
 			drawFinal = !providers.IsRetryableError(callErr)
@@ -109,11 +129,18 @@ func (s *JobService) runStudioImage(ctx context.Context, job *store.TekshotJob, 
 		if drawErr != nil {
 			err = drawErr
 		}
+		finishDraw(nil, err, nil)
+		if imageTrace := studioImageTraceFromContext(ctx); imageTrace != nil {
+			imageTrace.rawError = err
+		}
 		slog.Warn("tekshot: studio image failed", "job", job.ID.String(), "error", err)
 		return nil, "", studioImageUserError(err)
 	}
+	finishDraw(studioImageResultSummary(result), nil, nil)
 
+	_, finishSave := startStudioImageSpan(ctx, store.SpanData{Name: "Save generated image", SpanType: store.SpanTypeEvent}, nil)
 	path, err := writeStudioImage(s.studio.Workspace, job, result.Data)
+	finishSave(map[string]any{"path": path, "image_bytes": len(result.Data)}, err, nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -139,6 +166,8 @@ func (s *JobService) loadTaggedSkills(ctx context.Context, job *store.TekshotJob
 	for _, name := range names {
 		content, ok := s.studio.Skills.LoadSkill(ctx, name)
 		if !ok || strings.TrimSpace(content) == "" {
+			_, finish := startStudioImageSpan(ctx, store.SpanData{Name: "Load tagged image skill", SpanType: store.SpanTypeEvent}, map[string]any{"skill": name})
+			finish("Continuing without this skill", fmt.Errorf("tagged skill %q is missing or empty", name), nil)
 			slog.Warn("tekshot: tagged skill not found, skipping", "job", job.ID.String(), "skill", name)
 			continue
 		}
@@ -156,14 +185,31 @@ func (s *JobService) chooseStudioReference(ctx context.Context, job *store.Teksh
 		var reply string
 		choiceCtx, cancel := context.WithTimeout(ctx, referenceChoiceTimeout)
 		err := tools.RunCreateImageChain(choiceCtx, s.studio.Providers, func(ctx context.Context, target tools.ImageChainTarget) error {
-			resp, callErr := target.Provider.Chat(ctx, providers.ChatRequest{
+			observation := providers.NewChatGPTOAuthRoutingObservation()
+			callCtx := providers.WithChatGPTOAuthRoutingObservation(ctx, observation)
+			callCtx, finish := startStudioImageSpan(callCtx, store.SpanData{
+				Name: "Choose reference image", SpanType: store.SpanTypeLLMCall, Provider: target.Provider.Name(), Model: target.Model,
+			}, map[string]any{"prompt": prompt, "parse_attempt": attempt})
+			if imageTrace := studioImageTraceFromContext(callCtx); imageTrace != nil {
+				callCtx = providers.WithRetryHook(callCtx, func(attempt, maxAttempts int, err error) {
+					imageTrace.recordRetry(callCtx, target.Provider.Name(), attempt, maxAttempts, err)
+				})
+			}
+			resp, callErr := target.Provider.Chat(callCtx, providers.ChatRequest{
 				Messages: []providers.Message{{Role: "user", Content: prompt}},
 				Model:    target.Model,
 				Options:  map[string]any{providers.OptThinkingLevel: "low"},
 			})
 			if callErr != nil {
+				finish(nil, callErr, nil)
 				return callErr
 			}
+			if resp == nil {
+				err := fmt.Errorf("reference selection returned no response")
+				finish(nil, err, nil)
+				return err
+			}
+			finish(resp.Content, nil, resp.Usage)
 			reply = resp.Content
 			return nil
 		})
@@ -174,6 +220,8 @@ func (s *JobService) chooseStudioReference(ctx context.Context, job *store.Teksh
 			return referenceLibraryItem{}
 		}
 		if _, parsed := referenceChoiceRawID(reply); !parsed {
+			_, finish := startStudioImageSpan(ctx, store.SpanData{Name: "Parse reference selection", SpanType: store.SpanTypeEvent}, reply)
+			finish(map[string]any{"parse_attempt": attempt, "will_retry": attempt < 2}, fmt.Errorf("reference selection reply contained no readable id"), nil)
 			slog.Warn("tekshot: studio reference choice reply carried no id",
 				"job", job.ID.String(), "attempt", attempt, "reply_head", headRunes(reply, 200))
 			continue
@@ -181,10 +229,14 @@ func (s *JobService) chooseStudioReference(ctx context.Context, job *store.Teksh
 		id := parseReferenceChoice(reply, shortlist)
 		for _, item := range shortlist {
 			if item.ID == id {
+				_, finish := startStudioImageSpan(ctx, store.SpanData{Name: "Select reference image", SpanType: store.SpanTypeEvent}, nil)
+				finish(map[string]any{"reference_image_id": id}, nil, nil)
 				slog.Info("tekshot: studio reference image chosen", "job", job.ID.String(), "reference_image_id", id)
 				return item
 			}
 		}
+		_, finish := startStudioImageSpan(ctx, store.SpanData{Name: "Select reference image", SpanType: store.SpanTypeEvent}, nil)
+		finish("Drawing without a library image", nil, nil)
 		return referenceLibraryItem{}
 	}
 	return referenceLibraryItem{}

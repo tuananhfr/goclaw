@@ -262,7 +262,7 @@ export function TracesPage() {
                       <td className="px-3 py-2.5 text-center">
                         <div className="flex items-center justify-center gap-1">
                           <StatusIcon status={trace.status} />
-                          {(trace.status === "running") && (
+                          {(trace.status === "running" && !trace.tags?.includes("studio_image")) && (
                             <Button
                               variant="destructive"
                               size="icon-xs"

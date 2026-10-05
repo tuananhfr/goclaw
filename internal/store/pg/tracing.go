@@ -297,7 +297,7 @@ func (s *PGTracingStore) BatchUpdateTraceAggregates(ctx context.Context, traceID
 			total_input_tokens = COALESCE((SELECT SUM(input_tokens) FROM spans WHERE trace_id = $1 AND span_type = 'llm_call' AND input_tokens IS NOT NULL), 0),
 			total_output_tokens = COALESCE((SELECT SUM(output_tokens) FROM spans WHERE trace_id = $1 AND span_type = 'llm_call' AND output_tokens IS NOT NULL), 0),
 			total_cost = COALESCE((SELECT SUM(total_cost) FROM spans WHERE trace_id = $1 AND total_cost IS NOT NULL), 0),
-			metadata = (
+			metadata = COALESCE(traces.metadata, '{}'::jsonb) || (
 				SELECT jsonb_build_object(
 					'total_cache_read_tokens', COALESCE(SUM((metadata->>'cache_read_tokens')::int), 0),
 					'total_cache_creation_tokens', COALESCE(SUM((metadata->>'cache_creation_tokens')::int), 0)

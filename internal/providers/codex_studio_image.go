@@ -52,7 +52,7 @@ var (
 	_ StudioImageProvider = (*CodexAdapter)(nil)
 )
 
-func (p *CodexProvider) StudioImage(ctx context.Context, req StudioImageRequest) (*StudioImageResult, error) {
+func (p *CodexProvider) StudioImage(ctx context.Context, req StudioImageRequest) (result *StudioImageResult, err error) {
 	if strings.TrimSpace(req.Text) == "" {
 		return nil, fmt.Errorf("codex studio image: empty message")
 	}
@@ -64,6 +64,11 @@ func (p *CodexProvider) StudioImage(ctx context.Context, req StudioImageRequest)
 	if model == "" {
 		model = p.defaultModel
 	}
+	req.Model = model
+	req.ImageModel = imageModel
+	ctx, finish := observeStudioImage(ctx, p.Name(), req)
+	defer func() { finish(result, err) }()
+	ctx = withStudioImageRetryObservation(ctx, p.Name())
 	body := buildStudioImageRequestBody(model, imageModel, req)
 	respBody, err := RetryDo(ctx, p.retryConfig, func() (io.ReadCloser, error) {
 		return p.doRequest(ctx, body)

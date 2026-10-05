@@ -96,7 +96,7 @@ export function TraceDetailDialog({ traceId, onClose, getTrace, onNavigateTrace,
               {exporting ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" /> : <Download className="h-3.5 w-3.5" />}
               {t("detail.export")}
             </button>
-            {trace && trace.status === "running" && onAbortRun && (
+            {trace && trace.status === "running" && !trace.tags?.includes("studio_image") && onAbortRun && (
               <button type="button" onClick={(e) => onAbortRun(trace, e)} className="flex cursor-pointer items-center gap-1 rounded-md bg-destructive px-2 py-1 text-xs text-destructive-foreground transition-colors hover:bg-destructive/90">
                 <Square className="h-3.5 w-3.5" />{t("detail.stopRun")}
               </button>

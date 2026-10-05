@@ -297,10 +297,12 @@ func runGateway() {
 	if pgStores.TekshotJobs != nil {
 		tekshotJobs = tekshottools.NewJobService(pgStores.TekshotJobs, agentRouter, toolsReg)
 		tekshotJobs.SetStudioImageDeps(tekshottools.StudioImageDeps{
-			Providers:    providerRegistry,
-			BuiltinTools: pgStores.BuiltinTools,
-			Skills:       pgStores.Skills,
-			Workspace:    workspace,
+			Providers:      providerRegistry,
+			BuiltinTools:   pgStores.BuiltinTools,
+			Skills:         pgStores.Skills,
+			Workspace:      workspace,
+			TraceCollector: traceCollector,
+			Agents:         pgStores.Agents,
 		})
 		server.SetTekshotJobService(tekshotJobs)
 	} else {

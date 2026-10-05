@@ -7,8 +7,52 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
+
+func TestStudioImageObservationPreservesRetryHook(t *testing.T) {
+	var hits atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if hits.Add(1) == 1 {
+			http.Error(w, "retry", http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = io.WriteString(w, okStudioStream)
+	}))
+	defer server.Close()
+	p := newStudioProvider(server.URL)
+	p.WithRetryConfig(RetryConfig{Attempts: 2, MinDelay: time.Millisecond, MaxDelay: time.Millisecond})
+	starts, ends, retries, previous := 0, 0, 0, 0
+	ctx := WithRetryHook(context.Background(), func(int, int, error) { previous++ })
+	ctx = WithStudioImageObservation(ctx, &StudioImageObservation{
+		Start: func(ctx context.Context, provider string, req StudioImageRequest) (context.Context, func(*StudioImageResult, error)) {
+			starts++
+			if provider != "codex-studio" || req.Model != "gpt-5.6-luna" || req.ImageModel == "" {
+				t.Errorf("effective request missing: provider=%s request=%+v", provider, req)
+			}
+			return ctx, func(result *StudioImageResult, err error) {
+				ends++
+				if err != nil || result == nil || len(result.Data) == 0 {
+					t.Errorf("observed result=%v error=%v", result, err)
+				}
+			}
+		},
+		Retry: func(_ context.Context, provider string, attempt, maxAttempts int, err error) {
+			retries++
+			if provider != "codex-studio" || attempt != 1 || maxAttempts != 2 || err == nil {
+				t.Error("retry observation missing details")
+			}
+		},
+	})
+	if _, err := p.StudioImage(ctx, StudioImageRequest{Text: "Draw a poster"}); err != nil {
+		t.Fatal(err)
+	}
+	if starts != 1 || ends != 1 || retries != 1 || previous != 1 || hits.Load() != 2 {
+		t.Fatalf("starts=%d ends=%d retries=%d previous=%d hits=%d", starts, ends, retries, previous, hits.Load())
+	}
+}
 
 const studioPNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 

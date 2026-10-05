@@ -16,6 +16,13 @@ func (p *ChatGPTOAuthRouter) StudioImage(ctx context.Context, req StudioImageReq
 	if err != nil {
 		return nil, err
 	}
+	if observation := ChatGPTOAuthRoutingObservationFromContext(ctx); observation != nil {
+		poolProviders := make([]string, 0, len(p.registeredProviders()))
+		for _, provider := range p.registeredProviders() {
+			poolProviders = append(poolProviders, provider.Name())
+		}
+		observation.SetPool(p.defaultProviderName, p.strategy, poolProviders)
+	}
 	attempted := make([]string, 0, len(ordered))
 	var lastErr error
 	for i, provider := range ordered {
@@ -28,8 +35,14 @@ func (p *ChatGPTOAuthRouter) StudioImage(ctx context.Context, req StudioImageReq
 			lastErr = fmt.Errorf("member %s has no studio image support", provider.Name())
 			continue
 		}
+		if observation := ChatGPTOAuthRoutingObservationFromContext(ctx); observation != nil {
+			observation.RecordAttempt(provider.Name())
+		}
 		res, callErr := sp.StudioImage(ctx, req)
 		if callErr == nil {
+			if observation := ChatGPTOAuthRoutingObservationFromContext(ctx); observation != nil {
+				observation.RecordSuccess(provider.Name())
+			}
 			return res, nil
 		}
 		lastErr = callErr
