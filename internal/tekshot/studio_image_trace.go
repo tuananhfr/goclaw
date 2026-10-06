@@ -35,12 +35,8 @@ func (s *JobService) startStudioImageTrace(ctx context.Context, job *store.Teksh
 	ctx = store.WithUserID(ctx, "tekshot-"+job.ExternalUserID)
 	ctx = store.WithAgentKey(ctx, job.AgentKey)
 	t := &studioImageTrace{collector: s.studio.TraceCollector, id: store.GenNewID(), token: job.CallbackToken}
-	if s.studio.Agents != nil {
-		if data, err := s.studio.Agents.GetByKey(ctx, job.AgentKey); err != nil {
-			slog.Warn("tekshot.studio_image.trace_agent_failed", "job_id", job.ID, "error", err)
-		} else if data != nil && data.ID != uuid.Nil {
-			t.agentID = &data.ID
-		}
+	if resolved := studioImageAgentFromContext(ctx); resolved != nil && resolved.err == nil && resolved.data != nil && resolved.data.ID != uuid.Nil {
+		t.agentID = &resolved.data.ID
 	}
 	now := time.Now().UTC()
 	metadata, err := json.Marshal(map[string]any{

@@ -90,6 +90,7 @@ func newStudioService(t *testing.T, server *httptest.Server, skills map[string]s
 			`{"providers":[{"provider":"openai-codex","model":"gpt-5.6-luna","enabled":true,"params":{"image_model":"gpt-image-2.5-flare","quality":"high"}}]}`)},
 		Skills:    fakeSkills{skills: skills},
 		Workspace: workspace,
+		Agents:    &imageTraceAgentStore{id: uuid.New(), workspace: filepath.Join(workspace, "designer")},
 	})
 	return s, workspace
 }
@@ -108,7 +109,7 @@ func TestRunStudioImage_DrawsOnceAndWritesPNG(t *testing.T) {
 	var bodies []map[string]any
 	server := studioCodexServer(t, `{"id": 0}`, &bodies)
 	s, workspace := newStudioService(t, server, map[string]string{"poster": "Dùng chữ to."})
-	job := &store.TekshotJob{ID: uuid.New(), JobType: TekshotJobTypeStudioImage}
+	job := &store.TekshotJob{ID: uuid.New(), JobType: TekshotJobTypeStudioImage, AgentKey: "designer"}
 
 	out, progress, err := s.runStudioImage(context.Background(), job, map[string]any{
 		"instructions":  "You are the image designer.",
@@ -128,7 +129,7 @@ func TestRunStudioImage_DrawsOnceAndWritesPNG(t *testing.T) {
 		t.Fatalf("result = %+v", result)
 	}
 	media := result["media"].([]agent.MediaResult)
-	if len(media) != 1 || !strings.HasPrefix(media[0].Path, filepath.Join(workspace, "tekshot_studio")) || media[0].Prompt != "poster" {
+	if len(media) != 1 || !strings.HasPrefix(media[0].Path, filepath.Join(workspace, "designer", "tekshot_studio")) || media[0].Prompt != "poster" {
 		t.Fatalf("media = %+v", media)
 	}
 	if _, err := os.Stat(media[0].Path); err != nil {
@@ -144,7 +145,7 @@ func TestRunStudioImage_LibraryPickAttachesImageLast(t *testing.T) {
 	var bodies []map[string]any
 	server := studioCodexServer(t, `{"id": 12}`, &bodies)
 	s, _ := newStudioService(t, server, nil)
-	job := &store.TekshotJob{ID: uuid.New(), JobType: TekshotJobTypeStudioImage}
+	job := &store.TekshotJob{ID: uuid.New(), JobType: TekshotJobTypeStudioImage, AgentKey: "designer"}
 
 	out, _, err := s.runStudioImage(context.Background(), job, map[string]any{
 		"prompt": "Yêu cầu: ảnh combo",
@@ -171,7 +172,7 @@ func TestRunStudioImage_RejectsMediaOutsideAllowedDirs(t *testing.T) {
 	var bodies []map[string]any
 	server := studioCodexServer(t, `{"id": 0}`, &bodies)
 	s, _ := newStudioService(t, server, nil)
-	_, _, err := s.runStudioImage(context.Background(), &store.TekshotJob{ID: uuid.New()}, map[string]any{
+	_, _, err := s.runStudioImage(context.Background(), &store.TekshotJob{ID: uuid.New(), AgentKey: "designer"}, map[string]any{
 		"prompt": "x",
 		"media":  []any{map[string]any{"path": "/etc/passwd", "role": "reference"}},
 	})
@@ -219,11 +220,13 @@ func newStudioServiceWithChain(t *testing.T, server *httptest.Server, chain stri
 	registry := providers.NewRegistry(nil)
 	registry.Register(providertest.NewCodexProviderFast("openai-codex", server.URL))
 	s := &JobService{httpClient: server.Client()}
+	workspace := t.TempDir()
 	s.SetStudioImageDeps(StudioImageDeps{
 		Providers:    registry,
 		BuiltinTools: fakeBuiltinTools{settings: json.RawMessage(`{"providers":` + chain + `}`)},
 		Skills:       fakeSkills{},
-		Workspace:    t.TempDir(),
+		Workspace:    workspace,
+		Agents:       &imageTraceAgentStore{id: uuid.New(), workspace: filepath.Join(workspace, "designer")},
 	})
 	return s
 }
@@ -240,7 +243,7 @@ func TestRunStudioImage_RefusalStopsTheChainAndShowsTheModelText(t *testing.T) {
 	// Second Codex entry + a fallback that does not exist: neither may redraw
 	// nor replace the model's own words.
 	s := newStudioServiceWithChain(t, server, `[`+codexEntry+`,`+codexEntry+`,{"provider":"gemini","model":"g","enabled":true}]`)
-	job := &store.TekshotJob{ID: uuid.New(), JobType: TekshotJobTypeStudioImage}
+	job := &store.TekshotJob{ID: uuid.New(), JobType: TekshotJobTypeStudioImage, AgentKey: "designer"}
 
 	_, _, err := s.runStudioImage(context.Background(), job, studioDrawArgs())
 
@@ -256,7 +259,7 @@ func TestRunStudioImage_OverloadShowsTheRetryLaterMessage(t *testing.T) {
 	draws := 0
 	server := studioFailServer(t, http.StatusServiceUnavailable, &draws)
 	s := newStudioServiceWithChain(t, server, `[`+codexEntry+`,{"provider":"gemini","model":"g","enabled":true}]`)
-	job := &store.TekshotJob{ID: uuid.New(), JobType: TekshotJobTypeStudioImage}
+	job := &store.TekshotJob{ID: uuid.New(), JobType: TekshotJobTypeStudioImage, AgentKey: "designer"}
 
 	_, _, err := s.runStudioImage(context.Background(), job, studioDrawArgs())
 

@@ -149,11 +149,18 @@ func (s *imageTraceJobStore) MarkCompleted(context.Context, uuid.UUID, json.RawM
 
 type imageTraceAgentStore struct {
 	store.AgentCRUDStore
-	id uuid.UUID
+	id        uuid.UUID
+	workspace string
+	err       error
+	calls     int
 }
 
-func (s imageTraceAgentStore) GetByKey(context.Context, string) (*store.AgentData, error) {
-	return &store.AgentData{BaseModel: store.BaseModel{ID: s.id}}, nil
+func (s *imageTraceAgentStore) GetByKey(_ context.Context, key string) (*store.AgentData, error) {
+	s.calls++
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &store.AgentData{BaseModel: store.BaseModel{ID: s.id}, AgentKey: key, Workspace: s.workspace}, nil
 }
 
 type imageTraceFixture struct {
@@ -171,7 +178,7 @@ func newImageTraceFixture(t *testing.T, s *JobService) *imageTraceFixture {
 	f.collector.Start()
 	t.Cleanup(f.stop)
 	s.studio.TraceCollector = f.collector
-	s.studio.Agents = imageTraceAgentStore{id: uuid.New()}
+	s.studio.Agents = &imageTraceAgentStore{id: uuid.New(), workspace: filepath.Join(s.studio.Workspace, "image-agent")}
 	s.store = &imageTraceJobStore{}
 	f.job = &store.TekshotJob{ID: uuid.New(), JobType: TekshotJobTypeStudioImage, AgentKey: "image-agent", ExternalUserID: "42", ExternalJobUUID: uuid.NewString(), SessionKey: "tekshot:post:42:image", CallbackToken: "secret-callback-token"}
 	return f

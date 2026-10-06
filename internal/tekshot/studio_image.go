@@ -39,6 +39,7 @@ func (s *JobService) SetStudioImageDeps(deps StudioImageDeps) {
 }
 
 func (s *JobService) runStudioImage(ctx context.Context, job *store.TekshotJob, request map[string]any) (any, string, error) {
+	ctx = s.withStudioImageAgent(ctx, job)
 	_, finishPrepare := startStudioImageSpan(ctx, store.SpanData{Name: "Prepare image request", SpanType: store.SpanTypeEvent},
 		map[string]any{"prompt": stringFromMap(request, "prompt"), "instructions": stringFromMap(request, "instructions")})
 	if s.studio == nil || s.studio.Providers == nil || s.studio.BuiltinTools == nil || s.studio.Workspace == "" {
@@ -47,6 +48,11 @@ func (s *JobService) runStudioImage(ctx context.Context, job *store.TekshotJob, 
 		return nil, "", err
 	}
 	req, err := parseStudioImageRequest(request)
+	if err != nil {
+		finishPrepare(nil, err, nil)
+		return nil, "", err
+	}
+	workspace, err := s.studioImageWorkspace(ctx)
 	if err != nil {
 		finishPrepare(nil, err, nil)
 		return nil, "", err
@@ -65,7 +71,7 @@ func (s *JobService) runStudioImage(ctx context.Context, job *store.TekshotJob, 
 		return nil, "", err
 	}
 	prompt := appendSkillsBlock(req.Prompt, s.loadTaggedSkills(ctx, job, req.TaggedSkills))
-	finishPrepare(map[string]any{"image_count": len(images), "tagged_skills": req.TaggedSkills, "size": req.Size}, nil, nil)
+	finishPrepare(map[string]any{"image_count": len(images), "tagged_skills": req.TaggedSkills, "size": req.Size, "workspace": workspace}, nil, nil)
 
 	var chosen referenceLibraryItem
 	if len(req.Library) > 0 {
@@ -139,7 +145,7 @@ func (s *JobService) runStudioImage(ctx context.Context, job *store.TekshotJob, 
 	finishDraw(studioImageResultSummary(result), nil, nil)
 
 	_, finishSave := startStudioImageSpan(ctx, store.SpanData{Name: "Save generated image", SpanType: store.SpanTypeEvent}, nil)
-	path, err := writeStudioImage(s.studio.Workspace, job, result.Data)
+	path, err := writeStudioImage(workspace, job, result.Data)
 	finishSave(map[string]any{"path": path, "image_bytes": len(result.Data)}, err, nil)
 	if err != nil {
 		return nil, "", err

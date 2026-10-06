@@ -309,6 +309,9 @@ func (s *JobService) processNext(parent context.Context, workerID int) error {
 }
 
 func (s *JobService) process(ctx context.Context, job *store.TekshotJob) (runErr error) {
+	if job.JobType == TekshotJobTypeStudioImage {
+		ctx = s.withStudioImageAgent(ctx, job)
+	}
 	ctx, imageTrace := s.startStudioImageTrace(ctx, job)
 	if imageTrace != nil {
 		defer func() { imageTrace.finish(ctx, runErr) }()
