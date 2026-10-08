@@ -392,6 +392,8 @@ func (s *JobService) process(ctx context.Context, job *store.TekshotJob) (runErr
 		result, progress, err = s.runReplyDataExtract(ctx, job, request)
 	case TekshotJobTypeMarketingReport:
 		result, progress, err = s.runMarketingReport(ctx, job, request)
+	case TekshotJobTypeBusinessReport:
+		result, progress, err = s.runBusinessReport(ctx, job, request)
 	default:
 		err = fmt.Errorf("unsupported tekshot job type: %s", job.JobType)
 	}
@@ -699,7 +701,7 @@ func isSupportedTekshotJobType(jobType string) bool {
 		return true
 	}
 	switch jobType {
-	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeStudioImage, TekshotJobTypeAutoImage, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeChecklistChat, TekshotJobTypeChecklistReview, TekshotJobTypeChecklistGuide, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle, TekshotJobTypeDescribeImage, TekshotJobTypeSeedComments, TekshotJobTypeKnowledgeExtract, TekshotJobTypeBlogGenerate, TekshotJobTypeBlogRewrite, TekshotJobTypeBlogAudit, TekshotJobTypeBlogImages, TekshotJobTypeBlogImport, TekshotJobTypePriceLookup, TekshotJobTypeImageReview, TekshotJobTypeCommentReplyMatch, TekshotJobTypeCustomerMemory, TekshotJobTypeMessengerReplyMatch, TekshotJobTypeMessengerReplyCompose, TekshotJobTypeReplyDataExtract, TekshotJobTypeMarketingReport:
+	case TekshotJobTypeDraftPosts, TekshotJobTypePostChat, TekshotJobTypeImageChat, TekshotJobTypeStudioImage, TekshotJobTypeAutoImage, TekshotJobTypeMarketResearch, TekshotJobTypeContentChecklist, TekshotJobTypeChecklistChat, TekshotJobTypeChecklistReview, TekshotJobTypeChecklistGuide, TekshotJobTypeCompetitorDisc, TekshotJobTypeCompetitorAds, TekshotJobTypeLearnStyle, TekshotJobTypeDescribeImage, TekshotJobTypeSeedComments, TekshotJobTypeKnowledgeExtract, TekshotJobTypeBlogGenerate, TekshotJobTypeBlogRewrite, TekshotJobTypeBlogAudit, TekshotJobTypeBlogImages, TekshotJobTypeBlogImport, TekshotJobTypePriceLookup, TekshotJobTypeImageReview, TekshotJobTypeCommentReplyMatch, TekshotJobTypeCustomerMemory, TekshotJobTypeMessengerReplyMatch, TekshotJobTypeMessengerReplyCompose, TekshotJobTypeReplyDataExtract, TekshotJobTypeMarketingReport, TekshotJobTypeBusinessReport:
 		return true
 	default:
 		return false
