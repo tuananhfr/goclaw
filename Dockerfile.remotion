@@ -1,0 +1,21 @@
+# Add Remotion to the existing gateway without rebuilding or changing its Go binary.
+# Override GOCLAW_BASE_IMAGE when upgrading the gateway itself.
+ARG GOCLAW_BASE_IMAGE=ghcr.io/nextlevelbuilder/goclaw@sha256:c7079543aec9250c485e1d76fd9db7aa5ae99221c0e572d4e9c6c86c04e6feac
+FROM ${GOCLAW_BASE_IMAGE}
+
+USER root
+RUN apk add --no-cache nodejs npm chromium ffmpeg font-noto font-noto-emoji
+
+WORKDIR /opt/remotion
+COPY docker/remotion/package.json docker/remotion/package-lock.json ./
+RUN npm ci --omit=dev --cache /tmp/remotion-npm-cache \
+    && rm -rf /tmp/remotion-npm-cache
+COPY docker/remotion/template/ /opt/remotion/template/
+COPY docker/remotion/remotion /usr/local/bin/remotion
+# Chromium cần setpriv của util-linux (--pdeathsig), bản BusyBox không có cờ này.
+RUN chmod 755 /usr/local/bin/remotion && apk add --no-cache setpriv
+
+COPY skills/remotion-best-practices/ /app/bundled-skills/remotion-best-practices/
+ENV REMOTION_BROWSER_EXECUTABLE=/usr/bin/chromium
+WORKDIR /app
+# Retain the gateway entrypoint: it drops privileges to goclaw at startup.

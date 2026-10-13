@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/remotion-dev/skills",
+  "commit": "7ba4dcf8ebe1626b00baa41e1f2478113719b60b",
+  "path": "skills/remotion-best-practices",
+  "version": "4.0.535",
+  "installed_on": "2026-10-12",
+  "local_changes": [
+    "SKILL.md: search description and link to GoClaw Docker instructions",
+    "GOCLAW.md: preinstalled runtime, workspace scaffold and render commands"
+  ]
+}

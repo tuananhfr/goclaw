@@ -1,0 +1,14 @@
+# Usage:
+# docker compose -f docker-compose.yml -f docker-compose.postgres.yml \
+#   -f docker-compose.remotion.yml up -d --build --no-deps goclaw
+services:
+  goclaw:
+    image: goclaw-remotion:local
+    build:
+      dockerfile: Dockerfile.remotion
+      args:
+        GOCLAW_BASE_IMAGE: ${GOCLAW_BASE_IMAGE:-ghcr.io/nextlevelbuilder/goclaw@sha256:c7079543aec9250c485e1d76fd9db7aa5ae99221c0e572d4e9c6c86c04e6feac}
+    # Chromium and FFmpeg run alongside the gateway; limit render concurrency to 1.
+    shm_size: 256m
+    environment:
+      - REMOTION_BROWSER_EXECUTABLE=/usr/bin/chromium

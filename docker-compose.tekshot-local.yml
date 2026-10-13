@@ -16,3 +16,4 @@ services:
   goclaw:
     extra_hosts:
       - "tekshot.localhost:host-gateway"
+      - "tekshot.local:host-gateway"
