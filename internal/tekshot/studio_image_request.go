@@ -7,7 +7,11 @@ import (
 	"strings"
 )
 
-const studioImageMaxImages = 4
+// References per draw; the edit base and the library pick come on top. Codex
+// took 260 real images in a probe (2026-10-14), so this is a quota/accuracy
+// choice (~1.5K input tokens each), not a backend limit. Matches
+// StudioImageRequestBuilder::MAX_REFERENCE_IMAGES in Drupal.
+const studioImageMaxReferences = 16
 
 // Sizes SizeFromAspect produces, plus "auto"; anything else falls back to auto.
 var studioImageSizes = map[string]bool{

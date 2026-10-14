@@ -65,7 +65,7 @@ func (s *JobService) runStudioImage(ctx context.Context, job *store.TekshotJob, 
 	}
 	ctx = tools.WithBuiltinToolSettings(ctx, tools.BuiltinToolSettings{"create_image": settings})
 
-	images, err := loadStudioImages(req.Media, []string{os.TempDir(), s.studio.Workspace})
+	images, err := loadStudioImages(capStudioReferences(req.Media, studioImageMaxReferences), []string{os.TempDir(), s.studio.Workspace})
 	if err != nil {
 		finishPrepare(nil, err, nil)
 		return nil, "", err
@@ -86,12 +86,11 @@ func (s *JobService) runStudioImage(ctx context.Context, job *store.TekshotJob, 
 					"job", job.ID.String(), "reference_image_id", chosen.ID, "error", dlErr)
 				chosen = referenceLibraryItem{}
 			} else {
-				images = append(capStudioImages(images, studioImageMaxImages-1), img)
+				images = append(images, img)
 				prompt = appendLibraryLine(prompt, chosen)
 			}
 		}
 	}
-	images = capStudioImages(images, studioImageMaxImages)
 
 	s.setProgress(ctx, job, "Đang vẽ ảnh")
 	var result *providers.StudioImageResult
@@ -303,12 +302,28 @@ func imageContentFromBytes(data []byte) (providers.ImageContent, error) {
 	return providers.ImageContent{MimeType: mime, Data: base64.StdEncoding.EncodeToString(data)}, nil
 }
 
-// capStudioImages trims from the end: the base image is always first.
-func capStudioImages(images []providers.ImageContent, max int) []providers.ImageContent {
-	if max < 0 || len(images) <= max {
-		return images
+// capStudioReferences keeps every base image and the LAST max references, in
+// order: Drupal lists references by attach time and the newest steer the draw.
+func capStudioReferences(media []studioImageMedia, max int) []studioImageMedia {
+	references := 0
+	for _, item := range media {
+		if item.Role != "base" {
+			references++
+		}
 	}
-	return images[:max]
+	skip := references - max
+	if skip <= 0 {
+		return media
+	}
+	kept := make([]studioImageMedia, 0, len(media)-skip)
+	for _, item := range media {
+		if item.Role != "base" && skip > 0 {
+			skip--
+			continue
+		}
+		kept = append(kept, item)
+	}
+	return kept
 }
 
 func writeStudioImage(workspace string, job *store.TekshotJob, data []byte) (string, error) {

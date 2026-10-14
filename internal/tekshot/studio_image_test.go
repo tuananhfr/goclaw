@@ -187,10 +187,20 @@ func TestRunStudioImage_NotWired(t *testing.T) {
 	}
 }
 
-func TestCapStudioImagesKeepsBaseFirst(t *testing.T) {
-	images := []providers.ImageContent{{Data: "base"}, {Data: "r1"}, {Data: "r2"}, {Data: "r3"}, {Data: "r4"}}
-	got := capStudioImages(images, 3)
-	if len(got) != 3 || got[0].Data != "base" || got[2].Data != "r2" {
+func TestCapStudioReferencesKeepsBaseAndNewestReferences(t *testing.T) {
+	media := []studioImageMedia{
+		{Path: "base", Role: "base"}, {Path: "r1", Role: "reference"}, {Path: "r2", Role: "reference"},
+		{Path: "r3", Role: "reference"}, {Path: "r4", Role: "reference"},
+	}
+	got := capStudioReferences(media, 2)
+	if len(got) != 3 || got[0].Path != "base" || got[1].Path != "r3" || got[2].Path != "r4" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestCapStudioReferencesUnderTheCapIsUnchanged(t *testing.T) {
+	media := []studioImageMedia{{Path: "r1", Role: "reference"}, {Path: "r2", Role: "reference"}}
+	if got := capStudioReferences(media, studioImageMaxReferences); len(got) != 2 {
 		t.Fatalf("got %+v", got)
 	}
 }
