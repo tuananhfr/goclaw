@@ -2,6 +2,7 @@ package mediaworker
 
 import (
 	"context"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -188,4 +189,75 @@ func TestRealFfmpegDucksMusicUnderNarration(t *testing.T) {
 	if speaking > quiet-6 {
 		t.Fatalf("music must drop at least 6 dB while speaking: %.1f dB vs %.1f dB", speaking, quiet)
 	}
+}
+
+// Dạng E01 (V6 H6): 5 ảnh tĩnh 6/10/25/12/8 s, cắt thẳng, lời đọc đặt theo mốc và
+// phụ đề đốt. Bản ghép từng ra hình 59.7 s nhưng tiếng 61.0 s: độ dài file lấy
+// theo stream dài nhất nên chỉ đo format thì không bao giờ thấy hình bị hụt.
+func TestRealFfmpegStillScenesKeepPictureAndSoundTheSameLength(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg not installed")
+	}
+	dir := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		if output, err := exec.Command("ffmpeg", append([]string{"-v", "error", "-y"}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("ffmpeg %v: %v\n%s", args, err, output)
+		}
+	}
+	sources := map[string]string{}
+	durations := []int{6000, 10000, 25000, 12000, 8000}
+	scenes := make([]Scene, 0, len(durations))
+	audio := make([]AudioTrack, 0, len(durations))
+	cues := make([]SubtitleCue, 0, len(durations))
+	start := 0
+	for index, duration := range durations {
+		still := filepath.Join(dir, "still-"+strconv.Itoa(index)+".png")
+		run("-f", "lavfi", "-i", "color=c=navy:s=540x960", "-frames:v", "1", still)
+		voice := filepath.Join(dir, "voice-"+strconv.Itoa(index)+".mp3")
+		run("-f", "lavfi", "-i", "sine=f=440:d=2", "-c:a", "libmp3lame", voice)
+		stillURL := "https://src.test/still-" + strconv.Itoa(index) + ".png"
+		voiceURL := "https://src.test/voice-" + strconv.Itoa(index) + ".mp3"
+		sources[stillURL], sources[voiceURL] = still, voice
+		scenes = append(scenes, Scene{UUID: "s" + strconv.Itoa(index), SourceURL: stillURL, MIMEType: "image/png", DurationMS: duration, Motion: "subtle"})
+		at := start
+		audio = append(audio, AudioTrack{SourceURL: voiceURL, Kind: "voice", StartMS: &at})
+		cues = append(cues, SubtitleCue{StartMS: start, EndMS: start + duration, Text: "Cảnh " + strconv.Itoa(index+1)})
+		start += duration
+	}
+	processor := NewProcessor(nil, filepath.Join(dir, "work"), nil)
+	processor.download = func(_ context.Context, rawURL, destination string, _ int64) error {
+		data, err := os.ReadFile(sources[rawURL])
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(destination, data, 0o600)
+	}
+	manifest := Manifest{
+		ContractVersion: 1, ProjectUUID: "11111111-1111-4111-8111-111111111111", ProjectRevision: 1, DurationMS: 61000,
+		Scenes: scenes, Audio: audio, Subtitles: cues,
+		Output: OutputProfile{Width: 360, Height: 640, FPS: 30, Format: "mp4", VideoCodec: "h264", SubtitleMode: "burn"},
+	}
+	result, err := processor.Process(context.Background(), "job-e01", manifest)
+	if err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	video, sound := streamSeconds(t, result.Path, "v:0"), streamSeconds(t, result.Path, "a:0")
+	t.Logf("video %.3f s, audio %.3f s", video, sound)
+	if math.Abs(video-sound) > 0.05 || math.Abs(video-61) > 0.05 || math.Abs(sound-61) > 0.05 {
+		t.Fatalf("picture %.3f s and sound %.3f s must both be 61.0 ±0.05 s", video, sound)
+	}
+}
+
+func streamSeconds(t *testing.T, path, stream string) float64 {
+	t.Helper()
+	output, err := exec.Command("ffprobe", "-v", "error", "-select_streams", stream, "-show_entries", "stream=duration", "-of", "csv=p=0", path).Output()
+	if err != nil {
+		t.Fatalf("ffprobe %s: %v", stream, err)
+	}
+	seconds, err := strconv.ParseFloat(strings.TrimSpace(string(output)), 64)
+	if err != nil {
+		t.Fatalf("parse %s duration %q: %v", stream, output, err)
+	}
+	return seconds
 }

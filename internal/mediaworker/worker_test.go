@@ -302,7 +302,7 @@ func validManifest() Manifest {
 func TestNormalizeArgsKeepsSceneDurationAndAlwaysEmitsAudio(t *testing.T) {
 	profile := OutputProfile{Width: 720, Height: 1280, FPS: 30, Format: "mp4", VideoCodec: "h264"}
 	image := strings.Join(normalizeArgs("in.png", "out.mp4", Scene{MIMEType: "image/png", DurationMS: 4000, Motion: "smooth"}, profile, false), " ")
-	for _, expected := range []string{"zoompan=z='min(zoom+0.0010,1.12)':d=1:", "-framerate 25 -t 4.000 -i in.png", "anullsrc=r=48000:cl=stereo", "-map 1:a:0", "-t 4.000 -c:v libx264", "-c:a aac -ar 48000 -ac 2"} {
+	for _, expected := range []string{"zoompan=z='min(zoom+0.000833,1.12)':d=1:", "-framerate 30 -t 4.000 -i in.png", "anullsrc=r=48000:cl=stereo", "-map 1:a:0", "-t 4.000 -c:v libx264", "-c:a aac -ar 48000 -ac 2"} {
 		if !strings.Contains(image, expected) {
 			t.Fatalf("image scene missing %q in: %s", expected, image)
 		}
@@ -347,6 +347,29 @@ type driftingRunner struct{ recordingRunner }
 func (r *driftingRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	if name == "ffprobe" && strings.Contains(strings.Join(args, " "), "output.mp4") {
 		return []byte(`{"streams":[{"codec_type":"video","codec_name":"h264","width":1280,"height":720}],"format":{"duration":"400.000","size":"1024"}}`), nil
+	}
+	return r.recordingRunner.Run(ctx, name, args...)
+}
+
+func TestProcessRejectsOutputWhosePictureIsShorterThanItsSound(t *testing.T) {
+	runner := &shortPictureRunner{}
+	processor := NewProcessor(runner, t.TempDir(), nil)
+	processor.download = func(_ context.Context, rawURL, destination string, _ int64) error {
+		return os.WriteFile(destination, []byte(rawURL), 0o600)
+	}
+	_, err := processor.Process(context.Background(), "job-short-picture", validManifest())
+	if err == nil || !strings.Contains(err.Error(), "video stream runs 4700 ms") {
+		t.Fatalf("a 4.7 s picture under 6 s of sound must fail, got %v", err)
+	}
+}
+
+// shortPictureRunner reports what V6 H6 shipped: the file (= its longest stream,
+// the sound) matches the manifest while the picture is 1.3 s short.
+type shortPictureRunner struct{ recordingRunner }
+
+func (r *shortPictureRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if name == "ffprobe" && strings.Contains(strings.Join(args, " "), "output.mp4") {
+		return []byte(`{"streams":[{"codec_type":"video","codec_name":"h264","width":1280,"height":720,"duration":"4.700000"},{"codec_type":"audio","codec_name":"aac","duration":"6.000000"}],"format":{"duration":"6.000","size":"1024"}}`), nil
 	}
 	return r.recordingRunner.Run(ctx, name, args...)
 }

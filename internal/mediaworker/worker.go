@@ -111,6 +111,10 @@ type Result struct {
 	Height     int    `json:"height"`
 	DurationMS int    `json:"duration_ms"`
 	Codec      string `json:"codec"`
+	// Độ dài từng stream (0 = ffprobe không ghi). Độ dài file là của stream dài
+	// nhất, nên chỉ nhìn nó thì hình hụt dưới tiếng vẫn lọt.
+	videoMS int
+	audioMS int
 }
 
 type Runner interface {
@@ -273,6 +277,18 @@ func (p *Processor) Process(ctx context.Context, jobID string, manifest Manifest
 	// filter regressed (the image path once ran 100x long) and must not ship.
 	if expected := manifest.DurationMS; expected > 0 && absInt(result.DurationMS-expected) > 500 {
 		return Result{}, fmt.Errorf("output runs %d ms but the manifest is %d ms", result.DurationMS, expected)
+	}
+	expected := manifest.DurationMS
+	if expected <= 0 {
+		expected = result.DurationMS
+	}
+	for _, stream := range []struct {
+		name string
+		ms   int
+	}{{"video", result.videoMS}, {"audio", result.audioMS}} {
+		if stream.ms > 0 && absInt(stream.ms-expected) > 500 {
+			return Result{}, fmt.Errorf("%s stream runs %d ms but the output must run %d ms", stream.name, stream.ms, expected)
+		}
 	}
 	return result, nil
 }
@@ -483,16 +499,22 @@ func normalizeArgs(source, destination string, scene Scene, profile OutputProfil
 	silence := []string{"-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"}
 	args := []string{"-y"}
 	if strings.HasPrefix(scene.MIMEType, "image/") {
-		zoomStep := "0.0005"
+		// Mức zoom tính theo giây (trước là bước mỗi khung ở 25 khung/giây), để đổi
+		// số khung/giây đầu vào không làm ảnh zoom nhanh hơn.
+		zoomPerSecond := 0.0125
 		if scene.Motion == "smooth" {
-			zoomStep = "0.0010"
+			zoomPerSecond = 0.025
 		} else if scene.Motion == "dynamic" {
-			zoomStep = "0.0018"
+			zoomPerSecond = 0.045
 		}
-		// d=1: zoompan's d counts output frames PER INPUT FRAME, and the looped
-		// image feeds 25 input frames a second, so any d>1 multiplies the length.
+		zoomStep := strconv.FormatFloat(zoomPerSecond/float64(profile.FPS), 'f', 6, 64)
+		// d=1: zoompan's d counts output frames PER INPUT FRAME, so any d>1
+		// multiplies the length. With d=1 it emits one frame per input frame and
+		// stamps it at its own fps, so the looped image must be read at the output
+		// fps: reading 25 frames a second into fps=30 made every still scene 25/30
+		// of its length (V6 H6: picture 59.7 s under 61 s of sound).
 		filter := fmt.Sprintf("%s,zoompan=z='min(zoom+%s,1.12)':d=1:s=%dx%d:fps=%d,format=yuv420p", scale, zoomStep, profile.Width, profile.Height, profile.FPS)
-		args = append(args, "-loop", "1", "-framerate", "25", "-t", duration, "-i", source)
+		args = append(args, "-loop", "1", "-framerate", strconv.Itoa(profile.FPS), "-t", duration, "-i", source)
 		args = append(args, silence...)
 		args = append(args, "-vf", filter, "-map", "0:v:0", "-map", "1:a:0")
 	} else {
@@ -544,6 +566,7 @@ func (p *Processor) probe(ctx context.Context, path string) (Result, error) {
 			CodecName string `json:"codec_name"`
 			Width     int    `json:"width"`
 			Height    int    `json:"height"`
+			Duration  string `json:"duration"`
 		} `json:"streams"`
 		Format struct {
 			Duration string `json:"duration"`
@@ -552,6 +575,14 @@ func (p *Processor) probe(ctx context.Context, path string) (Result, error) {
 	}
 	if err := json.Unmarshal(output, &probe); err != nil {
 		return Result{}, fmt.Errorf("decode ffprobe output: %w", err)
+	}
+	streamMS := map[string]int{}
+	for _, stream := range probe.Streams {
+		if seconds, parseErr := strconv.ParseFloat(stream.Duration, 64); parseErr == nil {
+			if _, seen := streamMS[stream.CodecType]; !seen {
+				streamMS[stream.CodecType] = int(seconds * 1000)
+			}
+		}
 	}
 	for _, stream := range probe.Streams {
 		if stream.CodecType != "video" {
@@ -564,7 +595,7 @@ func (p *Processor) probe(ctx context.Context, path string) (Result, error) {
 				size = stat.Size()
 			}
 		}
-		return Result{Path: path, MIMEType: "video/mp4", FileSize: size, Width: stream.Width, Height: stream.Height, DurationMS: int(duration * 1000), Codec: stream.CodecName}, nil
+		return Result{Path: path, MIMEType: "video/mp4", FileSize: size, Width: stream.Width, Height: stream.Height, DurationMS: int(duration * 1000), Codec: stream.CodecName, videoMS: streamMS["video"], audioMS: streamMS["audio"]}, nil
 	}
 	return Result{}, errors.New("ffprobe found no video stream")
 }
