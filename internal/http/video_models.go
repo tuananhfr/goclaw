@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -12,16 +13,20 @@ import (
 
 type VideoModelsHandler struct {
 	registry video.ModelRegistry
+	// manifestVersions báo các manifest contract_version mà media worker đang chạy
+	// dựng được. contract_version của catalog vẫn là 1 vì Drupal đòi đúng 1.
+	manifestVersions func(context.Context) []int
 }
 
 type videoModelCatalogResponse struct {
-	ContractVersion int           `json:"contract_version"`
-	CatalogVersion  string        `json:"catalog_version"`
-	Models          []video.Model `json:"models"`
+	ContractVersion          int           `json:"contract_version"`
+	CatalogVersion           string        `json:"catalog_version"`
+	AssembleManifestVersions []int         `json:"assemble_manifest_versions"`
+	Models                   []video.Model `json:"models"`
 }
 
 func NewVideoModelsHandler(registry video.ModelRegistry) *VideoModelsHandler {
-	return &VideoModelsHandler{registry: registry}
+	return &VideoModelsHandler{registry: registry, manifestVersions: video.NewWorkerCapabilities().ManifestVersions}
 }
 
 func (h *VideoModelsHandler) RegisterRoutes(mux *http.ServeMux) {
@@ -30,12 +35,13 @@ func (h *VideoModelsHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/video/models/{model_id...}", requireAuth(permissions.RoleOperator, h.handleGet))
 }
 
-func (h *VideoModelsHandler) handleHealth(w http.ResponseWriter, _ *http.Request) {
+func (h *VideoModelsHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	h.writeCatalogHeaders(w)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"contract_version": video.ContractVersion,
-		"catalog_version":  h.registry.CatalogVersion(),
-		"status":           "ok",
+		"contract_version":           video.ContractVersion,
+		"catalog_version":            h.registry.CatalogVersion(),
+		"assemble_manifest_versions": h.assembleManifestVersions(r.Context()),
+		"status":                     "ok",
 	})
 }
 
@@ -53,8 +59,9 @@ func (h *VideoModelsHandler) handleList(w http.ResponseWriter, r *http.Request) 
 
 	h.writeCatalogHeaders(w)
 	writeJSON(w, http.StatusOK, videoModelCatalogResponse{
-		ContractVersion: video.ContractVersion,
-		CatalogVersion:  h.registry.CatalogVersion(),
+		ContractVersion:          video.ContractVersion,
+		CatalogVersion:           h.registry.CatalogVersion(),
+		AssembleManifestVersions: h.assembleManifestVersions(r.Context()),
 		Models: h.registry.List(video.ModelFilter{
 			Operation: operation,
 			Status:    status,
@@ -71,6 +78,13 @@ func (h *VideoModelsHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 	h.writeCatalogHeaders(w)
 	writeJSON(w, http.StatusOK, model)
+}
+
+func (h *VideoModelsHandler) assembleManifestVersions(ctx context.Context) []int {
+	if h.manifestVersions == nil {
+		return []int{1}
+	}
+	return h.manifestVersions(ctx)
 }
 
 func (h *VideoModelsHandler) writeCatalogHeaders(w http.ResponseWriter) {

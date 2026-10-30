@@ -59,7 +59,9 @@ func NewServer(processor assembleProcessor, root, token, baseURL string, maxConc
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "contract_version": ContractVersion})
+		// contract_version giữ 1 (gateway cũ đọc nó); khả năng manifest báo riêng
+		// để gateway mới biết worker này dựng được manifest v2.
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "contract_version": ContractVersion, "assemble_manifest_versions": SupportedManifestVersions()})
 	})
 	mux.HandleFunc("POST /v1/assemble", s.authorize(s.handleAssemble))
 	mux.HandleFunc("GET /v1/outputs/{job_id}", s.handleOutput)

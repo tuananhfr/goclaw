@@ -17,14 +17,34 @@ import (
 )
 
 const (
+	// ContractVersion là phiên bản của phản hồi /v1/assemble và /health; nó KHÔNG
+	// đổi theo manifest: gateway cũ đòi đúng 1, nâng lên làm job v1 hỏng theo.
 	ContractVersion = 1
-	maxScenes       = 60
-	maxSourceBytes  = int64(2 << 30)
+	// ManifestVersionEdit là manifest "Xuất video đã chỉnh" của Drupal: cảnh có
+	// source_start_ms, effect, fade_in_ms, fade_out_ms.
+	ManifestVersionEdit = 2
+	maxScenes           = 60
+	maxSourceBytes      = int64(2 << 30)
+	maxFadeMS           = 1500
+	// Nguồn được phép hụt so với đoạn cắt ngần này (làm tròn ms của Drupal, khung
+	// cuối, độ trễ AAC); hụt hơn thế thì tpad sẽ giữ khung cuối, tức là cắt sai.
+	sourceEndToleranceMS = 100
 
 	transitionCut       = "cut"
 	transitionCrossfade = "crossfade"
 	transitionFadeBlack = "fade_black"
+
+	effectNone      = "none"
+	effectGrayscale = "grayscale"
+	effectWarm      = "warm"
+	effectCool      = "cool"
 )
+
+// SupportedManifestVersions là các manifest contract_version worker này dựng
+// được; gateway đọc nó từ /health để báo cho Drupal.
+func SupportedManifestVersions() []int {
+	return []int{ContractVersion, ManifestVersionEdit}
+}
 
 type Manifest struct {
 	ContractVersion int           `json:"contract_version"`
@@ -45,6 +65,31 @@ type Scene struct {
 	DurationMS int         `json:"duration_ms"`
 	Motion     string      `json:"motion,omitempty"`
 	Transition *Transition `json:"transition,omitempty"`
+	// Các field của manifest v2. Con trỏ để phân biệt "không gửi" với 0/"none":
+	// manifest v1 gửi kèm chúng phải bị từ chối, không được bỏ qua im lặng (bỏ qua
+	// offset là cắt nhầm từ đầu video). omitempty giữ JSON của job v1 y như cũ.
+	SourceStartMS *int    `json:"source_start_ms,omitempty"`
+	Effect        *string `json:"effect,omitempty"`
+	FadeInMS      *int    `json:"fade_in_ms,omitempty"`
+	FadeOutMS     *int    `json:"fade_out_ms,omitempty"`
+}
+
+// editFields trả tên các field v2 mà cảnh có, theo thứ tự cố định để lỗi ổn định.
+func (s Scene) editFields() []string {
+	fields := make([]string, 0, 4)
+	if s.SourceStartMS != nil {
+		fields = append(fields, "source_start_ms")
+	}
+	if s.Effect != nil {
+		fields = append(fields, "effect")
+	}
+	if s.FadeInMS != nil {
+		fields = append(fields, "fade_in_ms")
+	}
+	if s.FadeOutMS != nil {
+		fields = append(fields, "fade_out_ms")
+	}
+	return fields
 }
 
 // Transition is how a scene enters: a hard cut, a crossfade that overlaps the
@@ -152,7 +197,10 @@ func NewProcessor(runner Runner, root string, client *http.Client) *Processor {
 }
 
 func ValidateManifest(manifest Manifest) error {
-	if manifest.ContractVersion != ContractVersion || strings.TrimSpace(manifest.ProjectUUID) == "" || manifest.ProjectRevision < 1 {
+	if manifest.ContractVersion != ContractVersion && manifest.ContractVersion != ManifestVersionEdit {
+		return fmt.Errorf("unsupported manifest contract_version %d (supported: 1, 2)", manifest.ContractVersion)
+	}
+	if strings.TrimSpace(manifest.ProjectUUID) == "" || manifest.ProjectRevision < 1 {
 		return errors.New("invalid contract, project UUID, or project revision")
 	}
 	if len(manifest.Scenes) == 0 || len(manifest.Scenes) > maxScenes {
@@ -177,6 +225,9 @@ func ValidateManifest(manifest Manifest) error {
 		}
 		if !strings.HasPrefix(scene.MIMEType, "image/") && !strings.HasPrefix(scene.MIMEType, "video/") {
 			return fmt.Errorf("scene %s has unsupported MIME type", scene.UUID)
+		}
+		if err := validateEditFields(manifest.ContractVersion, scene); err != nil {
+			return err
 		}
 		if scene.Transition != nil {
 			// A transition is how a scene enters, so the first scene cannot have one.
@@ -211,6 +262,115 @@ func ValidateManifest(manifest Manifest) error {
 	return nil
 }
 
+func validateEditFields(contractVersion int, scene Scene) error {
+	fields := scene.editFields()
+	if contractVersion == ContractVersion {
+		if len(fields) > 0 {
+			return fmt.Errorf("scene %s: %s requires manifest contract_version 2", scene.UUID, strings.Join(fields, ", "))
+		}
+		return nil
+	}
+	if scene.SourceStartMS != nil {
+		if *scene.SourceStartMS < 0 {
+			return fmt.Errorf("scene %s: source_start_ms %d must not be negative", scene.UUID, *scene.SourceStartMS)
+		}
+		if !strings.HasPrefix(scene.MIMEType, "video/") {
+			return fmt.Errorf("scene %s: source_start_ms only applies to video scenes, not %s", scene.UUID, scene.MIMEType)
+		}
+	}
+	if scene.Effect != nil {
+		switch *scene.Effect {
+		case effectNone, effectGrayscale, effectWarm, effectCool:
+		default:
+			return fmt.Errorf("scene %s: effect %q must be one of none, grayscale, warm, cool", scene.UUID, *scene.Effect)
+		}
+	}
+	for _, fade := range []struct {
+		name  string
+		value *int
+	}{{"fade_in_ms", scene.FadeInMS}, {"fade_out_ms", scene.FadeOutMS}} {
+		if fade.value == nil {
+			continue
+		}
+		if *fade.value < 0 || *fade.value > maxFadeMS {
+			return fmt.Errorf("scene %s: %s %d must be between 0 and %d", scene.UUID, fade.name, *fade.value, maxFadeMS)
+		}
+		if *fade.value > scene.DurationMS/2 {
+			return fmt.Errorf("scene %s: %s %d is longer than half of its %d ms scene", scene.UUID, fade.name, *fade.value, scene.DurationMS)
+		}
+	}
+	return nil
+}
+
+// effectFilter trả bộ lọc màu của effect; "none" và không gửi đều là "" để
+// không thêm bước lọc nào (hình y như nguồn).
+func effectFilter(scene Scene) string {
+	if scene.Effect == nil {
+		return ""
+	}
+	switch *scene.Effect {
+	case effectGrayscale:
+		// hue=s=0 đưa U/V về đúng 128, nên SATAVG ~0 chứ không chỉ "nhạt màu".
+		return "hue=s=0"
+	case effectWarm:
+		return "colorbalance=rs=0.08:bs=-0.08:rm=0.10:bm=-0.10:rh=0.05:bh=-0.05"
+	case effectCool:
+		return "colorbalance=rs=-0.08:bs=0.08:rm=-0.10:bm=0.10:rh=-0.05:bh=0.05"
+	}
+	return ""
+}
+
+func fadeSeconds(milliseconds int) string {
+	return strconv.FormatFloat(float64(milliseconds)/1000, 'f', 3, 64)
+}
+
+func effectSuffix(scene Scene) string {
+	if filter := effectFilter(scene); filter != "" {
+		return "," + filter
+	}
+	return ""
+}
+
+// fadeIn/fadeOut trả bộ lọc mờ đầu/cuối cho hình ("fade") hoặc tiếng ("afade"),
+// tính theo mốc 0 của cảnh: -ss trước -i đã đưa đầu đoạn cắt về 0. Mờ 0 ms
+// (Drupal luôn gửi, có thể là 0) không thêm bộ lọc.
+func fadeIn(scene Scene, name string) string {
+	if scene.FadeInMS == nil || *scene.FadeInMS <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s=t=in:st=0:d=%s", name, fadeSeconds(*scene.FadeInMS))
+}
+
+func fadeOut(scene Scene, name string) string {
+	if scene.FadeOutMS == nil || *scene.FadeOutMS <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s=t=out:st=%s:d=%s", name, fadeSeconds(scene.DurationMS-*scene.FadeOutMS), fadeSeconds(*scene.FadeOutMS))
+}
+
+func fadeSuffix(scene Scene, name string) string {
+	suffix := ""
+	for _, filter := range []string{fadeIn(scene, name), fadeOut(scene, name)} {
+		if filter != "" {
+			suffix += "," + filter
+		}
+	}
+	return suffix
+}
+
+// audioEditFilter là "apad" của v1, thêm mờ tiếng cùng chỗ với mờ hình ở v2:
+// mờ vào trước apad (tiếng gốc), mờ ra sau apad để rơi đúng đuôi cảnh.
+func audioEditFilter(scene Scene) string {
+	filter := "apad"
+	if in := fadeIn(scene, "afade"); in != "" {
+		filter = in + "," + filter
+	}
+	if out := fadeOut(scene, "afade"); out != "" {
+		filter += "," + out
+	}
+	return filter
+}
+
 func (p *Processor) Process(ctx context.Context, jobID string, manifest Manifest) (Result, error) {
 	if err := ValidateManifest(manifest); err != nil {
 		return Result{}, err
@@ -234,6 +394,17 @@ func (p *Processor) Process(ctx context.Context, jobID string, manifest Manifest
 		hasAudio := false
 		if strings.HasPrefix(scene.MIMEType, "video/") {
 			hasAudio = p.hasAudioStream(ctx, source)
+		}
+		if scene.SourceStartMS != nil {
+			// Đoạn cắt vượt cuối nguồn thì tpad sẽ giữ khung cuối cho đủ giờ: ra
+			// video "thành công" nhưng sai. Phải hỏng rõ ràng thay vì thế.
+			sourceMS, err := p.sourceDurationMS(ctx, source)
+			if err != nil {
+				return Result{}, fmt.Errorf("scene %d: read source duration: %w", index+1, err)
+			}
+			if end := *scene.SourceStartMS + scene.DurationMS; end > sourceMS+sourceEndToleranceMS {
+				return Result{}, fmt.Errorf("scene %d (%s) cuts %d-%d ms but its source runs only %d ms", index+1, scene.UUID, *scene.SourceStartMS, end, sourceMS)
+			}
 		}
 		args := normalizeArgs(source, clip, scene, manifest.Output, hasAudio)
 		if _, err := p.runner.Run(ctx, "ffmpeg", args...); err != nil {
@@ -513,17 +684,26 @@ func normalizeArgs(source, destination string, scene Scene, profile OutputProfil
 		// stamps it at its own fps, so the looped image must be read at the output
 		// fps: reading 25 frames a second into fps=30 made every still scene 25/30
 		// of its length (V6 H6: picture 59.7 s under 61 s of sound).
-		filter := fmt.Sprintf("%s,zoompan=z='min(zoom+%s,1.12)':d=1:s=%dx%d:fps=%d,format=yuv420p", scale, zoomStep, profile.Width, profile.Height, profile.FPS)
+		// Bộ lọc của manifest v2 đều rỗng ở v1, nên chuỗi lọc v1 giữ y như cũ.
+		edit := effectSuffix(scene) + fadeSuffix(scene, "fade")
+		filter := fmt.Sprintf("%s,zoompan=z='min(zoom+%s,1.12)':d=1:s=%dx%d:fps=%d%s,format=yuv420p", scale, zoomStep, profile.Width, profile.Height, profile.FPS, edit)
 		args = append(args, "-loop", "1", "-framerate", strconv.Itoa(profile.FPS), "-t", duration, "-i", source)
 		args = append(args, silence...)
 		args = append(args, "-vf", filter, "-map", "0:v:0", "-map", "1:a:0")
 	} else {
 		// tpad holds the last frame when the clip is shorter than the scene; the
 		// output -t below trims a longer one. apad does the same for its sound.
-		filter := fmt.Sprintf("%s,fps=%d,tpad=stop_mode=clone:stop_duration=%s,format=yuv420p", scale, profile.FPS, duration)
+		// Ở v2 đoạn cắt đã được kiểm không vượt cuối nguồn, nên tpad chỉ bù vài ms.
+		// Mờ đặt sau tpad để mờ cuối rơi đúng đuôi cảnh kể cả khi nguồn hụt vài khung.
+		filter := fmt.Sprintf("%s%s,fps=%d,tpad=stop_mode=clone:stop_duration=%s%s,format=yuv420p", scale, effectSuffix(scene), profile.FPS, duration, fadeSuffix(scene, "fade"))
+		if scene.SourceStartMS != nil {
+			// -ss TRƯỚC -i: tua ở đầu vào nên hình và tiếng cùng bắt đầu từ mốc cắt
+			// (vẫn giải mã chính xác, mốc thời gian về 0 nên st của fade tính từ 0).
+			args = append(args, "-ss", strconv.FormatFloat(float64(*scene.SourceStartMS)/1000, 'f', 3, 64))
+		}
 		args = append(args, "-i", source)
 		if hasAudio {
-			args = append(args, "-vf", filter, "-af", "apad", "-map", "0:v:0", "-map", "0:a:0")
+			args = append(args, "-vf", filter, "-af", audioEditFilter(scene), "-map", "0:v:0", "-map", "0:a:0")
 		} else {
 			args = append(args, silence...)
 			args = append(args, "-vf", filter, "-map", "0:v:0", "-map", "1:a:0")
@@ -553,6 +733,27 @@ func (p *Processor) hasAudioStream(ctx context.Context, path string) bool {
 		}
 	}
 	return false
+}
+
+// sourceDurationMS đọc độ dài file nguồn (của format, tức stream dài nhất).
+func (p *Processor) sourceDurationMS(ctx context.Context, path string) (int, error) {
+	output, err := p.runner.Run(ctx, "ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", path)
+	if err != nil {
+		return 0, err
+	}
+	var probe struct {
+		Format struct {
+			Duration string `json:"duration"`
+		} `json:"format"`
+	}
+	if err := json.Unmarshal(output, &probe); err != nil {
+		return 0, fmt.Errorf("decode ffprobe output: %w", err)
+	}
+	seconds, err := strconv.ParseFloat(probe.Format.Duration, 64)
+	if err != nil || seconds <= 0 {
+		return 0, fmt.Errorf("ffprobe reported no duration (%q)", probe.Format.Duration)
+	}
+	return int(seconds*1000 + 0.5), nil
 }
 
 func (p *Processor) probe(ctx context.Context, path string) (Result, error) {

@@ -101,6 +101,17 @@ type JobRequestMetadata struct {
 	SceneRevision   *int    `json:"scene_revision"`
 	RequestID       string  `json:"request_id"`
 	IdempotencyKey  string  `json:"idempotency_key,omitempty"`
+	// PostProduction đánh dấu job "Xuất video đã chỉnh" (manifest v2) của Drupal.
+	// GoClaw chỉ kiểm và lưu; omitempty giữ băm idempotency của job cũ y nguyên.
+	PostProduction *PostProductionMetadata `json:"post_production,omitempty"`
+}
+
+// PostProductionMetadata nhận đúng ba khoá Drupal gửi; khoá lạ vẫn bị 400 vì
+// handler giải mã với DisallowUnknownFields.
+type PostProductionMetadata struct {
+	Engine    string `json:"engine"`
+	JobUUID   string `json:"job_uuid"`
+	AssetUUID string `json:"asset_uuid"`
 }
 
 type JobOutput struct {
@@ -889,6 +900,11 @@ func (s *JobService) validateRequest(request JobRequest) error {
 		if request.ModelID != nil || request.Operation != nil || request.Inputs.Manifest == nil {
 			return invalid("assemble jobs require an inline manifest and no model or operation")
 		}
+		if post := request.Metadata.PostProduction; post != nil {
+			if engine := strings.TrimSpace(post.Engine); engine == "" || len(engine) > 32 || uuid.Validate(post.JobUUID) != nil || uuid.Validate(post.AssetUUID) != nil {
+				return invalid("invalid metadata.post_production: engine, job_uuid and asset_uuid are required")
+			}
+		}
 		if err := mediaworker.ValidateManifest(*request.Inputs.Manifest); err != nil {
 			return invalid("invalid assemble manifest: " + err.Error())
 		}
@@ -903,6 +919,9 @@ func (s *JobService) validateRequest(request JobRequest) error {
 	}
 	if uuid.Validate(request.Metadata.ProjectUUID) != nil || request.Metadata.SceneUUID == nil || uuid.Validate(*request.Metadata.SceneUUID) != nil || request.Metadata.ProjectRevision < 1 || request.Metadata.SceneRevision == nil || *request.Metadata.SceneRevision < 1 || uuid.Validate(request.Metadata.RequestID) != nil {
 		return invalid("invalid job metadata")
+	}
+	if request.Metadata.PostProduction != nil {
+		return invalid("metadata.post_production only applies to project.assemble jobs")
 	}
 	if request.ModelID == nil || request.Operation == nil {
 		return invalid("model_id and operation are required")
