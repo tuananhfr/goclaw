@@ -1,0 +1,38 @@
+{
+  "audio": [],
+  "contract_version": 2,
+  "duration_ms": 36000,
+  "output": {
+    "format": "mp4",
+    "fps": 30,
+    "height": 1920,
+    "subtitle_mode": "burn",
+    "video_codec": "h264",
+    "width": 1080
+  },
+  "project_revision": 31,
+  "project_uuid": "666bfbc1-70ef-42ed-ac00-00e74c7c540d",
+  "scenes": [
+    {
+      "asset_uuid": "8689390e-b0a3-4ee7-865c-453c34e26c61",
+      "duration_ms": 16000,
+      "effect": "grayscale",
+      "fade_in_ms": 500,
+      "mime_type": "video/mp4",
+      "source_start_ms": 0,
+      "source_url": "http://tekshot.localhost/api/tekshot-video/assets/8689390e-b0a3-4ee7-865c-453c34e26c61/content?variant=source&expires=1793279626&signature=***",
+      "uuid": "edit-0-0"
+    },
+    {
+      "asset_uuid": "8689390e-b0a3-4ee7-865c-453c34e26c61",
+      "duration_ms": 20000,
+      "effect": "grayscale",
+      "fade_out_ms": 500,
+      "mime_type": "video/mp4",
+      "source_start_ms": 41000,
+      "source_url": "http://tekshot.localhost/api/tekshot-video/assets/8689390e-b0a3-4ee7-865c-453c34e26c61/content?variant=source&expires=1793279626&signature=***",
+      "uuid": "edit-1-0"
+    }
+  ],
+  "subtitles": []
+}

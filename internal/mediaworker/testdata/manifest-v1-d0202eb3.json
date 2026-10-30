@@ -1,0 +1,115 @@
+{
+  "audio": [
+    {
+      "gain_db": 0,
+      "kind": "voice",
+      "source_url": "http://tekshot.localhost/api/tekshot-video/assets/6e810c09-2e27-4838-9ffd-6abccb228423/content?variant=source&expires=1793280191&signature=***",
+      "start_ms": 0
+    },
+    {
+      "gain_db": 0,
+      "kind": "voice",
+      "source_url": "http://tekshot.localhost/api/tekshot-video/assets/3ffd08f4-fed0-42ee-ab92-d356669c522e/content?variant=source&expires=1793280191&signature=***",
+      "start_ms": 6000
+    },
+    {
+      "gain_db": 0,
+      "kind": "voice",
+      "source_url": "http://tekshot.localhost/api/tekshot-video/assets/518ad177-2fc8-4fc4-a60a-e425c692d614/content?variant=source&expires=1793280191&signature=***",
+      "start_ms": 16000
+    },
+    {
+      "gain_db": 0,
+      "kind": "voice",
+      "source_url": "http://tekshot.localhost/api/tekshot-video/assets/35b58a4c-3801-4dc2-a624-cd8ba740afe4/content?variant=source&expires=1793280191&signature=***",
+      "start_ms": 41000
+    },
+    {
+      "gain_db": 0,
+      "kind": "voice",
+      "source_url": "http://tekshot.localhost/api/tekshot-video/assets/71755fe6-ed75-49fd-81be-798a14bd73d5/content?variant=source&expires=1793280191&signature=***",
+      "start_ms": 53000
+    }
+  ],
+  "contract_version": 1,
+  "duration_ms": 61000,
+  "output": {
+    "format": "mp4",
+    "fps": 30,
+    "height": 1920,
+    "subtitle_mode": "burn",
+    "video_codec": "h264",
+    "width": 1080
+  },
+  "project_revision": 31,
+  "project_uuid": "666bfbc1-70ef-42ed-ac00-00e74c7c540d",
+  "scenes": [
+    {
+      "asset_uuid": "523417d6-fbb5-46e0-a2ff-93494898ab5c",
+      "duration_ms": 6000,
+      "mime_type": "image/png",
+      "motion": "subtle",
+      "source_url": "http://tekshot.localhost/api/tekshot-video/assets/523417d6-fbb5-46e0-a2ff-93494898ab5c/content?variant=source&expires=1793280191&signature=***",
+      "uuid": "0b93e0b1-5514-4ca9-841e-6f572ce45432"
+    },
+    {
+      "asset_uuid": "2bb61435-1438-4014-b478-7629778b85c8",
+      "duration_ms": 10000,
+      "mime_type": "image/png",
+      "motion": "subtle",
+      "source_url": "http://tekshot.localhost/api/tekshot-video/assets/2bb61435-1438-4014-b478-7629778b85c8/content?variant=source&expires=1793280191&signature=***",
+      "uuid": "b73f691c-1af4-4f90-8288-79bba1755bb3"
+    },
+    {
+      "asset_uuid": "43ee9d15-053b-4ed5-a38f-c2d97fda8cf8",
+      "duration_ms": 25000,
+      "mime_type": "image/png",
+      "motion": "subtle",
+      "source_url": "http://tekshot.localhost/api/tekshot-video/assets/43ee9d15-053b-4ed5-a38f-c2d97fda8cf8/content?variant=source&expires=1793280191&signature=***",
+      "uuid": "f25e4b6e-3246-40a3-b375-a9a0723b14a5"
+    },
+    {
+      "asset_uuid": "6116c650-6514-4575-93fb-ead55bd0a906",
+      "duration_ms": 12000,
+      "mime_type": "image/png",
+      "motion": "subtle",
+      "source_url": "http://tekshot.localhost/api/tekshot-video/assets/6116c650-6514-4575-93fb-ead55bd0a906/content?variant=source&expires=1793280191&signature=***",
+      "uuid": "2c373423-9a67-40a6-b404-f25e27e9a2f9"
+    },
+    {
+      "asset_uuid": "6bb15198-9e94-4858-8a85-336849bb3df0",
+      "duration_ms": 8000,
+      "mime_type": "image/png",
+      "motion": "subtle",
+      "source_url": "http://tekshot.localhost/api/tekshot-video/assets/6bb15198-9e94-4858-8a85-336849bb3df0/content?variant=source&expires=1793280191&signature=***",
+      "uuid": "e15d6eaa-de54-49e3-8bdc-2c1ccabed117"
+    }
+  ],
+  "subtitles": [
+    {
+      "end_ms": 6000,
+      "start_ms": 0,
+      "text": "Are payment documents a problem for your team?"
+    },
+    {
+      "end_ms": 16000,
+      "start_ms": 6000,
+      "text": "This example uses simulated data."
+    },
+    {
+      "end_ms": 41000,
+      "start_ms": 16000,
+      "text": "Watch the workflow step by step."
+    },
+    {
+      "end_ms": 53000,
+      "start_ms": 41000,
+      "text": "Review the result and current status."
+    },
+    {
+      "end_ms": 61000,
+      "start_ms": 53000,
+      "text": "Try the demo and see for yourself."
+    }
+  ]
+}
