@@ -67,6 +67,13 @@ func IsRetryableError(err error) bool {
 		return false
 	}
 
+	// A rejected image tuning value fails identically on every resend; its raw
+	// payload may still contain words like "timeout", so match the type first.
+	var paramErr *ImageParamRejectedError
+	if errors.As(err, &paramErr) {
+		return false
+	}
+
 	// Check for HTTPError
 	var httpErr *HTTPError
 	if errors.As(err, &httpErr) {

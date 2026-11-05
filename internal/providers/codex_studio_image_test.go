@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -111,8 +112,8 @@ func TestStudioImage_BuildsRequest(t *testing.T) {
 	if body["model"] != "gpt-5.6-luna" || body["instructions"] != "You are the image designer." || body["store"] != false {
 		t.Fatalf("unexpected top-level body: %v", body)
 	}
-	if body["reasoning"].(map[string]any)["effort"] != "low" {
-		t.Fatalf("reasoning effort = %v, want low", body["reasoning"])
+	if _, ok := body["reasoning"]; ok {
+		t.Fatalf("reasoning = %v, want omitted when the caller sets no effort", body["reasoning"])
 	}
 	if body["tool_choice"].(map[string]any)["type"] != "image_generation" {
 		t.Fatalf("tool_choice = %v", body["tool_choice"])
@@ -171,6 +172,149 @@ func TestStudioImage_FailedEventIsReported(t *testing.T) {
 	_, err := newStudioProvider(server.URL).StudioImage(context.Background(), StudioImageRequest{Text: "x"})
 	if err == nil || !strings.Contains(err.Error(), "moderation_blocked") {
 		t.Fatalf("err = %v, want moderation_blocked", err)
+	}
+}
+
+func studioTool(body map[string]any) map[string]any {
+	switch tools := body["tools"].(type) {
+	case []map[string]any:
+		return tools[0]
+	case []any:
+		return tools[0].(map[string]any)
+	}
+	return nil
+}
+
+// Production: "Complexity 'low' is not supported for this image model" with a
+// GPT-6 parent and gpt-image-2. No image model may get a forced effort "low".
+func TestBuildStudioImageRequestBody_NoForcedLowEffort(t *testing.T) {
+	for _, imageModel := range []string{"gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "gpt-image-2", "gpt-image-1.5"} {
+		body := buildStudioImageRequestBody("gpt-6-luna", imageModel, StudioImageRequest{Text: "x"})
+		if _, ok := body["reasoning"]; ok {
+			t.Errorf("%s: reasoning = %v, want omitted", imageModel, body["reasoning"])
+		}
+		if _, ok := studioTool(body)["quality"]; ok {
+			t.Errorf("%s: quality sent without config", imageModel)
+		}
+	}
+}
+
+// The API now rejects "low" for every parent/image model combination.
+func TestBuildStudioImageRequestBody_DropsLowForEveryImageModel(t *testing.T) {
+	for _, imageModel := range []string{"gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "gpt-image-2", "gpt-image-1.5"} {
+		body := buildStudioImageRequestBody("gpt-6-luna", imageModel, StudioImageRequest{Text: "x", Quality: "low", ReasoningEffort: "low"})
+		if _, ok := body["reasoning"]; ok {
+			t.Errorf("%s: reasoning = %v, want low dropped", imageModel, body["reasoning"])
+		}
+		if q, ok := studioTool(body)["quality"]; ok {
+			t.Errorf("%s: quality = %v, want low dropped", imageModel, q)
+		}
+		// Values other than "low" stay as configured.
+		body = buildStudioImageRequestBody("gpt-6-luna", imageModel, StudioImageRequest{Text: "x", Quality: "high", ReasoningEffort: "medium"})
+		if studioTool(body)["quality"] != "high" || body["reasoning"].(map[string]any)["effort"] != "medium" {
+			t.Errorf("%s: high/medium not kept: %v", imageModel, body)
+		}
+	}
+}
+
+const complexityRejectedEvent = `{"type":"response.failed","response":{"status":"failed","error":{"type":"image_generation_user_error","code":"invalid_value","message":"Complexity 'low' is not supported for this image model.","param":"complexity"}}}`
+
+func TestStudioImage_ParamRejectionRetriesOnceWithoutTuning(t *testing.T) {
+	for _, param := range []string{"complexity", "quality"} {
+		t.Run(param, func(t *testing.T) {
+			rejected := studioSSE(strings.Replace(complexityRejectedEvent, `"param":"complexity"`, `"param":"`+param+`"`, 1))
+			var bodies []map[string]any
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				raw, _ := io.ReadAll(r.Body)
+				var b map[string]any
+				_ = json.Unmarshal(raw, &b)
+				bodies = append(bodies, b)
+				w.Header().Set("Content-Type", "text/event-stream")
+				if len(bodies) == 1 {
+					_, _ = io.WriteString(w, rejected)
+					return
+				}
+				_, _ = io.WriteString(w, okStudioStream)
+			}))
+			defer server.Close()
+			res, err := newStudioProvider(server.URL).StudioImage(context.Background(), StudioImageRequest{
+				Text: "x", ImageModel: "gpt-image-2", Quality: "high", ReasoningEffort: "medium",
+			})
+			if err != nil || res == nil || len(res.Data) == 0 {
+				t.Fatalf("res=%v err=%v, want image from the fallback call", res, err)
+			}
+			if len(bodies) != 2 {
+				t.Fatalf("calls = %d, want 2", len(bodies))
+			}
+			if _, ok := bodies[0]["reasoning"]; !ok || studioTool(bodies[0])["quality"] != "high" {
+				t.Fatalf("first body lost its tuning: %v", bodies[0])
+			}
+			if _, ok := bodies[1]["reasoning"]; ok {
+				t.Fatalf("fallback reasoning = %v, want omitted", bodies[1]["reasoning"])
+			}
+			if q, ok := studioTool(bodies[1])["quality"]; ok {
+				t.Fatalf("fallback quality = %v, want omitted", q)
+			}
+			if studioTool(bodies[1])["model"] != "gpt-image-2" || bodies[1]["model"] != "gpt-5.6-luna" {
+				t.Fatalf("fallback changed models: %v", bodies[1])
+			}
+		})
+	}
+}
+
+func TestStudioImage_ParamRejectionRetriesOnlyOnceAndIsFinal(t *testing.T) {
+	var hits atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, studioSSE(complexityRejectedEvent))
+	}))
+	defer server.Close()
+	p := newStudioProvider(server.URL)
+	p.WithRetryConfig(RetryConfig{Attempts: 3, MinDelay: time.Millisecond, MaxDelay: time.Millisecond})
+	_, err := p.StudioImage(context.Background(), StudioImageRequest{Text: "x", Quality: "high", ReasoningEffort: "medium"})
+	var rejected *ImageParamRejectedError
+	if !errors.As(err, &rejected) || rejected.Param != "complexity" {
+		t.Fatalf("err = %v, want ImageParamRejectedError(complexity)", err)
+	}
+	if hits.Load() != 2 {
+		t.Fatalf("calls = %d, want 2 (original + one fallback)", hits.Load())
+	}
+	if IsRetryableError(err) {
+		t.Fatal("a rejected tuning value must not be retryable")
+	}
+	if !strings.Contains(err.Error(), "Complexity 'low' is not supported") {
+		t.Fatalf("err = %v, want upstream message kept", err)
+	}
+}
+
+func TestStudioImage_ParamRejectionWithNothingToStripIsNotResent(t *testing.T) {
+	var hits atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, studioSSE(complexityRejectedEvent))
+	}))
+	defer server.Close()
+	_, err := newStudioProvider(server.URL).StudioImage(context.Background(), StudioImageRequest{Text: "x"})
+	var rejected *ImageParamRejectedError
+	if !errors.As(err, &rejected) || hits.Load() != 1 {
+		t.Fatalf("err=%v calls=%d, want rejection after 1 call", err, hits.Load())
+	}
+}
+
+func TestStudioImage_OtherUserErrorsAreNotParamRejections(t *testing.T) {
+	stream := studioSSE(`{"type":"response.failed","response":{"status":"failed","error":{"type":"image_generation_user_error","code":"invalid_value","message":"bad size","param":"size"}}}`)
+	var hits atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		_, _ = io.WriteString(w, stream)
+	}))
+	defer server.Close()
+	_, err := newStudioProvider(server.URL).StudioImage(context.Background(), StudioImageRequest{Text: "x", Quality: "high"})
+	var rejected *ImageParamRejectedError
+	if err == nil || errors.As(err, &rejected) || hits.Load() != 1 {
+		t.Fatalf("err=%v calls=%d, want plain failure after 1 call", err, hits.Load())
 	}
 }
 

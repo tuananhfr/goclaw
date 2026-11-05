@@ -80,8 +80,8 @@ func (p *CodexProvider) buildNativeImageRequestBody(model string, req NativeImag
 		"output_format": req.OutputFormat,
 		"size":          SizeFromAspect(req.AspectRatio),
 	}
-	if req.Quality != "" {
-		imageTool["quality"] = req.Quality
+	if quality := ImageToolQuality(req.ImageModel, req.Quality); quality != "" {
+		imageTool["quality"] = quality
 	}
 	return map[string]any{
 		"model":        model,

@@ -277,3 +277,30 @@ func TestRunStudioImage_OverloadShowsTheRetryLaterMessage(t *testing.T) {
 		t.Fatalf("err = %v, want the overload message", err)
 	}
 }
+
+// Production (GPT-6 parent, gpt-image-2): "Complexity 'low' is not supported".
+// The provider resends once without quality/effort; after that the rejection is
+// final, so neither the entry's retries nor the next entry may redraw.
+func TestRunStudioImage_ParamRejectionIsFinalAfterOneFallback(t *testing.T) {
+	draws := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		draws++
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(
+			"data: {\"type\":\"response.failed\",\"response\":{\"status\":\"failed\",\"error\":{\"type\":\"image_generation_user_error\",\"code\":\"invalid_value\",\"message\":\"Complexity 'low' is not supported for this image model.\",\"param\":\"complexity\"}}}\n\n" +
+				"data: [DONE]\n\n"))
+	}))
+	t.Cleanup(server.Close)
+	entry := `{"provider":"openai-codex","model":"gpt-6-luna","enabled":true,"max_retries":2,"params":{"image_model":"gpt-image-2","quality":"high"}}`
+	s := newStudioServiceWithChain(t, server, `[`+entry+`,`+entry+`,{"provider":"gemini","model":"g","enabled":true}]`)
+	job := &store.TekshotJob{ID: uuid.New(), JobType: TekshotJobTypeStudioImage, AgentKey: "designer"}
+
+	_, _, err := s.runStudioImage(context.Background(), job, studioDrawArgs())
+
+	if err == nil || !strings.Contains(err.Error(), "Complexity 'low' is not supported") {
+		t.Fatalf("err = %v, want the upstream rejection", err)
+	}
+	if draws != 2 {
+		t.Fatalf("draws = %d, want 2 (original + one fallback without quality/effort)", draws)
+	}
+}

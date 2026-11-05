@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 // NativeImageProvider is implemented by OAuth-backed providers whose upstream
@@ -39,6 +40,18 @@ func ValidateImageModel(model string) (string, error) {
 		return "", fmt.Errorf("unsupported image model %q; allowed: gpt-image-2.5-flare, gpt-image-2.5-sunburst, gpt-image-2 (default), gpt-image-1.5 (legacy)", model)
 	}
 	return model, nil
+}
+
+// ImageToolQuality returns the image_generation tool quality to send; empty
+// means omit the field. The Responses API now rejects "low" for every image
+// model and parent LLM (stream fails with "Complexity 'low' is not supported
+// for this image model", param complexity), so "low" is never sent and the
+// server default applies. imageModel is kept so a per-model rule can return.
+func ImageToolQuality(_ string, quality string) string {
+	if strings.EqualFold(quality, "low") {
+		return ""
+	}
+	return quality
 }
 
 // Image tool actions of the Responses API. "generate" always draws a new image

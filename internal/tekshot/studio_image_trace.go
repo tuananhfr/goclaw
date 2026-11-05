@@ -161,12 +161,15 @@ func startStudioImageSpan(ctx context.Context, span store.SpanData, input any) (
 func (t *studioImageTrace) startNativeCall(ctx context.Context, provider string, req providers.StudioImageRequest) (context.Context, func(*providers.StudioImageResult, error)) {
 	// A native call belongs to one pool member; outer routing evidence belongs to its parent.
 	ctx = providers.WithChatGPTOAuthRoutingObservation(ctx, nil)
-	params := map[string]any{"image_model": req.ImageModel, "quality": req.Quality, "size": req.Size, "reasoning_effort": req.ReasoningEffort}
+	// Trace what is actually sent: empty quality/effort means the field is omitted.
+	params := map[string]any{
+		"image_model":      req.ImageModel,
+		"quality":          providers.ImageToolQuality(req.ImageModel, req.Quality),
+		"size":             req.Size,
+		"reasoning_effort": providers.StudioImageReasoningEffort(req.ImageModel, req.ReasoningEffort),
+	}
 	if req.Size == "" {
 		params["size"] = "auto"
-	}
-	if req.ReasoningEffort == "" {
-		params["reasoning_effort"] = "low"
 	}
 	encoded, err := json.Marshal(params)
 	if err != nil {

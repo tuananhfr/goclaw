@@ -426,3 +426,33 @@ func TestValidateImageModel_Images25(t *testing.T) {
 		}
 	}
 }
+
+// create_image's native path never sends reasoning, and quality "low" (now
+// rejected as complexity 'low' for every image model) is dropped too.
+func TestBuildNativeImageRequestBody_NeverSendsLow(t *testing.T) {
+	p := &CodexProvider{}
+	cases := []struct {
+		imageModel, quality string
+		want                any
+	}{
+		{"gpt-image-2.5-flare", "low", nil},
+		{"gpt-image-2.5-sunburst", "LOW", nil},
+		{"gpt-image-2.5-flare", "high", "high"},
+		{"gpt-image-2", "low", nil},
+		{"gpt-image-1.5", "low", nil},
+		{"gpt-image-2", "medium", "medium"},
+		{"gpt-image-2", "", nil},
+	}
+	for _, tc := range cases {
+		body := p.buildNativeImageRequestBody("gpt-6-luna", NativeImageRequest{
+			ImageModel: tc.imageModel, Prompt: "x", OutputFormat: "png", Quality: tc.quality,
+		})
+		tool := body["tools"].([]map[string]any)[0]
+		if got := tool["quality"]; got != tc.want {
+			t.Errorf("%s quality %q: sent %v, want %v", tc.imageModel, tc.quality, got, tc.want)
+		}
+		if _, ok := body["reasoning"]; ok {
+			t.Errorf("%s: native body must not carry reasoning", tc.imageModel)
+		}
+	}
+}
