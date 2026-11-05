@@ -145,14 +145,14 @@ func stripStudioImageTuning(body map[string]any) (map[string]any, bool) {
 }
 
 // StudioImageReasoningEffort returns the reasoning effort the studio request
-// carries; empty means the "reasoning" field is omitted and the server default
-// applies. The old forced "low" default is gone: the API now maps effort "low"
-// to the image tool's "complexity" and fails every draw ("Complexity 'low' is
-// not supported for this image model") whatever the parent or image model, so
-// an explicit "low" is dropped too.
+// carries. The default used to be "low", but the API now maps effort "low" to
+// the image tool's "complexity" and fails every draw ("Complexity 'low' is not
+// supported for this image model") whatever the parent or image model. The
+// default, and an explicit "low", become "medium" (Giám đốc chốt mức trung
+// bình); StudioImage still drops the field if "medium" is refused too.
 func StudioImageReasoningEffort(_ string, effort string) string {
-	if strings.EqualFold(effort, "low") {
-		return ""
+	if effort == "" || strings.EqualFold(effort, "low") {
+		return "medium"
 	}
 	return effort
 }

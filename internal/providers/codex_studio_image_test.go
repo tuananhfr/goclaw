@@ -112,8 +112,8 @@ func TestStudioImage_BuildsRequest(t *testing.T) {
 	if body["model"] != "gpt-5.6-luna" || body["instructions"] != "You are the image designer." || body["store"] != false {
 		t.Fatalf("unexpected top-level body: %v", body)
 	}
-	if _, ok := body["reasoning"]; ok {
-		t.Fatalf("reasoning = %v, want omitted when the caller sets no effort", body["reasoning"])
+	if body["reasoning"].(map[string]any)["effort"] != "medium" {
+		t.Fatalf("reasoning = %v, want default effort medium", body["reasoning"])
 	}
 	if body["tool_choice"].(map[string]any)["type"] != "image_generation" {
 		t.Fatalf("tool_choice = %v", body["tool_choice"])
@@ -187,11 +187,11 @@ func studioTool(body map[string]any) map[string]any {
 
 // Production: "Complexity 'low' is not supported for this image model" with a
 // GPT-6 parent and gpt-image-2. No image model may get a forced effort "low".
-func TestBuildStudioImageRequestBody_NoForcedLowEffort(t *testing.T) {
+func TestBuildStudioImageRequestBody_DefaultEffortIsMedium(t *testing.T) {
 	for _, imageModel := range []string{"gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "gpt-image-2", "gpt-image-1.5"} {
 		body := buildStudioImageRequestBody("gpt-6-luna", imageModel, StudioImageRequest{Text: "x"})
-		if _, ok := body["reasoning"]; ok {
-			t.Errorf("%s: reasoning = %v, want omitted", imageModel, body["reasoning"])
+		if body["reasoning"].(map[string]any)["effort"] != "medium" {
+			t.Errorf("%s: reasoning = %v, want medium", imageModel, body["reasoning"])
 		}
 		if _, ok := studioTool(body)["quality"]; ok {
 			t.Errorf("%s: quality sent without config", imageModel)
@@ -199,21 +199,42 @@ func TestBuildStudioImageRequestBody_NoForcedLowEffort(t *testing.T) {
 	}
 }
 
-// The API now rejects "low" for every parent/image model combination.
-func TestBuildStudioImageRequestBody_DropsLowForEveryImageModel(t *testing.T) {
+// The API now rejects "low" for every parent/image model combination; "low"
+// is raised to "medium", other values stay as configured.
+func TestBuildStudioImageRequestBody_LowBecomesMediumForEveryImageModel(t *testing.T) {
 	for _, imageModel := range []string{"gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "gpt-image-2", "gpt-image-1.5"} {
-		body := buildStudioImageRequestBody("gpt-6-luna", imageModel, StudioImageRequest{Text: "x", Quality: "low", ReasoningEffort: "low"})
-		if _, ok := body["reasoning"]; ok {
-			t.Errorf("%s: reasoning = %v, want low dropped", imageModel, body["reasoning"])
+		body := buildStudioImageRequestBody("gpt-6-luna", imageModel, StudioImageRequest{Text: "x", Quality: "low", ReasoningEffort: "LOW"})
+		if body["reasoning"].(map[string]any)["effort"] != "medium" {
+			t.Errorf("%s: reasoning = %v, want low raised to medium", imageModel, body["reasoning"])
 		}
-		if q, ok := studioTool(body)["quality"]; ok {
-			t.Errorf("%s: quality = %v, want low dropped", imageModel, q)
+		if studioTool(body)["quality"] != "medium" {
+			t.Errorf("%s: quality = %v, want low raised to medium", imageModel, studioTool(body)["quality"])
 		}
-		// Values other than "low" stay as configured.
-		body = buildStudioImageRequestBody("gpt-6-luna", imageModel, StudioImageRequest{Text: "x", Quality: "high", ReasoningEffort: "medium"})
-		if studioTool(body)["quality"] != "high" || body["reasoning"].(map[string]any)["effort"] != "medium" {
-			t.Errorf("%s: high/medium not kept: %v", imageModel, body)
+		body = buildStudioImageRequestBody("gpt-6-luna", imageModel, StudioImageRequest{Text: "x", Quality: "high", ReasoningEffort: "high"})
+		if studioTool(body)["quality"] != "high" || body["reasoning"].(map[string]any)["effort"] != "high" {
+			t.Errorf("%s: high not kept: %v", imageModel, body)
 		}
+	}
+}
+
+func TestStripStudioImageTuning(t *testing.T) {
+	body := buildStudioImageRequestBody("gpt-6-luna", "gpt-image-2", StudioImageRequest{Text: "x", Quality: "high"})
+	out, stripped := stripStudioImageTuning(body)
+	if !stripped {
+		t.Fatal("stripped = false, want true")
+	}
+	if _, ok := out["reasoning"]; ok {
+		t.Fatalf("reasoning kept: %v", out)
+	}
+	if _, ok := studioTool(out)["quality"]; ok {
+		t.Fatalf("quality kept: %v", studioTool(out))
+	}
+	// The original body is untouched (it is the record of the first attempt).
+	if _, ok := body["reasoning"]; !ok || studioTool(body)["quality"] != "high" {
+		t.Fatalf("original body mutated: %v", body)
+	}
+	if _, again := stripStudioImageTuning(out); again {
+		t.Fatal("nothing left to strip, want stripped = false")
 	}
 }
 
@@ -288,18 +309,32 @@ func TestStudioImage_ParamRejectionRetriesOnlyOnceAndIsFinal(t *testing.T) {
 	}
 }
 
-func TestStudioImage_ParamRejectionWithNothingToStripIsNotResent(t *testing.T) {
-	var hits atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		hits.Add(1)
+// Default request (no config): even the "medium" default may be refused, so
+// the fallback drops the reasoning field and the draw still succeeds.
+func TestStudioImage_DefaultRequestRejectedFallsBackWithoutReasoning(t *testing.T) {
+	var bodies []map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var b map[string]any
+		_ = json.Unmarshal(raw, &b)
+		bodies = append(bodies, b)
 		w.Header().Set("Content-Type", "text/event-stream")
-		_, _ = io.WriteString(w, studioSSE(complexityRejectedEvent))
+		if len(bodies) == 1 {
+			_, _ = io.WriteString(w, studioSSE(complexityRejectedEvent))
+			return
+		}
+		_, _ = io.WriteString(w, okStudioStream)
 	}))
 	defer server.Close()
-	_, err := newStudioProvider(server.URL).StudioImage(context.Background(), StudioImageRequest{Text: "x"})
-	var rejected *ImageParamRejectedError
-	if !errors.As(err, &rejected) || hits.Load() != 1 {
-		t.Fatalf("err=%v calls=%d, want rejection after 1 call", err, hits.Load())
+	res, err := newStudioProvider(server.URL).StudioImage(context.Background(), StudioImageRequest{Text: "x"})
+	if err != nil || res == nil || len(bodies) != 2 {
+		t.Fatalf("res=%v err=%v calls=%d, want success on the 2nd call", res, err, len(bodies))
+	}
+	if bodies[0]["reasoning"].(map[string]any)["effort"] != "medium" {
+		t.Fatalf("first reasoning = %v, want medium", bodies[0]["reasoning"])
+	}
+	if _, ok := bodies[1]["reasoning"]; ok {
+		t.Fatalf("fallback reasoning = %v, want omitted", bodies[1]["reasoning"])
 	}
 }
 

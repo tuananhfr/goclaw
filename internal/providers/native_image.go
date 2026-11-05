@@ -45,11 +45,12 @@ func ValidateImageModel(model string) (string, error) {
 // ImageToolQuality returns the image_generation tool quality to send; empty
 // means omit the field. The Responses API now rejects "low" for every image
 // model and parent LLM (stream fails with "Complexity 'low' is not supported
-// for this image model", param complexity), so "low" is never sent and the
-// server default applies. imageModel is kept so a per-model rule can return.
+// for this image model", param complexity), so a configured "low" is sent as
+// "medium" (Giám đốc chốt mức trung bình). imageModel is kept so a per-model
+// rule can return.
 func ImageToolQuality(_ string, quality string) string {
 	if strings.EqualFold(quality, "low") {
-		return ""
+		return "medium"
 	}
 	return quality
 }

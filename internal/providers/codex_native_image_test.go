@@ -427,20 +427,21 @@ func TestValidateImageModel_Images25(t *testing.T) {
 	}
 }
 
-// create_image's native path never sends reasoning, and quality "low" (now
-// rejected as complexity 'low' for every image model) is dropped too.
-func TestBuildNativeImageRequestBody_NeverSendsLow(t *testing.T) {
+// create_image's native path never sends reasoning, and a configured quality
+// "low" (now rejected as complexity 'low' for every image model) is sent as
+// "medium".
+func TestBuildNativeImageRequestBody_LowQualityBecomesMedium(t *testing.T) {
 	p := &CodexProvider{}
 	cases := []struct {
 		imageModel, quality string
 		want                any
 	}{
-		{"gpt-image-2.5-flare", "low", nil},
-		{"gpt-image-2.5-sunburst", "LOW", nil},
+		{"gpt-image-2.5-flare", "low", "medium"},
+		{"gpt-image-2.5-sunburst", "LOW", "medium"},
 		{"gpt-image-2.5-flare", "high", "high"},
-		{"gpt-image-2", "low", nil},
-		{"gpt-image-1.5", "low", nil},
-		{"gpt-image-2", "medium", "medium"},
+		{"gpt-image-2", "low", "medium"},
+		{"gpt-image-1.5", "low", "medium"},
+		{"gpt-image-2", "high", "high"},
 		{"gpt-image-2", "", nil},
 	}
 	for _, tc := range cases {
