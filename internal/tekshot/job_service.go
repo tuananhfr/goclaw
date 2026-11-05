@@ -394,6 +394,8 @@ func (s *JobService) process(ctx context.Context, job *store.TekshotJob) (runErr
 		result, progress, err = s.runMarketingReport(ctx, job, request)
 	case TekshotJobTypeBusinessReport:
 		result, progress, err = s.runBusinessReport(ctx, job, request)
+	case TekshotJobTypePostProofread:
+		result, progress, err = s.runPostProofread(ctx, job, request)
 	default:
 		err = fmt.Errorf("unsupported tekshot job type: %s", job.JobType)
 	}
@@ -697,7 +699,7 @@ func isSupportedTekshotJobType(jobType string) bool {
 	if jobType == TekshotJobTypeCommentReplyCompose || jobType == TekshotJobTypeCommentThreadMemory {
 		return true
 	}
-	if jobType == TekshotJobTypeMessengerLearnStyle {
+	if jobType == TekshotJobTypeMessengerLearnStyle || jobType == TekshotJobTypePostProofread {
 		return true
 	}
 	switch jobType {
